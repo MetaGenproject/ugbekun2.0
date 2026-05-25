@@ -4,17 +4,18 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 
-export function LoginForm() {
+export function SignupForm() {
   const router = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState('2') // Default to Branch Admin (Role 2)
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,19 +34,23 @@ export function LoginForm() {
 
     setIsLoading(true)
     setErrorMsg('')
+    setSuccessMsg('')
 
     try {
-      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password })
+      const data = await apiSlice.post(endpoints.auth.register, {
+        username: trimmedUsername,
+        password,
+        role: parseInt(role)
+      })
 
-      // Save token and user details to localStorage
-      localStorage.setItem('ugbekun_token', data.token)
-      localStorage.setItem('ugbekun_user', JSON.stringify(data.user))
-
-      // Redirect to role-based dashboard
-      router.push('/dashboard')
+      setSuccessMsg(data.message || 'Registration successful! Redirecting to login...')
+      
+      // Auto-redirect to login after 2 seconds
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
     } catch (err: any) {
-      console.error('Login error:', err)
-
+      console.error('Registration error:', err)
       setErrorMsg(err.message || 'Network connection error. Is the backend server running?')
     } finally {
       setIsLoading(false)
@@ -68,9 +73,17 @@ export function LoginForm() {
             />
           </Link>
         </div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Welcome Back</h1>
-        <p className="text-foreground/60 text-sm font-medium">Sign in to your school management account</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Create Account</h1>
+        <p className="text-foreground/60 text-sm font-medium">Join the Ugbekun school management network</p>
       </div>
+
+      {/* Success Message */}
+      {successMsg && (
+        <div className="flex items-center gap-3 p-3.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 text-sm animate-fade-in">
+          <CheckCircle size={18} className="shrink-0" />
+          <p className="font-semibold">{successMsg}</p>
+        </div>
+      )}
 
       {/* Error Message */}
       {errorMsg && (
@@ -80,22 +93,40 @@ export function LoginForm() {
         </div>
       )}
 
-      {/* Login Form */}
+      {/* Signup Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Username/Email Field */}
+        {/* Username Field */}
         <div>
-          <label htmlFor="login" className="block text-sm font-semibold text-foreground mb-2">
-            Username or Email
+          <label htmlFor="username" className="block text-sm font-semibold text-foreground mb-2">
+            Desired Username
           </label>
           <input
-            id="login"
+            id="username"
             type="text"
-            placeholder="username or email"
+            placeholder="Choose username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
             className="w-full px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-foreground placeholder-foreground/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition text-sm"
           />
+        </div>
+
+        {/* Role Selector Field */}
+        <div>
+          <label htmlFor="role" className="block text-sm font-semibold text-foreground mb-2">
+            Register As
+          </label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition text-sm bg-white cursor-pointer"
+          >
+            <option value="2">Branch / School Admin</option>
+            <option value="3">Teacher</option>
+            <option value="6">Parent / Guardian</option>
+            <option value="7">Student</option>
+          </select>
         </div>
 
         {/* Password Field */}
@@ -123,23 +154,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        {/* Remember Me & Forgot Password */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-4 h-4 rounded border border-border/50 bg-muted/30 accent-primary cursor-pointer"
-            />
-            <span className="text-sm text-foreground/70">Remember me</span>
-          </label>
-          <Link href="/forgot-password" className="text-sm text-primary hover:underline font-medium">
-            Forgot password?
-          </Link>
-        </div>
-
-        {/* Login Button */}
+        {/* Register Button */}
         <button
           type="submit"
           disabled={isLoading}
@@ -148,22 +163,20 @@ export function LoginForm() {
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              Signing in...
+              Registering...
             </span>
           ) : (
-            'Sign In'
+            'Sign Up'
           )}
         </button>
       </form>
 
-      {/* Removed Google Sign In as requested */}
-
-      {/* Sign Up Link */}
+      {/* Log In Link */}
       <div className="text-center pt-4 border-t border-border/30">
         <p className="text-sm text-foreground/60">
-          Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline font-semibold">
-            Sign up
+          Already have an account?{' '}
+          <Link href="/login" className="text-primary hover:underline font-semibold">
+            Sign in
           </Link>
         </p>
       </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -53,10 +54,13 @@ export function Hero() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-          <button className="px-8 py-3.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2">
+          <Link
+            href="/subscribe?plan=basic-plus"
+            className="px-8 py-3.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2"
+          >
             Start Free Trial
             <ArrowRight size={18} />
-          </button>
+          </Link>
           <button className="px-8 py-3.5 border border-border bg-card text-foreground rounded-lg font-semibold hover:bg-muted/50 transition-all duration-200">
             View Demo
           </button>

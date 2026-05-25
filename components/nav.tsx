@@ -31,9 +31,9 @@ export function Navigation() {
               <Link href="/login" className="px-6 py-2 text-foreground border border-border/50 rounded-lg hover:bg-muted/50 transition text-sm font-medium">
                 Login
               </Link>
-              <button className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-sm font-medium">
+              <Link href="/subscribe?plan=starter" className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-sm font-medium">
                 Get Started
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -55,9 +55,9 @@ export function Navigation() {
               <Link href="/login" className="w-full px-4 py-2 text-foreground border border-border/50 rounded-lg hover:bg-muted/50 transition text-sm font-medium text-center">
                 Login
               </Link>
-              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-sm font-medium">
+              <Link href="/subscribe?plan=starter" className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-sm font-medium text-center">
                 Get Started
-              </button>
+              </Link>
             </div>
           </div>
         )}

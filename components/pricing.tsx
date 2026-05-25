@@ -1,6 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { Check } from 'lucide-react'
+import { PLAN_SLUG_BY_NAME } from '@/lib/plans'
 
 const plans = [
   {
@@ -106,15 +108,29 @@ export function Pricing() {
                   <span className="text-foreground/60 text-xs ml-2">{plan.period}</span>
                 </div>
 
-                <button
-                  className={`w-full py-2.5 rounded-lg font-semibold mb-8 transition duration-300 transform ${
-                    plan.popular
-                      ? 'bg-primary text-primary-foreground hover:shadow-lg hover:scale-105 active:scale-95'
-                      : 'border border-border/50 text-foreground hover:bg-muted/70 hover:scale-105 active:scale-95'
-                  }`}
-                >
-                  {plan.cta}
-                </button>
+                {plan.cta === 'Contact Sales' ? (
+                  <Link
+                    href="#contact"
+                    className={`block w-full py-2.5 rounded-lg font-semibold mb-8 transition duration-300 transform text-center ${
+                      plan.popular
+                        ? 'bg-primary text-primary-foreground hover:shadow-lg hover:scale-105 active:scale-95'
+                        : 'border border-border/50 text-foreground hover:bg-muted/70 hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/subscribe?plan=${PLAN_SLUG_BY_NAME[plan.name] || 'professional'}`}
+                    className={`block w-full py-2.5 rounded-lg font-semibold mb-8 transition duration-300 transform text-center ${
+                      plan.popular
+                        ? 'bg-primary text-primary-foreground hover:shadow-lg hover:scale-105 active:scale-95'
+                        : 'border border-border/50 text-foreground hover:bg-muted/70 hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
 
                 <div className="space-y-3">
                   {plan.features.map((feature, fidx) => (
