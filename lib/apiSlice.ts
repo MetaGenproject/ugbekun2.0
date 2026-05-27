@@ -19,6 +19,9 @@ export const endpoints = {
     planSummary: (slug: string) => `${BASE_URL}/onboarding/plans/${slug}/summary`,
     register: `${BASE_URL}/onboarding/register`,
   },
+  superadmin: {
+    addBranch: `${BASE_URL}/superadmin/branches`,
+  },
 };
 
 // Helper to get authorization headers

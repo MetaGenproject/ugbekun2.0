@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { 
   School, 
   Users, 
@@ -11,6 +12,7 @@ import {
   Layers, 
   RefreshCw 
 } from 'lucide-react'
+import { AddSchoolForm } from './add-school-form'
 
 interface DashboardProps {
   user: {
@@ -21,6 +23,8 @@ interface DashboardProps {
 }
 
 export function SuperAdminDashboard({ user }: DashboardProps) {
+  const [isAddOpen, setIsAddOpen] = useState(false)
+
   const stats = [
     { label: 'Active Tenant Branches', value: '18 Branches', icon: School, color: 'text-blue-600 bg-blue-50 border-blue-100' },
     { label: 'Platform Users Count', value: '12,840 Total', icon: Users, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
@@ -52,6 +56,15 @@ export function SuperAdminDashboard({ user }: DashboardProps) {
             Role 1 · Single master account — global control across all Ugbekun school tenants.
           </p>
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setIsAddOpen(true)}
+          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 transition text-white font-extrabold text-sm shadow-sm shadow-blue-500/20"
+        >
+          Add School / Branch
+        </button>
       </div>
 
       {/* Stats */}
@@ -127,6 +140,12 @@ export function SuperAdminDashboard({ user }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {isAddOpen && (
+        <AddSchoolForm
+          onClose={() => setIsAddOpen(false)}
+        />
+      )}
     </div>
   )
 }
