@@ -23,7 +23,8 @@ import {
 
 // Import decoupled role-specific dashboards from their own folders
 import { SuperAdminDashboard } from '@/components/dashboards/superadmin/superadmin-dashboard'
-import { AdminDashboard } from '@/components/dashboards/admin/admin-dashboard'
+import { AdminDashboard, type BranchStats } from '@/components/dashboards/admin/admin-dashboard'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashboard'
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
@@ -54,57 +55,79 @@ interface User {
   lastLogin?: string
 }
 
-const getNavLinks = (role: number) => {
+interface NavLink {
+  id: string
+  label: string
+  icon: typeof Activity
+  active?: boolean
+  badge?: string
+}
+
+const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] => {
   switch (role) {
     case 1: // Superadmin (Master) — single global admin
       return [
-        { label: 'SaaS Overview', icon: Activity, active: true },
-        { label: 'Manage Branches', icon: School },
-        { label: 'Tenants Directory', icon: Users },
-        { label: 'Subscriptions', icon: DollarSign },
-        { label: 'System Logs', icon: Layers },
-        { label: 'Global Settings', icon: Settings },
+        { id: 'overview', label: 'SaaS Overview', icon: Activity, active: true },
+        { id: 'manage-branches', label: 'Manage Branches', icon: School },
+        { id: 'tenants', label: 'Tenants Directory', icon: Users },
+        { id: 'subscriptions', label: 'Subscriptions', icon: DollarSign },
+        { id: 'logs', label: 'System Logs', icon: Layers },
+        { id: 'settings', label: 'Global Settings', icon: Settings },
       ]
     case 2: // Branch Admin — one per school branch
       return [
-        { label: 'Admin Overview', icon: TrendingUp, active: true },
-        { label: 'Students & Parents', icon: Users },
-        { label: 'Teachers & Staff', icon: GraduationCap },
-        { label: 'Admissions Desk', icon: CheckSquare },
-        { label: 'Fees & Finances', icon: DollarSign },
-        { label: 'Curriculum Planner', icon: BookOpen },
-        { label: 'Branch Settings', icon: Settings },
+        { id: 'overview', label: 'Admin Overview', icon: TrendingUp, active: true },
+        {
+          id: 'students',
+          label: 'Students & Parents',
+          icon: Users,
+          badge: branchStats
+            ? `${branchStats.students.toLocaleString()} · ${branchStats.parents.toLocaleString()}`
+            : undefined,
+        },
+        {
+          id: 'teachers',
+          label: 'Teachers & Staff',
+          icon: GraduationCap,
+          badge: branchStats
+            ? `${branchStats.teachers.toLocaleString()} · ${branchStats.staff.toLocaleString()}`
+            : undefined,
+        },
+        { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
+        { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
+        { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
+        { id: 'settings', label: 'Branch Settings', icon: Settings },
       ]
     case 3: // Teacher
       return [
-        { label: 'My Classroom', icon: BookOpen, active: true },
-        { label: 'Student Roster', icon: Users },
-        { label: 'Gradebook & Exams', icon: TrendingUp },
-        { label: 'Attendance Tracker', icon: CheckSquare },
-        { label: 'School Calendar', icon: Calendar },
-        { label: 'Personal Settings', icon: Settings },
+        { id: 'classroom', label: 'My Classroom', icon: BookOpen, active: true },
+        { id: 'roster', label: 'Student Roster', icon: Users },
+        { id: 'grades', label: 'Gradebook & Exams', icon: TrendingUp },
+        { id: 'attendance', label: 'Attendance Tracker', icon: CheckSquare },
+        { id: 'calendar', label: 'School Calendar', icon: Calendar },
+        { id: 'settings', label: 'Personal Settings', icon: Settings },
       ]
     case 6: // Parent
       return [
-        { label: 'Children Overview', icon: Users, active: true },
-        { label: 'Grade Progress', icon: TrendingUp },
-        { label: 'Attendance Logs', icon: CheckSquare },
-        { label: 'Fee Invoices', icon: DollarSign },
-        { label: 'Term Calendar', icon: Calendar },
-        { label: 'Account Settings', icon: Settings },
+        { id: 'overview', label: 'Children Overview', icon: Users, active: true },
+        { id: 'grades', label: 'Grade Progress', icon: TrendingUp },
+        { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
+        { id: 'billing', label: 'Fee Invoices', icon: DollarSign },
+        { id: 'calendar', label: 'Term Calendar', icon: Calendar },
+        { id: 'settings', label: 'Account Settings', icon: Settings },
       ]
     case 7: // Student
       return [
-        { label: 'My Studies', icon: BookOpen, active: true },
-        { label: 'Assignments Tracker', icon: CheckSquare },
-        { label: 'Grade Sheet & GPA', icon: TrendingUp },
-        { label: 'Timetable Schedule', icon: Calendar },
-        { label: 'Platform Settings', icon: Settings },
+        { id: 'overview', label: 'My Studies', icon: BookOpen, active: true },
+        { id: 'assignments', label: 'Assignments Tracker', icon: CheckSquare },
+        { id: 'grades', label: 'Grade Sheet & GPA', icon: TrendingUp },
+        { id: 'timetable', label: 'Timetable Schedule', icon: Calendar },
+        { id: 'settings', label: 'Platform Settings', icon: Settings },
       ]
     default:
       return [
-        { label: 'Overview', icon: TrendingUp, active: true },
-        { label: 'Settings', icon: Settings },
+        { id: 'overview', label: 'Overview', icon: TrendingUp, active: true },
+        { id: 'settings', label: 'Settings', icon: Settings },
       ]
   }
 }
@@ -114,6 +137,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [selectedSection, setSelectedSection] = useState('overview')
+  const [branchStats, setBranchStats] = useState<BranchStats | null>(null)
 
   useEffect(() => {
     // Check authentication token and user context
@@ -137,6 +162,26 @@ export default function DashboardPage() {
     }
   }, [router])
 
+  useEffect(() => {
+    if (!user || user.role !== 2) return
+
+    let cancelled = false
+
+    async function loadBranchStats() {
+      try {
+        const res = await apiSlice.get<{ success: boolean; data: BranchStats }>(
+          endpoints.admin.stats
+        )
+        if (!cancelled) setBranchStats(res.data)
+      } catch {
+        if (!cancelled) setBranchStats(null)
+      }
+    }
+
+    loadBranchStats()
+    return () => { cancelled = true }
+  }, [user])
+
   const handleLogout = () => {
     localStorage.removeItem('ugbekun_token')
     localStorage.removeItem('ugbekun_user')
@@ -154,15 +199,26 @@ export default function DashboardPage() {
 
   if (!user) return null
 
+  const navLinks = getNavLinks(user.role, branchStats)
+  const activeSection = navLinks.some((link) => link.id === selectedSection)
+    ? selectedSection
+    : navLinks[0]?.id ?? 'overview'
+
   // Switch content panel based on active logged-in user role
   // Role 1 = Superadmin (Master) | Role 2 = Branch Admin | Role 3 = Teacher
   // Role 6 = Parent | Role 7 = Student
   const renderDashboardContent = () => {
     switch (user.role) {
       case 1: // Superadmin (Master)
-        return <SuperAdminDashboard user={user} />
+        return <SuperAdminDashboard user={user} activeSection={activeSection} />
       case 2: // Branch Admin
-        return <AdminDashboard user={user} />
+        return (
+          <AdminDashboard
+            user={user}
+            activeSection={activeSection}
+            branchStats={branchStats}
+          />
+        )
       case 3: // Teacher
         return <TeacherDashboard user={user} />
       case 6: // Parent
@@ -215,22 +271,35 @@ export default function DashboardPage() {
 
           {/* Navigation Links */}
           <nav className="space-y-1">
-            {getNavLinks(user.role).map((link, idx) => {
+            {navLinks.map((link, idx) => {
               const IconComponent = link.icon
+              const isActive = link.id === activeSection
               return (
-                <a
+                <button
                   key={idx}
-                  href="#"
-                  onClick={() => setIsSidebarOpen(false)} // Close sidebar drawer when clicking a link on mobile
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-sm transition ${
-                    link.active
+                  type="button"
+                  onClick={() => {
+                    setSelectedSection(link.id)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-sm transition ${
+                    isActive
                       ? 'bg-blue-50 text-blue-700'
                       : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <IconComponent size={18} className="shrink-0" />
-                  {link.label}
-                </a>
+                  <span className="flex-1 min-w-0 truncate">{link.label}</span>
+                  {link.badge && (
+                    <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${
+                      isActive
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {link.badge}
+                    </span>
+                  )}
+                </button>
               )
             })}
           </nav>

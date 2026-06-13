@@ -20,7 +20,17 @@ export const endpoints = {
     register: `${BASE_URL}/onboarding/register`,
   },
   superadmin: {
+    stats: `${BASE_URL}/superadmin/stats`,
+    branches: `${BASE_URL}/superadmin/branches`,
     addBranch: `${BASE_URL}/superadmin/branches`,
+    branch: (id: number) => `${BASE_URL}/superadmin/branches/${id}`,
+    exportCsv: `${BASE_URL}/superadmin/branches/export.csv`,
+    exportPdf: `${BASE_URL}/superadmin/branches/export.pdf`,
+  },
+  admin: {
+    stats: `${BASE_URL}/admin/stats`,
+    studentsParents: `${BASE_URL}/admin/students-parents`,
+    teachersStaff: `${BASE_URL}/admin/teachers-staff`,
   },
 };
 
@@ -99,6 +109,34 @@ export const apiSlice = {
       ...options,
     });
     return handleResponse<T>(response);
+  },
+
+  /**
+   * Download a file (CSV, PDF, etc.) with auth headers.
+   */
+  async download(url: string, filename: string): Promise<void> {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      const data = isJson ? await response.json() : null;
+      throw new Error(data?.message || `Download failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
   },
 };
 
