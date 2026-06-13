@@ -428,7 +428,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
         <AddSchoolForm
           onClose={() => setIsAddOpen(false)}
           onAdded={() => {
-            setIsAddOpen(false)
+            // Keep the modal open so the superadmin can see the generated temp password.
+            // Refresh the branch list when in Manage Branches view.
             if (isManageBranches) {
               refreshBranches()
             }
