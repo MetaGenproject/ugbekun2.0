@@ -6,9 +6,14 @@ import {
   GraduationCap, 
   UserCheck,
   Briefcase,
-  Activity 
+  Activity,
+  TrendingUp,
+  Trash2,
+  UserPlus,
+  Edit2
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { TeacherOnboardingModal, EditTeacherModal } from './teacher-modals'
 import {
   Table,
   TableHeader,
@@ -18,6 +23,9 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import { BranchSetup } from './branch-setup'
+import { StudentOnboarding } from './student-onboarding'
+import { StudentPromotionModal } from './student-promotion-modal'
 
 export interface BranchStats {
   branchId: number
@@ -49,6 +57,7 @@ interface StudentRow {
   mobileno: string | null
   email: string | null
   parentName: string | null
+  className?: string | null
 }
 
 interface ParentRow {
@@ -94,17 +103,17 @@ function SectionBanner({
   branchCode?: string | null
 }) {
   return (
-    <div className="relative rounded-2xl border border-slate-200/80 bg-white p-6 md:p-8 shadow-sm overflow-hidden">
+    <div className="relative rounded-2xl bg-gradient-to-r from-[#003da5] via-[#0063a6] to-[#009ca6] p-6 md:p-8 shadow-md overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-blue-50 rounded-full blur-3xl opacity-60" />
+        <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-40" />
       </div>
       <div className="relative z-10 space-y-2.5">
-        <span className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 rounded-full border border-blue-100 shadow-sm inline-block">
+        <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
           {branchName || 'Branch Admin'}
           {branchCode ? ` · ${branchCode}` : ''}
         </span>
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{title}</h1>
-        <p className="text-slate-500 text-sm max-w-xl font-medium">{description}</p>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">{title}</h1>
+        <p className="text-white/80 text-sm max-w-xl font-medium">{description}</p>
       </div>
     </div>
   )
@@ -121,6 +130,34 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [listError, setListError] = useState<string | null>(null)
   const [isLoadingList, setIsLoadingList] = useState(false)
+
+  // Student promotion trigger state
+  const [promotingStudent, setPromotingStudent] = useState<{ id: number; name: string; currentClass: string } | null>(null)
+
+  // Teacher management modal states
+  const [isOnboardOpen, setIsOnboardOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null)
+  const [deactivatingTeacher, setDeactivatingTeacher] = useState<TeacherRow | null>(null)
+  const [isDeactivating, setIsDeactivating] = useState(false)
+
+  const handleDeactivateTeacher = async (teacherId: number) => {
+    setIsDeactivating(true)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteTeacher(teacherId))
+      setDeactivatingTeacher(null)
+      loadList()
+      // Reload stats to reflect updated teacher count
+      const res = await apiSlice.get<{ success: boolean; data: BranchStats }>(
+        endpoints.admin.stats
+      )
+      setStats(res.data)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Deactivation failed.')
+    } finally {
+      setIsDeactivating(false)
+    }
+  }
 
   useEffect(() => {
     if (branchStatsProp) {
@@ -152,45 +189,35 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return () => { cancelled = true }
   }, [branchStatsProp])
 
+  async function loadList() {
+    setIsLoadingList(true)
+    setListError(null)
+    try {
+      if (activeSection === 'students') {
+        const res = await apiSlice.get<{
+          success: boolean
+          data: { students: StudentRow[]; parents: ParentRow[] }
+        }>(endpoints.admin.studentsParents)
+        setStudents(res.data.students)
+        setParents(res.data.parents)
+      } else if (activeSection === 'teachers') {
+        const res = await apiSlice.get<{
+          success: boolean
+          data: { teachers: TeacherRow[]; staff: StaffRow[] }
+        }>(endpoints.admin.teachersStaff)
+        setTeachers(res.data.teachers)
+        setStaff(res.data.staff)
+      }
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : 'Failed to load records')
+    } finally {
+      setIsLoadingList(false)
+    }
+  }
+
   useEffect(() => {
     if (activeSection !== 'students' && activeSection !== 'teachers') return
-
-    let cancelled = false
-
-    async function loadList() {
-      setIsLoadingList(true)
-      setListError(null)
-      try {
-        if (activeSection === 'students') {
-          const res = await apiSlice.get<{
-            success: boolean
-            data: { students: StudentRow[]; parents: ParentRow[] }
-          }>(endpoints.admin.studentsParents)
-          if (!cancelled) {
-            setStudents(res.data.students)
-            setParents(res.data.parents)
-          }
-        } else {
-          const res = await apiSlice.get<{
-            success: boolean
-            data: { teachers: TeacherRow[]; staff: StaffRow[] }
-          }>(endpoints.admin.teachersStaff)
-          if (!cancelled) {
-            setTeachers(res.data.teachers)
-            setStaff(res.data.staff)
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setListError(err instanceof Error ? err.message : 'Failed to load records')
-        }
-      } finally {
-        if (!cancelled) setIsLoadingList(false)
-      }
-    }
-
     loadList()
-    return () => { cancelled = true }
   }, [activeSection])
 
   const statCards = [
@@ -263,21 +290,38 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                 <TableRow>
                   <TableHead>Reg. No</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Class</TableHead>
                   <TableHead>Gender</TableHead>
                   <TableHead>Parent</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {students.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell>{student.registerNo || '—'}</TableCell>
-                    <TableCell>{[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}</TableCell>
+                    <TableCell className="font-bold">{[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}</TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase">
+                        {student.className || 'Unassigned'}
+                      </span>
+                    </TableCell>
                     <TableCell>{student.gender || '—'}</TableCell>
                     <TableCell>{student.parentName || '—'}</TableCell>
                     <TableCell>{student.mobileno || '—'}</TableCell>
-                    <TableCell>{student.email || '—'}</TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={() => setPromotingStudent({
+                          id: student.id,
+                          name: `${student.firstName} ${student.lastName}`,
+                          currentClass: student.className || 'Unassigned'
+                        })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold text-xs transition cursor-pointer"
+                      >
+                        <TrendingUp size={12} /> Promote
+                      </button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -320,6 +364,19 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
             </Table>
           )}
         </div>
+
+        {promotingStudent && (
+          <StudentPromotionModal
+            studentId={promotingStudent.id}
+            studentName={promotingStudent.name}
+            currentClass={promotingStudent.currentClass}
+            onClose={() => setPromotingStudent(null)}
+            onSuccess={() => {
+              setPromotingStudent(null)
+              loadList()
+            }}
+          />
+        )}
       </div>
     )
   }
@@ -356,11 +413,27 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm overflow-hidden">
-          <h3 className="text-base font-extrabold text-slate-900 px-2 py-2">Teachers</h3>
+          <div className="flex items-center justify-between px-2 py-2 border-b border-slate-100 mb-2">
+            <h3 className="text-base font-extrabold text-slate-900">Teachers</h3>
+            <button
+              onClick={() => setIsOnboardOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs transition cursor-pointer active:scale-[0.98]"
+            >
+              <UserPlus size={14} /> Onboard Teacher
+            </button>
+          </div>
           {isLoadingList ? (
             <div className="p-8 text-center text-slate-500">Loading teachers...</div>
           ) : teachers.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No teachers assigned to this branch yet.</div>
+            <div className="p-8 text-center text-slate-500">
+              <p>No teachers assigned to this branch yet.</p>
+              <button
+                onClick={() => setIsOnboardOpen(true)}
+                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs transition cursor-pointer"
+              >
+                <UserPlus size={14} /> Onboard First Teacher
+              </button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -369,15 +442,41 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Class Allocations</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {teachers.map((teacher) => (
                   <TableRow key={teacher.id}>
-                    <TableCell>{teacher.name}</TableCell>
+                    <TableCell className="font-semibold text-slate-800">{teacher.name}</TableCell>
                     <TableCell>{teacher.email || '—'}</TableCell>
                     <TableCell>{teacher.phone || '—'}</TableCell>
-                    <TableCell>{teacher.classCount}</TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {teacher.classCount} {teacher.classCount === 1 ? 'class' : 'classes'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingTeacher(teacher)
+                            setIsEditOpen(true)
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition cursor-pointer"
+                          title="Edit Details"
+                        >
+                          <Edit2 size={12} /> Edit
+                        </button>
+                        <button
+                          onClick={() => setDeactivatingTeacher(teacher)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 font-bold text-xs transition cursor-pointer"
+                          title="Deactivate Teacher"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -418,8 +517,65 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
             </Table>
           )}
         </div>
+
+        <TeacherOnboardingModal
+          isOpen={isOnboardOpen}
+          onClose={() => setIsOnboardOpen(false)}
+          onSuccess={() => {
+            loadList()
+          }}
+        />
+
+        <EditTeacherModal
+          isOpen={isEditOpen}
+          teacher={editingTeacher}
+          onClose={() => {
+            setIsEditOpen(false)
+            setEditingTeacher(null)
+          }}
+          onSuccess={() => {
+            loadList()
+          }}
+        />
+
+        {/* Deactivation Confirmation Modal */}
+        {deactivatingTeacher && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-100 max-w-sm w-full space-y-4 animate-in fade-in zoom-in duration-200">
+              <h3 className="text-base font-black text-slate-900">Deactivate Teacher?</h3>
+              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                Are you sure you want to deactivate <strong>{deactivatingTeacher.name}</strong>?
+                This will immediately block their login and portal access. Historical grading records and notes will be preserved.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setDeactivatingTeacher(null)}
+                  disabled={isDeactivating}
+                  className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeactivateTeacher(deactivatingTeacher.id)}
+                  disabled={isDeactivating}
+                  className="flex-1 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition"
+                >
+                  {isDeactivating ? 'Deactivating...' : 'Deactivate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
+  }
+
+  if (activeSection === 'curriculum') {
+    return <BranchSetup />
+  }
+
+  if (activeSection === 'admissions') {
+    return <StudentOnboarding />
   }
 
   const activities = [

@@ -4,7 +4,7 @@
  */
 
 // 1. Centralized Base URL (can be easily changed here or overridden via env variable)
-export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 // 2. Centralized Endpoints Catalog
 export const endpoints = {
@@ -26,11 +26,72 @@ export const endpoints = {
     branch: (id: number) => `${BASE_URL}/superadmin/branches/${id}`,
     exportCsv: `${BASE_URL}/superadmin/branches/export.csv`,
     exportPdf: `${BASE_URL}/superadmin/branches/export.pdf`,
+    sessions: `${BASE_URL}/superadmin/sessions`,
+    setActiveSession: `${BASE_URL}/superadmin/sessions/active`,
+    subscriptions: `${BASE_URL}/superadmin/subscriptions`,
+    renewSubscription: (id: number) => `${BASE_URL}/superadmin/branches/${id}/renew-subscription`,
+    analytics: `${BASE_URL}/superadmin/analytics`,
   },
   admin: {
     stats: `${BASE_URL}/admin/stats`,
     studentsParents: `${BASE_URL}/admin/students-parents`,
     teachersStaff: `${BASE_URL}/admin/teachers-staff`,
+    classesSections: `${BASE_URL}/admin/classes-sections`,
+    classes: `${BASE_URL}/admin/classes`,
+    toggleEcdClass: `${BASE_URL}/admin/classes/toggle-ecd`,
+    sections: `${BASE_URL}/admin/sections`,
+    allocateSections: `${BASE_URL}/admin/classes/allocate-sections`,
+    subjects: `${BASE_URL}/admin/subjects`,
+    assignSubject: `${BASE_URL}/admin/subjects/assign`,
+    exams: `${BASE_URL}/admin/exams`,
+    onboardStudent: `${BASE_URL}/admin/students/onboard`,
+    promoteStudent: (id: number) => `${BASE_URL}/admin/students/${id}/promote`,
+    onboardTeacher: `${BASE_URL}/admin/teachers/onboard`,
+    updateTeacher: (id: number) => `${BASE_URL}/admin/teachers/${id}`,
+    deleteTeacher: (id: number) => `${BASE_URL}/admin/teachers/${id}`,
+  },
+  teacher: {
+    profile: `${BASE_URL}/teacher/profile`,
+    exams: `${BASE_URL}/teacher/exams`,
+    students: `${BASE_URL}/teacher/students`,
+    scores: `${BASE_URL}/teacher/scores`,
+    attendance: `${BASE_URL}/teacher/attendance`,
+    commentary: `${BASE_URL}/teacher/commentary`,
+    reportCards: `${BASE_URL}/teacher/report-cards`,
+    montessoriSheet: (classId: number, sectionId: number, examId: number) =>
+      `${BASE_URL}/teacher/montessori/sheet?classId=${classId}&sectionId=${sectionId}&examId=${examId}`,
+    saveMontessoriSingle: `${BASE_URL}/teacher/montessori/save-single`,
+    homeworks: `${BASE_URL}/teacher/homeworks`,
+    onlineExams: `${BASE_URL}/teacher/online-exams`,
+    homeworkSubmissions: (homeworkId: number) => `${BASE_URL}/teacher/homeworks/${homeworkId}/submissions`,
+    onlineExamSubmissions: (examId: number) => `${BASE_URL}/teacher/online-exams/${examId}/submissions`,
+    gradeHomework: (submissionId: number) => `${BASE_URL}/teacher/homeworks/submissions/${submissionId}/grade`,
+    gradeOnlineExam: (submissionId: number) => `${BASE_URL}/teacher/online-exams/submissions/${submissionId}/grade`,
+    exportPdf: (studentId: number, classId: number, sectionId: number, rankingType: string, rankingLimit?: number) =>
+      `${BASE_URL}/teacher/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+  },
+  student: {
+    profile: `${BASE_URL}/student/profile`,
+    attendance: `${BASE_URL}/student/attendance`,
+    tasks: `${BASE_URL}/student/tasks`,
+    submitHomework: (homeworkId: number) => `${BASE_URL}/student/homeworks/${homeworkId}/submit`,
+    submitOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/submit`,
+    startOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/start`,
+    grades: `${BASE_URL}/student/grades`,
+    exportPdf: (rankingType: string, rankingLimit?: number) =>
+      `${BASE_URL}/student/grades/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+  },
+  common: {
+    upload: `${BASE_URL}/upload`,
+  },
+  parent: {
+    children: `${BASE_URL}/parent/children`,
+    childProfile: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/profile`,
+    childAttendance: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/attendance`,
+    childTasks: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/tasks`,
+    childGrades: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/grades`,
+    childExportPdf: (studentId: number, rankingType: string, rankingLimit?: number) =>
+      `${BASE_URL}/parent/child/${studentId}/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
   },
 };
 

@@ -120,6 +120,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'My Studies', icon: BookOpen, active: true },
         { id: 'assignments', label: 'Assignments Tracker', icon: CheckSquare },
+        { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
         { id: 'grades', label: 'Grade Sheet & GPA', icon: TrendingUp },
         { id: 'timetable', label: 'Timetable Schedule', icon: Calendar },
         { id: 'settings', label: 'Platform Settings', icon: Settings },
@@ -220,11 +221,11 @@ export default function DashboardPage() {
           />
         )
       case 3: // Teacher
-        return <TeacherDashboard user={user} />
+        return <TeacherDashboard user={user} activeSection={activeSection} />
       case 6: // Parent
-        return <ParentDashboard user={user} />
+        return <ParentDashboard user={user} activeSection={activeSection} />
       case 7: // Student
-        return <StudentDashboard user={user} />
+        return <StudentDashboard user={user} activeSection={activeSection} />
       default:
         return <DefaultDashboard user={user} roleName={ROLE_NAMES[user.role] || 'User'} />
     }
@@ -242,7 +243,7 @@ export default function DashboardPage() {
 
       {/* Dynamic Sidebar Shell */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200/80 bg-white flex flex-col justify-between p-6 shadow-xl 
+        fixed inset-y-0 left-0 z-50 w-64 bg-[#001a4e] flex flex-col justify-between p-6 shadow-xl 
         transition-transform duration-300 ease-in-out transform
         md:translate-x-0 md:static md:shadow-sm md:flex md:shrink-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
@@ -251,18 +252,18 @@ export default function DashboardPage() {
           {/* Logo Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-500/20">
+              <div className="p-2.5 rounded-xl bg-[#003da5] text-white shadow-sm shadow-[#003da5]/20">
                 <School size={22} className="stroke-[2.5]" />
               </div>
               <div>
-                <span className="font-extrabold text-slate-900 text-lg tracking-tight block">Ugbekun 2.0</span>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SaaS SMP Portal</p>
+                <span className="font-extrabold text-white text-lg tracking-tight block">Ugbekun 2.0</span>
+                <p className="text-[10px] text-slate-300/80 font-bold uppercase tracking-wider">SaaS SMP Portal</p>
               </div>
             </div>
             {/* Close Button on Mobile Drawer */}
             <button 
               onClick={() => setIsSidebarOpen(false)}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 md:hidden transition cursor-pointer"
+              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white md:hidden transition cursor-pointer"
               aria-label="Close Sidebar"
             >
               <X size={20} className="stroke-[2.5]" />
@@ -282,19 +283,22 @@ export default function DashboardPage() {
                     setSelectedSection(link.id)
                     setIsSidebarOpen(false)
                   }}
-                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-sm transition ${
+                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-sm transition relative overflow-hidden ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                      ? 'bg-[#003da5] text-white pl-6'
+                      : 'hover:bg-white/10 text-slate-300 hover:text-white'
                   }`}
                 >
+                  {isActive && (
+                    <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#00bcff]" />
+                  )}
                   <IconComponent size={18} className="shrink-0" />
                   <span className="flex-1 min-w-0 truncate">{link.label}</span>
                   {link.badge && (
                     <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${
                       isActive
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-slate-100 text-slate-500'
+                        ? 'bg-[#00bcff]/20 text-[#00bcff]'
+                        : 'bg-white/10 text-slate-300'
                     }`}>
                       {link.badge}
                     </span>
@@ -306,19 +310,19 @@ export default function DashboardPage() {
         </div>
 
         {/* Profile Card & Session End Controls */}
-        <div className="pt-6 border-t border-slate-100">
-          <div className="flex items-center gap-3 mb-4 p-2 bg-slate-50 rounded-xl border border-slate-100">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-sm uppercase">
+        <div className="pt-6 border-t border-white/10">
+          <div className="flex items-center gap-3 mb-4 p-2 bg-white/5 rounded-xl border border-white/10">
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-white text-sm uppercase">
               {user.username.substring(0, 2)}
             </div>
             <div className="overflow-hidden">
-              <h4 className="font-bold text-sm text-slate-900 truncate">{user.username}</h4>
+              <h4 className="font-bold text-sm text-white truncate">{user.username}</h4>
               <p className="text-xs text-slate-400 truncate font-semibold">{ROLE_NAMES[user.role] || 'User'}</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm transition border border-rose-100 cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 font-bold text-sm transition border border-rose-900/40 cursor-pointer"
           >
             <LogOut size={16} />
             Sign Out

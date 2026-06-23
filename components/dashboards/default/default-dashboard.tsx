@@ -1,6 +1,7 @@
 'use client'
 
 import { Shield, User as UserIcon, Activity } from 'lucide-react'
+import { SchoolHeader } from '../school-header'
 
 interface DashboardProps {
   user: {
@@ -23,6 +24,9 @@ export function DefaultDashboard({ user, roleName }: DashboardProps) {
 
   return (
     <div className="space-y-8">
+      {/* School Header */}
+      <SchoolHeader />
+      
       {/* Banner */}
       <div className="relative rounded-2xl border border-slate-200/80 bg-white p-6 md:p-8 shadow-sm overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
