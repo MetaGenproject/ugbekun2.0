@@ -102,6 +102,12 @@ export function BranchSetup() {
   const [assignTeacherId, setAssignTeacherId] = useState('')
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false)
 
+  // Bulk subject assignment states
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
+  const [defaultTeacherId, setDefaultTeacherId] = useState('')
+  const [subjectTeacherOverrides, setSubjectTeacherOverrides] = useState<Record<number, string>>({})
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState('')
+
   // Exams state
   const [exams, setExams] = useState<ExamData[]>([])
   const [newExamName, setNewExamName] = useState('')
@@ -283,30 +289,48 @@ export function BranchSetup() {
     }
   }
 
-  // Assign Subject to Teacher & Class/Section
+  // Assign Subjects to Class/Section (Bulk)
   const handleAssignSubject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!assignClassId || !assignSectionId || !assignSubjectId || !assignTeacherId) {
-      showNotification('error', 'Please fill all assignments fields.')
+    if (!assignClassId || !assignSectionId) {
+      showNotification('error', 'Please select Class and Section.')
       return
+    }
+
+    if (selectedSubjectIds.length === 0) {
+      showNotification('error', 'Please select at least one subject to assign.')
+      return
+    }
+
+    // Verify all selected subjects have a teacher assigned
+    const assignmentsList = []
+    for (const subId of selectedSubjectIds) {
+      const teacherId = subjectTeacherOverrides[subId] || defaultTeacherId
+      if (!teacherId) {
+        const sub = subjects.find(s => s.id === subId)
+        showNotification('error', `Please assign a teacher for subject: ${sub?.name || subId}`)
+        return
+      }
+      assignmentsList.push({
+        subjectId: subId,
+        teacherId: Number(teacherId)
+      })
     }
 
     setIsSubmittingAssign(true)
     try {
-      await apiSlice.post(endpoints.admin.assignSubject, {
+      await apiSlice.post(endpoints.admin.assignSubjectBulk, {
         classId: Number(assignClassId),
         sectionId: Number(assignSectionId),
-        subjectId: Number(assignSubjectId),
-        teacherId: Number(assignTeacherId),
+        assignments: assignmentsList,
       })
-      setAssignClassId('')
-      setAssignSectionId('')
-      setAssignSubjectId('')
-      setAssignTeacherId('')
-      showNotification('success', 'Subject assignment created/updated successfully!')
+      setSelectedSubjectIds([])
+      setSubjectTeacherOverrides({})
+      setDefaultTeacherId('')
+      showNotification('success', `${assignmentsList.length} subjects assigned successfully!`)
       await loadSubjects()
     } catch (err) {
-      showNotification('error', err instanceof Error ? err.message : 'Failed to assign subject.')
+      showNotification('error', err instanceof Error ? err.message : 'Failed to assign subjects.')
     } finally {
       setIsSubmittingAssign(false)
     }
@@ -346,6 +370,11 @@ export function BranchSetup() {
     setNewExamDist([...newExamDist, distInput.trim()])
     setDistInput('')
   }
+
+  const filteredSubjects = subjects.filter(sub => 
+    sub.name.toLowerCase().includes(subjectSearchQuery.toLowerCase()) ||
+    sub.subjectCode.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+  )
 
   return (
     <div className="space-y-6">
@@ -675,82 +704,170 @@ export function BranchSetup() {
                   </form>
                 </div>
 
-                {/* Allocate Subject to Class-Section-Teacher */}
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <BookMarked size={16} className="text-amber-600" /> Assign to Curriculum
-                  </h3>
-                  <form onSubmit={handleAssignSubject} className="space-y-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Class</label>
-                      <select 
-                        value={assignClassId}
-                        onChange={e => setAssignClassId(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      >
-                        <option value="">-- Choose Class --</option>
-                        {classes.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Section</label>
-                      <select 
-                        value={assignSectionId}
-                        onChange={e => setAssignSectionId(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      >
-                        <option value="">-- Choose Section --</option>
-                        {sections.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Subject</label>
-                      <select 
-                        value={assignSubjectId}
-                        onChange={e => setAssignSubjectId(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      >
-                        <option value="">-- Choose Subject --</option>
-                        {subjects.map(sub => (
-                          <option key={sub.id} value={sub.id}>{sub.name} ({sub.subjectCode})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Assign Subject Teacher</label>
-                      <select 
-                        value={assignTeacherId}
-                        onChange={e => setAssignTeacherId(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      >
-                        <option value="">-- Choose Teacher --</option>
-                        {teachers.map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <button 
-                      type="submit" 
-                      disabled={isSubmittingAssign}
-                      className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
-                    >
-                      {isSubmittingAssign ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                      Link Subject
-                    </button>
-                  </form>
-                </div>
               </div>
 
               {/* Assignments List view */}
               <div className="lg:col-span-2 space-y-6">
+                {/* Allocate Subject to Class-Section-Teacher (Bulk) */}
+                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <BookMarked size={16} className="text-amber-600" /> Assign to Curriculum (Bulk)
+                  </h3>
+                  <form onSubmit={handleAssignSubject} className="space-y-4">
+                    {/* Class & Section Selectors */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Select Class</label>
+                        <select 
+                          value={assignClassId}
+                          onChange={e => {
+                            setAssignClassId(e.target.value)
+                            setAssignSectionId('')
+                          }}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                          required
+                        >
+                          <option value="">-- Choose Class --</option>
+                          {classes.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Select Section</label>
+                        <select 
+                          value={assignSectionId}
+                          onChange={e => setAssignSectionId(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                          required
+                        >
+                          <option value="">-- Choose Section --</option>
+                          {sections.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Global Default Teacher</label>
+                        <select 
+                          value={defaultTeacherId}
+                          onChange={e => setDefaultTeacherId(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                        >
+                          <option value="">-- Choose Default Teacher --</option>
+                          {teachers.map(t => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Subjects Checklist Header & Filter */}
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-xs font-bold text-slate-700">Select Subjects to Assign</span>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="text" 
+                            placeholder="Search subjects..." 
+                            value={subjectSearchQuery}
+                            onChange={e => setSubjectSearchQuery(e.target.value)}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 w-48 font-semibold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const filteredIds = filteredSubjects.map(s => s.id)
+                              const allSelected = filteredIds.every(id => selectedSubjectIds.includes(id))
+                              if (allSelected) {
+                                setSelectedSubjectIds(prev => prev.filter(id => !filteredIds.includes(id)))
+                              } else {
+                                setSelectedSubjectIds(prev => Array.from(new Set([...prev, ...filteredIds])))
+                              }
+                            }}
+                            className="text-[10px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition"
+                          >
+                            Toggle Select All
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Subjects Scrollable Container */}
+                      <div className="max-h-[300px] overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100 pr-1">
+                        {filteredSubjects.length === 0 ? (
+                          <div className="p-6 text-center text-slate-400 text-xs font-semibold">No subjects match search criteria.</div>
+                        ) : (
+                          filteredSubjects.map(sub => {
+                            const isChecked = selectedSubjectIds.includes(sub.id)
+                            const isOptional = sub.subjectType?.toLowerCase() === 'optional'
+
+                            return (
+                              <div key={sub.id} className={`flex items-center justify-between p-3 transition ${isChecked ? 'bg-blue-50/20' : 'hover:bg-slate-50/50'}`}>
+                                <div className="flex items-center gap-3">
+                                  <input 
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        setSelectedSubjectIds(prev => prev.filter(id => id !== sub.id))
+                                      } else {
+                                        setSelectedSubjectIds(prev => [...prev, sub.id])
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                                  />
+                                  <div>
+                                    <div className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+                                      {sub.name}
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                                        isOptional 
+                                          ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                      }`}>
+                                        {sub.subjectType}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase">{sub.subjectCode}</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-slate-400">Teacher:</span>
+                                  <select
+                                    value={subjectTeacherOverrides[sub.id] || ''}
+                                    onChange={e => {
+                                      setSubjectTeacherOverrides(prev => ({
+                                        ...prev,
+                                        [sub.id]: e.target.value
+                                      }))
+                                    }}
+                                    disabled={!isChecked}
+                                    className="text-xs px-2 py-1 rounded-md border border-slate-200 bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                                  >
+                                    <option value="">{defaultTeacherId ? `Default` : '-- Choose Teacher --'}</option>
+                                    {teachers.map(t => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      disabled={isSubmittingAssign}
+                      className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      {isSubmittingAssign ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      Link Selected Coursework ({selectedSubjectIds.length} Checked)
+                    </button>
+                  </form>
+                </div>
+
                 <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <BookOpen size={16} className="text-blue-600" /> Active Course Assignments

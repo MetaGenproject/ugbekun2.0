@@ -93,6 +93,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
             ? `${branchStats.teachers.toLocaleString()} · ${branchStats.staff.toLocaleString()}`
             : undefined,
         },
+        { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
@@ -110,6 +111,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
     case 6: // Parent
       return [
         { id: 'overview', label: 'Children Overview', icon: Users, active: true },
+        { id: 'sibling-requests', label: 'Sibling Admissions', icon: GraduationCap },
         { id: 'grades', label: 'Grade Progress', icon: TrendingUp },
         { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
         { id: 'billing', label: 'Fee Invoices', icon: DollarSign },

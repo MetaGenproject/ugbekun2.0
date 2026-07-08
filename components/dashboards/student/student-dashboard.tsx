@@ -94,6 +94,7 @@ interface TaskData {
     submitted: boolean
     score: number | null
     submittedAt: string | null
+    duration?: number
     createdAt: string
   }>
   homeworks: Array<{
@@ -829,7 +830,7 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
                       <div>
                         <p className="text-sm font-bold text-slate-800">{ex.title}</p>
                         <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                          {ex.subjectName} {ex.duration > 0 ? `• ${ex.duration} Mins` : ''}
+                          {ex.subjectName} {(ex.duration && ex.duration > 0) ? `• ${ex.duration} Mins` : ''}
                         </p>
                         {ex.submitted && ex.submittedAt && (
                           <span className="text-[10px] text-slate-400 font-bold block pt-1 uppercase">

@@ -26,6 +26,7 @@ import {
 import { BranchSetup } from './branch-setup'
 import { StudentOnboarding } from './student-onboarding'
 import { StudentPromotionModal } from './student-promotion-modal'
+import { ClassroomStudents } from './classroom-students'
 
 export interface BranchStats {
   branchId: number
@@ -576,6 +577,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'admissions') {
     return <StudentOnboarding />
+  }
+
+  if (activeSection === 'classrooms') {
+    return <ClassroomStudents />
   }
 
   const activities = [

@@ -161,6 +161,13 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
   const [isSubmittingRenewal, setIsSubmittingRenewal] = useState(false)
   const [renewError, setRenewError] = useState<string | null>(null)
 
+  // Extension Form State
+  const [extendingBranch, setExtendingBranch] = useState<SubscriptionDetail | null>(null)
+  const [extensionDays, setExtensionDays] = useState<string>('7')
+  const [extensionReason, setExtensionReason] = useState<string>('')
+  const [isSubmittingExtension, setIsSubmittingExtension] = useState(false)
+  const [extensionError, setExtensionError] = useState<string | null>(null)
+
   // Sessions State
   const [sessions, setSessions] = useState<AcademicSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
@@ -289,6 +296,36 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       setRenewError(err instanceof Error ? err.message : 'Failed to renew subscription')
     } finally {
       setIsSubmittingRenewal(false)
+    }
+  }
+
+  const handleExtendSubscription = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!extendingBranch || !extensionDays) return
+    setIsSubmittingExtension(true)
+    setExtensionError(null)
+    setActionMessage(null)
+    try {
+      const daysNum = Number(extensionDays)
+      if (isNaN(daysNum) || daysNum < 1 || daysNum > 30) {
+        throw new Error('Please enter a number of days between 1 and 30.')
+      }
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.superadmin.extendSubscription(extendingBranch.branchId),
+        {
+          days: daysNum,
+          reason: extensionReason,
+        }
+      )
+      setActionMessage(res.message || 'Subscription extended successfully.')
+      setExtendingBranch(null)
+      setExtensionDays('7')
+      setExtensionReason('')
+      loadSubscriptions()
+    } catch (err) {
+      setExtensionError(err instanceof Error ? err.message : 'Failed to extend subscription')
+    } finally {
+      setIsSubmittingExtension(false)
     }
   }
 
@@ -833,17 +870,31 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
                           {getDaysRemainingBadge(lSub?.expiryDate)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRenewingBranch(sub)
-                              setSelectedPlanId(sub.latestSubscription?.planId.toString() || '')
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
-                          >
-                            <DollarSign size={13} />
-                            Renew Subscription
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExtendingBranch(sub)
+                                setExtensionDays('7')
+                                setExtensionReason('')
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                            >
+                              <Clock size={13} />
+                              Extend Grace Period
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRenewingBranch(sub)
+                                setSelectedPlanId(sub.latestSubscription?.planId.toString() || '')
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                            >
+                              <DollarSign size={13} />
+                              Renew Subscription
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -961,6 +1012,100 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
                 </Table>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXTEND SUBSCRIPTION MODAL */}
+      {extendingBranch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden transform transition-all animate-fade-in">
+            <div className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-slate-900">Extend Grace Period</h3>
+                <p className="text-xs text-slate-400 font-semibold">{extendingBranch.branchName}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setExtendingBranch(null)
+                  setExtensionError(null)
+                }}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleExtendSubscription} className="p-6 space-y-4">
+              {extensionError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 font-semibold">
+                  {extensionError}
+                </div>
+              )}
+
+              {/* Display existing subscription context */}
+              {extendingBranch.latestSubscription && (
+                <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-xl text-xs space-y-1 text-amber-900 font-semibold">
+                  <div className="flex justify-between">
+                    <span>Current Expiration:</span>
+                    <span>{new Date(extendingBranch.latestSubscription.expiryDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="text-[10px] text-amber-600 font-bold leading-normal mt-1 flex items-start gap-1">
+                    <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                    <span>This will grant a grace period extension. The new expiry date will start from the current expiration date (or from today if already expired).</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Extension Days */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 block">Number of Days to Extend</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={extensionDays}
+                  onChange={(e) => setExtensionDays(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                  required
+                />
+                <p className="text-[10px] text-slate-400 font-semibold">
+                  Enter the number of days (1 to 30 days) to extend the subscription.
+                </p>
+              </div>
+
+              {/* Reason / Notes */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-600 block">Reason for Extension</label>
+                <textarea
+                  value={extensionReason}
+                  onChange={(e) => setExtensionReason(e.target.value)}
+                  placeholder="e.g. School requested grace period for fee collection process."
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm focus:outline-none focus:border-blue-500 focus:bg-white transition min-h-[80px]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExtendingBranch(null)
+                    setExtensionError(null)
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingExtension}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-extrabold text-sm transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSubmittingExtension && <Loader2 size={14} className="animate-spin" />}
+                  Confirm Extension
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

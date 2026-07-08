@@ -60,10 +60,50 @@ interface OnboardResponse {
 // TEACHER ONBOARDING MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface ClassSectionData {
+  section: {
+    id: number
+    name: string
+  }
+}
+
+interface ClassData {
+  id: number
+  name: string
+  sections: ClassSectionData[]
+}
+
+interface SubjectData {
+  id: number
+  name: string
+  subjectCode: string
+}
+
+const STAFF_ROLE_LABELS: Record<string, string> = {
+  '3': 'Teacher',
+  '4': 'Accountant',
+  '8': 'Receptionist',
+  '9': 'Proprietor',
+  '12': 'Librarian',
+  '13': 'Staff',
+}
+
 export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOnboardingModalProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+
+  const [role, setRole] = useState('3')
+  const [isClassTeacher, setIsClassTeacher] = useState(false)
+  const [isSubjectTeacher, setIsSubjectTeacher] = useState(false)
+  const [classTeacherClassId, setClassTeacherClassId] = useState('')
+  const [classTeacherSectionId, setClassTeacherSectionId] = useState('')
+  const [subjectTeacherClassId, setSubjectTeacherClassId] = useState('')
+  const [subjectTeacherSectionId, setSubjectTeacherSectionId] = useState('')
+  const [subjectTeacherSubjectId, setSubjectTeacherSubjectId] = useState('')
+
+  const [classes, setClasses] = useState<ClassData[]>([])
+  const [subjects, setSubjects] = useState<SubjectData[]>([])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -71,6 +111,29 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
 
   const [showPassword, setShowPassword] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSetupData()
+    }
+  }, [isOpen])
+
+  const loadSetupData = async () => {
+    try {
+      const [classRes, subjectRes] = await Promise.all([
+        apiSlice.get<{ success: boolean; classes: ClassData[] }>(endpoints.admin.classesSections),
+        apiSlice.get<{ success: boolean; subjects: SubjectData[] }>(endpoints.admin.subjects),
+      ])
+      if (classRes.success && classRes.classes) {
+        setClasses(classRes.classes)
+      }
+      if (subjectRes.success && subjectRes.subjects) {
+        setSubjects(subjectRes.subjects)
+      }
+    } catch (err) {
+      console.error('Failed to load setup data for onboarding:', err)
+    }
+  }
 
   const handleCopyText = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
@@ -82,6 +145,14 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
     setName('')
     setEmail('')
     setPhone('')
+    setRole('3')
+    setIsClassTeacher(false)
+    setIsSubjectTeacher(false)
+    setClassTeacherClassId('')
+    setClassTeacherSectionId('')
+    setSubjectTeacherClassId('')
+    setSubjectTeacherSectionId('')
+    setSubjectTeacherSubjectId('')
     setResultData(null)
     setErrorMsg(null)
     setIsSubmitting(false)
@@ -104,6 +175,14 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
+        role: Number(role),
+        isClassTeacher,
+        classTeacherClassId: classTeacherClassId ? Number(classTeacherClassId) : undefined,
+        classTeacherSectionId: classTeacherSectionId ? Number(classTeacherSectionId) : undefined,
+        isSubjectTeacher,
+        subjectTeacherClassId: subjectTeacherClassId ? Number(subjectTeacherClassId) : undefined,
+        subjectTeacherSectionId: subjectTeacherSectionId ? Number(subjectTeacherSectionId) : undefined,
+        subjectTeacherSubjectId: subjectTeacherSubjectId ? Number(subjectTeacherSubjectId) : undefined,
       }
 
       const res = await apiSlice.post<OnboardResponse>(
@@ -114,7 +193,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
       setResultData(res)
       onSuccess()
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Teacher onboarding failed.')
+      setErrorMsg(err instanceof Error ? err.message : 'Staff onboarding failed.')
     } finally {
       setIsSubmitting(false)
     }
@@ -124,12 +203,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50 shrink-0">
           <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <UserPlus className="text-[#0063a6]" size={18} /> Onboard New Teacher
+            <UserPlus className="text-[#0063a6]" size={18} /> Onboard New Staff / Teacher
           </h2>
           <button onClick={handleClose} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition">
             <X size={18} />
@@ -137,7 +216,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto flex-1">
           {resultData ? (
             <div className="space-y-6">
               <div className="text-center space-y-2 py-2">
@@ -147,7 +226,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Onboarding Completed!</h3>
                 <p className="text-xs text-slate-500 font-medium">
                   {resultData.emailSent 
-                    ? `Account created. Portal credentials successfully delivered to ${resultData.data.teacher.email}.`
+                    ? `Account created. Portal credentials successfully delivered to ${email}.`
                     : `Account created. (Email skipped or failed delivery).`}
                 </p>
               </div>
@@ -156,7 +235,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
               <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-5 space-y-4 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-[#0063a6]" />
                 <div className="flex items-center gap-2 font-black text-xs text-[#0063a6] uppercase tracking-wider">
-                  <Key size={14} /> Teacher Account Access
+                  <Key size={14} /> {STAFF_ROLE_LABELS[role] || 'Staff'} Account Access
                 </div>
 
                 <div className="space-y-3">
@@ -206,7 +285,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                     onClick={() => {
                       const link = document.createElement('a')
                       link.href = `data:application/pdf;base64,${resultData.pdfBase64}`
-                      link.download = `login_slip_teacher_${resultData.data.teacher.name.toLowerCase().replace(/\s+/g, '_')}.pdf`
+                      link.download = `login_slip_staff_${name.toLowerCase().replace(/\s+/g, '_')}.pdf`
                       document.body.appendChild(link)
                       link.click()
                       document.body.removeChild(link)
@@ -233,7 +312,31 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
               )}
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500">Teacher Full Name <span className="text-rose-500">*</span></label>
+                <label className="text-xs font-bold text-slate-500">Staff Role <span className="text-rose-500">*</span></label>
+                <select
+                  value={role}
+                  onChange={(e) => {
+                    setRole(e.target.value)
+                    // Reset teacher flags if not teacher role
+                    if (e.target.value !== '3') {
+                      setIsClassTeacher(false)
+                      setIsSubjectTeacher(false)
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition"
+                >
+                  <option value="3">Teacher</option>
+                  <option value="4">Accountant</option>
+                  <option value="8">Receptionist</option>
+                  <option value="9">Proprietor</option>
+                  <option value="12">Librarian</option>
+                  <option value="13">Staff</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">{role === '3' ? 'Teacher' : 'Staff'} Full Name <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -270,6 +373,144 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                   className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#0063a6] transition"
                 />
               </div>
+
+              {role === '3' && (
+                <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-4">
+                  <p className="text-xs font-bold text-slate-700">Teacher Designation & Immediate Class Assignment</p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isClassTeacher}
+                        onChange={(e) => setIsClassTeacher(e.target.checked)}
+                        className="rounded border-slate-300 text-[#0063a6] focus:ring-[#0063a6]"
+                      />
+                      Class Teacher (Form Teacher)
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isSubjectTeacher}
+                        onChange={(e) => setIsSubjectTeacher(e.target.checked)}
+                        className="rounded border-slate-300 text-[#0063a6] focus:ring-[#0063a6]"
+                      />
+                      Subject Teacher
+                    </label>
+                  </div>
+
+                  {/* Class Teacher (Form Teacher) Allocation Dropdowns */}
+                  {isClassTeacher && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200/60">
+                      <p className="text-[11px] font-bold text-[#0063a6] uppercase tracking-wider">Allocate Form/Class Classroom</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400">Class <span className="text-rose-500">*</span></label>
+                          <select
+                            required
+                            value={classTeacherClassId}
+                            onChange={(e) => {
+                              setClassTeacherClassId(e.target.value)
+                              setClassTeacherSectionId('')
+                            }}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                          >
+                            <option value="">Select Class</option>
+                            {classes.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400">Section <span className="text-rose-500">*</span></label>
+                          <select
+                            required
+                            value={classTeacherSectionId}
+                            onChange={(e) => setClassTeacherSectionId(e.target.value)}
+                            disabled={!classTeacherClassId}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none disabled:opacity-60"
+                          >
+                            <option value="">Select Section</option>
+                            {classTeacherClassId &&
+                              classes
+                                .find((c) => String(c.id) === classTeacherClassId)
+                                ?.sections.map((s) => (
+                                  <option key={s.section.id} value={s.section.id}>
+                                    {s.section.name}
+                                  </option>
+                                ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Subject Teacher Assignment Dropdowns */}
+                  {isSubjectTeacher && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200/60">
+                      <p className="text-[11px] font-bold text-[#0063a6] uppercase tracking-wider">Assign Subject & Classroom</p>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400">Subject <span className="text-rose-500">*</span></label>
+                        <select
+                          required
+                          value={subjectTeacherSubjectId}
+                          onChange={(e) => setSubjectTeacherSubjectId(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                        >
+                          <option value="">Select Subject</option>
+                          {subjects.map((sub) => (
+                            <option key={sub.id} value={sub.id}>{sub.name} ({sub.subjectCode})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400">Class <span className="text-rose-500">*</span></label>
+                          <select
+                            required
+                            value={subjectTeacherClassId}
+                            onChange={(e) => {
+                              setSubjectTeacherClassId(e.target.value)
+                              setSubjectTeacherSectionId('')
+                            }}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                          >
+                            <option value="">Select Class</option>
+                            {classes.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400">Section <span className="text-rose-500">*</span></label>
+                          <select
+                            required
+                            value={subjectTeacherSectionId}
+                            onChange={(e) => setSubjectTeacherSectionId(e.target.value)}
+                            disabled={!subjectTeacherClassId}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none disabled:opacity-60"
+                          >
+                            <option value="">Select Section</option>
+                            {subjectTeacherClassId &&
+                              classes
+                                .find((c) => String(c.id) === subjectTeacherClassId)
+                                ?.sections.map((s) => (
+                                  <option key={s.section.id} value={s.section.id}>
+                                    {s.section.name}
+                                  </option>
+                                ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-3 border-t border-slate-100 mt-6">
                 <button
