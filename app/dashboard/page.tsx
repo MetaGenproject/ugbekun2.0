@@ -18,7 +18,8 @@ import {
   Activity,
   Layers,
   Menu,
-  X
+  X,
+  Award
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -95,6 +96,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         },
         { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
+        { id: 'credentials', label: 'ID & Credentials', icon: Award },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'settings', label: 'Branch Settings', icon: Settings },

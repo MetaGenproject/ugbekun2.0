@@ -27,6 +27,8 @@ import { BranchSetup } from './branch-setup'
 import { StudentOnboarding } from './student-onboarding'
 import { StudentPromotionModal } from './student-promotion-modal'
 import { ClassroomStudents } from './classroom-students'
+import { IdProvisioning } from './id-provisioning'
+import { FinancesDashboard } from './finances-dashboard'
 
 export interface BranchStats {
   branchId: number
@@ -577,6 +579,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'admissions') {
     return <StudentOnboarding />
+  }
+
+  if (activeSection === 'credentials') {
+    return <IdProvisioning />
+  }
+
+  if (activeSection === 'finances') {
+    return <FinancesDashboard />
   }
 
   if (activeSection === 'classrooms') {
