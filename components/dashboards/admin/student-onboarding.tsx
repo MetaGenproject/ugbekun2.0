@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { 
-  UserPlus, 
-  Users, 
-  GraduationCap, 
-  CheckCircle2, 
-  Loader2, 
-  BookOpen, 
-  Award, 
-  UserCheck, 
-  QrCode, 
+import {
+  UserPlus,
+  Users,
+  GraduationCap,
+  CheckCircle2,
+  Loader2,
+  BookOpen,
+  Award,
+  UserCheck,
+  QrCode,
   Sparkles,
   ArrowRight,
   Key,
@@ -241,7 +241,7 @@ export function StudentOnboarding() {
     }
 
     const headers = rawRows[0].map(h => h.trim().toLowerCase())
-    
+
     const indexMap = {
       firstName: headers.indexOf('first name'),
       lastName: headers.indexOf('last name'),
@@ -262,7 +262,7 @@ export function StudentOnboarding() {
     if (indexMap.class === -1) missingHeaders.push('Class')
     if (indexMap.section === -1) missingHeaders.push('Section')
     if (indexMap.parentName === -1) missingHeaders.push('Parent Name')
-    
+
     if (missingHeaders.length > 0) {
       setValidationErrors([{ row: 0, error: `Missing required columns in CSV header: ${missingHeaders.join(', ')}` }])
       setParsedStudents([])
@@ -417,7 +417,7 @@ export function StudentOnboarding() {
     setServerError(null)
     setShowCredentialsMap({})
   }
-  
+
   // Sibling Requests Admin states
   interface AdminSiblingRequest {
     id: number
@@ -444,7 +444,7 @@ export function StudentOnboarding() {
   const [siblingReqs, setSiblingReqs] = useState<AdminSiblingRequest[]>([])
   const [loadingReqs, setLoadingReqs] = useState(false)
   const [approvingId, setApprovingId] = useState<number | null>(null)
-  
+
   // Rejection states
   const [rejectingReq, setRejectingReq] = useState<AdminSiblingRequest | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -558,6 +558,8 @@ export function StudentOnboarding() {
     birthday: '',
     classId: '',
     sectionId: '',
+    currentAddress: '',
+    previousDetails: '',
   })
 
   const [parentForm, setParentForm] = useState({
@@ -601,6 +603,68 @@ export function StudentOnboarding() {
     }
   }, [studentForm.classId, classes])
 
+  const [isParsing, setIsParsing] = useState(false)
+  const [parseSuccessMsg, setParseSuccessMsg] = useState('')
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsParsing(true)
+    setErrorMsg(null)
+    setParseSuccessMsg('')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_token') : null
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
+      const response = await fetch(`${apiUrl}/admin/students/parse-document`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errData = await response.json()
+        throw new Error(errData.message || 'AI parsing failed.')
+      }
+
+      const res = await response.json()
+      if (res.success && res.extractedData) {
+        const data = res.extractedData
+
+        setStudentForm(prev => ({
+          ...prev,
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          gender: data.gender === 'Female' ? 'Female' : 'Male',
+          birthday: data.birthday ? data.birthday.substring(0, 10) : '',
+          currentAddress: data.homeAddress || '',
+          previousDetails: data.historicalPerformance || '',
+        }))
+
+        setParentForm({
+          name: data.parentName || '',
+          relation: (data.parentRelation === 'Mother' ? 'Mother' : data.parentRelation === 'Guardian' ? 'Guardian' : 'Father') as any,
+          email: data.parentEmail || '',
+          mobileno: data.parentPhone || '',
+        })
+
+        setParseSuccessMsg('AI successfully parsed document! Fields have been pre-filled below.')
+      } else {
+        throw new Error('Failed to extract data from document.')
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'AI parsing failed. Please verify the document is readable.')
+    } finally {
+      setIsParsing(false)
+    }
+  }
+
   // Submit Handler
   const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -639,6 +703,8 @@ export function StudentOnboarding() {
       birthday: '',
       classId: '',
       sectionId: '',
+      currentAddress: '',
+      previousDetails: '',
     })
     setParentForm({
       name: '',
@@ -646,6 +712,7 @@ export function StudentOnboarding() {
       email: '',
       mobileno: '',
     })
+    setParseSuccessMsg('')
     setResultData(null)
     setActiveStep(1)
     setErrorMsg(null)
@@ -741,7 +808,7 @@ export function StudentOnboarding() {
               <div className="flex items-center gap-2 font-black text-xs text-blue-800 uppercase tracking-wider">
                 <GraduationCap size={16} /> Student Access Details
               </div>
-              
+
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 block mb-1 uppercase tracking-wider">Username</label>
@@ -849,7 +916,7 @@ export function StudentOnboarding() {
           {/* Card Footprint Preview */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md relative overflow-hidden flex flex-col justify-between h-[360px]">
             <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-600 to-indigo-600" />
-            
+
             {/* ID Card Top Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
@@ -957,14 +1024,14 @@ export function StudentOnboarding() {
           </div>
           {activeTab === 'direct' && (
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 p-1 rounded-xl shrink-0">
-              <button 
+              <button
                 type="button"
                 onClick={() => setActiveStep(1)}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold text-xs transition ${activeStep === 1 ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 <GraduationCap size={14} /> Student Info
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   if (studentForm.firstName && studentForm.lastName && studentForm.classId && studentForm.sectionId) {
@@ -987,22 +1054,20 @@ export function StudentOnboarding() {
         <button
           type="button"
           onClick={() => setActiveTab('direct')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition ${
-            activeTab === 'direct'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-550 hover:text-slate-900'
-          }`}
+          className={`pb-3 font-extrabold text-sm border-b-2 transition ${activeTab === 'direct'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-550 hover:text-slate-900'
+            }`}
         >
           Direct Student Onboarding
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('sibling')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'sibling'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-550 hover:text-slate-900'
-          }`}
+          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'sibling'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-550 hover:text-slate-900'
+            }`}
         >
           Sibling Requests Approval
           {siblingReqs.filter(r => r.status === 'pending').length > 0 && (
@@ -1014,22 +1079,20 @@ export function StudentOnboarding() {
         <button
           type="button"
           onClick={() => setActiveTab('csv')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'csv'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-550 hover:text-slate-900'
-          }`}
+          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'csv'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-550 hover:text-slate-900'
+            }`}
         >
           CSV Bulk Onboarding
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('online')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${
-            activeTab === 'online'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-550 hover:text-slate-900'
-          }`}
+          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'online'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-550 hover:text-slate-900'
+            }`}
         >
           Online Admissions Desk
           {onlineAdmissions.filter(a => a.status === 1).length > 0 && (
@@ -1068,13 +1131,51 @@ export function StudentOnboarding() {
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
                     <GraduationCap size={16} className="text-blue-600" /> Student Profile Details
                   </h3>
-                  
+
+                  {/* AI Document Parsing Widget */}
+                  <div className="p-4 rounded-xl border border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50/80 transition space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2.5 bg-blue-600 text-white rounded-lg shadow-sm">
+                        <Sparkles size={16} className="animate-pulse" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-black text-slate-950 tracking-tight">AI Document Parsing Assistant</h4>
+                        <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+                          Upload a scanned admission form, birth certificate, or previous academic transcript. AI will parse the details and autofill the registration schema instantly.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="relative px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95">
+                        {isParsing ? 'Processing with AI...' : 'Upload & Parse Document'}
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={handleDocumentUpload}
+                          className="hidden"
+                          disabled={isParsing}
+                        />
+                      </label>
+                      {isParsing && (
+                        <div className="flex items-center gap-1.5 text-xs text-blue-600 font-bold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Extracting records...
+                        </div>
+                      )}
+                      {parseSuccessMsg && (
+                        <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={14} /> {parseSuccessMsg}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">First Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="Student's first name" 
+                      <input
+                        type="text"
+                        placeholder="Student's first name"
                         value={studentForm.firstName}
                         onChange={e => setStudentForm({ ...studentForm, firstName: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1083,9 +1184,9 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Last Name (Surname)</label>
-                      <input 
-                        type="text" 
-                        placeholder="Student's last name" 
+                      <input
+                        type="text"
+                        placeholder="Student's last name"
                         value={studentForm.lastName}
                         onChange={e => setStudentForm({ ...studentForm, lastName: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1094,7 +1195,7 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Gender</label>
-                      <select 
+                      <select
                         value={studentForm.gender}
                         onChange={e => setStudentForm({ ...studentForm, gender: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1105,8 +1206,8 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Date of Birth</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         value={studentForm.birthday}
                         onChange={e => setStudentForm({ ...studentForm, birthday: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1114,7 +1215,7 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Select Class</label>
-                      <select 
+                      <select
                         value={studentForm.classId}
                         onChange={e => setStudentForm({ ...studentForm, classId: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1128,7 +1229,7 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Select Section</label>
-                      <select 
+                      <select
                         value={studentForm.sectionId}
                         onChange={e => setStudentForm({ ...studentForm, sectionId: e.target.value })}
                         disabled={!studentForm.classId}
@@ -1140,6 +1241,24 @@ export function StudentOnboarding() {
                           <option key={sec.id} value={sec.id}>{sec.name}</option>
                         ))}
                       </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Home Address</label>
+                      <textarea
+                        placeholder="Student's home address"
+                        value={studentForm.currentAddress}
+                        onChange={e => setStudentForm({ ...studentForm, currentAddress: e.target.value })}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-16 resize-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Previous School & Academic History</label>
+                      <textarea
+                        placeholder="E.g., Greenfield Academy, Grade 3 - average score 85%, exemplary behavior"
+                        value={studentForm.previousDetails}
+                        onChange={e => setStudentForm({ ...studentForm, previousDetails: e.target.value })}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-16 resize-none"
+                      />
                     </div>
                   </div>
 
@@ -1172,9 +1291,9 @@ export function StudentOnboarding() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Parent Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="Father or Mother's full name" 
+                      <input
+                        type="text"
+                        placeholder="Father or Mother's full name"
                         value={parentForm.name}
                         onChange={e => setParentForm({ ...parentForm, name: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1183,7 +1302,7 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Relationship</label>
-                      <select 
+                      <select
                         value={parentForm.relation}
                         onChange={e => setParentForm({ ...parentForm, relation: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1195,9 +1314,9 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Mobile Phone Number</label>
-                      <input 
-                        type="tel" 
-                        placeholder="e.g. 08012345678" 
+                      <input
+                        type="tel"
+                        placeholder="e.g. 08012345678"
                         value={parentForm.mobileno}
                         onChange={e => setParentForm({ ...parentForm, mobileno: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1205,9 +1324,9 @@ export function StudentOnboarding() {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 block mb-1">Email Address</label>
-                      <input 
-                        type="email" 
-                        placeholder="e.g. parent@domain.com" 
+                      <input
+                        type="email"
+                        placeholder="e.g. parent@domain.com"
                         value={parentForm.email}
                         onChange={e => setParentForm({ ...parentForm, email: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1531,7 +1650,7 @@ export function StudentOnboarding() {
                       <FileText size={16} className="text-blue-600" /> Bulk Import Guidelines
                     </h3>
                     <p className="text-xs text-slate-500 font-medium max-w-2xl leading-relaxed">
-                      Download the CSV template, fill in your student and parent details, and upload the file. 
+                      Download the CSV template, fill in your student and parent details, and upload the file.
                       Class and Section names must exactly match the configurations of your branch (case-insensitive).
                     </p>
                   </div>
@@ -1572,11 +1691,11 @@ export function StudentOnboarding() {
                       </p>
                       <p className="text-[10px] text-slate-400 font-medium">CSV Files only (max 10MB)</p>
                     </div>
-                    <input 
-                      type="file" 
-                      accept=".csv" 
-                      onChange={handleCsvUpload} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleCsvUpload}
+                      className="hidden"
                     />
                   </label>
                 </div>
@@ -1603,13 +1722,12 @@ export function StudentOnboarding() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                        validationErrors.length > 0 
-                          ? 'bg-rose-105 text-rose-700 border border-rose-200' 
-                          : 'bg-emerald-105 text-emerald-700 border border-emerald-200'
-                      }`}>
-                        {validationErrors.length > 0 
-                          ? `${validationErrors.length} validation errors` 
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${validationErrors.length > 0
+                        ? 'bg-rose-105 text-rose-700 border border-rose-200'
+                        : 'bg-emerald-105 text-emerald-700 border border-emerald-200'
+                        }`}>
+                        {validationErrors.length > 0
+                          ? `${validationErrors.length} validation errors`
                           : 'All rows valid'
                         }
                       </span>
@@ -1720,25 +1838,24 @@ export function StudentOnboarding() {
             {/* Status Tabs */}
             <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
               {(['all', 'pending', 'screening', 'approved', 'rejected'] as const).map(f => {
-                const count = f === 'all' 
-                  ? onlineAdmissions.length 
+                const count = f === 'all'
+                  ? onlineAdmissions.length
                   : onlineAdmissions.filter(a => {
-                      if (f === 'pending') return a.status === 1
-                      if (f === 'screening') return a.status === 2
-                      if (f === 'approved') return a.status === 3
-                      if (f === 'rejected') return a.status === 0
-                      return false
-                    }).length
+                    if (f === 'pending') return a.status === 1
+                    if (f === 'screening') return a.status === 2
+                    if (f === 'approved') return a.status === 3
+                    if (f === 'rejected') return a.status === 0
+                    return false
+                  }).length
 
                 return (
                   <button
                     key={f}
                     onClick={() => setAdmissionsFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition cursor-pointer whitespace-nowrap ${
-                      admissionsFilter === f 
-                        ? 'bg-white text-slate-900 shadow-sm shadow-slate-250' 
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition cursor-pointer whitespace-nowrap ${admissionsFilter === f
+                      ? 'bg-white text-slate-900 shadow-sm shadow-slate-250'
+                      : 'text-slate-500 hover:text-slate-900'
+                      }`}
                   >
                     {f} ({count})
                   </button>
@@ -2152,7 +2269,7 @@ export function StudentOnboarding() {
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                Record interview comments, test results, or feedback for <strong>{selectedAdmission.firstName} {selectedAdmission.lastName || ''}</strong>. 
+                Record interview comments, test results, or feedback for <strong>{selectedAdmission.firstName} {selectedAdmission.lastName || ''}</strong>.
                 This will move their application status to <strong>Screening</strong>.
               </p>
               <div>
@@ -2267,7 +2384,7 @@ export function StudentOnboarding() {
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                Approve admission and register <strong>{selectedAdmission.firstName} {selectedAdmission.lastName || ''}</strong>. 
+                Approve admission and register <strong>{selectedAdmission.firstName} {selectedAdmission.lastName || ''}</strong>.
                 Verify or override their classroom allocation below:
               </p>
 
@@ -2315,9 +2432,9 @@ export function StudentOnboarding() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleAdmissionAction(selectedAdmission.id, 3, { 
-                    classId: overrideClassId ? Number(overrideClassId) : undefined, 
-                    sectionId: overrideSectionId ? Number(overrideSectionId) : undefined 
+                  onClick={() => handleAdmissionAction(selectedAdmission.id, 3, {
+                    classId: overrideClassId ? Number(overrideClassId) : undefined,
+                    sectionId: overrideSectionId ? Number(overrideSectionId) : undefined
                   })}
                   disabled={isProcessingAction || !overrideClassId || !overrideSectionId}
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { StudentMediaLibrary } from './student-media-library'
+import { StudentLiveClassrooms } from './student-live-classrooms'
 
 interface DashboardProps {
   user: {
@@ -1417,6 +1419,14 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {activeSection === 'media' && (
+        <StudentMediaLibrary />
+      )}
+
+      {activeSection === 'liveRooms' && (
+        <StudentLiveClassrooms />
       )}
     </div>
   )

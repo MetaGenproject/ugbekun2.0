@@ -15,7 +15,8 @@ import {
   UserCheck,
   AlertCircle
 } from 'lucide-react'
-import { apiSlice } from '@/lib/apiSlice'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { ScoreScannerModal } from './score-scanner-modal'
 
 interface StudentRow {
   studentId: number
@@ -71,6 +72,7 @@ export default function GradebookInterface({
     errorMsg?: string
   }[]>([])
   const [uploadingCsv, setUploadingCsv] = useState(false)
+  const [showScannerModal, setShowScannerModal] = useState(false)
 
   // Fetch sheet data
   const fetchGradebook = async () => {
@@ -78,7 +80,7 @@ export default function GradebookInterface({
     setError(null)
     try {
       const res = await apiSlice.get<{ success: boolean; sheet: StudentRow[] }>(
-        `/api/teacher/gradebook/sheet?classId=${classId}&sectionId=${sectionId}&subjectId=${subjectId}&examId=${examId}`
+        `${endpoints.teacher.gradebookSheet}?classId=${classId}&sectionId=${sectionId}&subjectId=${subjectId}&examId=${examId}`
       )
       if (res.success) {
         setSheetData(res.sheet)
@@ -184,7 +186,7 @@ export default function GradebookInterface({
     setSuccess(null)
     try {
       const res = await apiSlice.post<{ success: boolean; message: string }>(
-        '/api/teacher/gradebook/save-single',
+        endpoints.teacher.gradebookSaveSingle,
         {
           classId,
           sectionId,
@@ -319,7 +321,7 @@ export default function GradebookInterface({
       }))
 
       const res = await apiSlice.post<{ success: boolean; results: any }>(
-        '/api/teacher/gradebook/csv-upload',
+        endpoints.teacher.gradebookCsvUpload,
         {
           classId,
           sectionId,
@@ -422,6 +424,13 @@ export default function GradebookInterface({
             >
               <Upload size={14} />
               Bulk Import CSV
+            </button>
+            <button
+              onClick={() => setShowScannerModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-xs transition"
+            >
+              <Sparkles size={14} />
+              Scan Score Sheet (AI)
             </button>
           </div>
         </div>
@@ -702,6 +711,25 @@ export default function GradebookInterface({
           </div>
         </div>
       )}
+
+      <ScoreScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onCommitSuccess={() => {
+          fetchGradebook()
+          setSuccess('Scores from scanned sheet committed successfully!')
+        }}
+        classId={classId}
+        sectionId={sectionId}
+        examId={examId}
+        subjectId={subjectId}
+        students={sheetData.map(s => ({
+          id: s.studentId,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          registerNo: s.registerNo
+        }))}
+      />
     </div>
   )
 }

@@ -18,13 +18,17 @@ import {
   Save,
   Clock,
   Download,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
 import GradebookInterface from './gradebook-interface'
 import MontessoriMatrix from './montessori-matrix'
 import AttendanceRegister from './attendance-register'
+import { MediaLibrary } from './media-library'
+import { AiLessonPlanner } from './ai-lesson-planner'
+import { LiveClassroomHub } from './live-classroom-hub'
 
 interface DashboardProps {
   user: {
@@ -75,10 +79,15 @@ interface Student {
   registerNo: string
   gender: string
   remark?: string
+  status?: string
+  reviewNotes?: string | null
+  originalAiRemark?: string | null
+  isAiGenerated?: boolean
+  isEditedByHuman?: boolean
 }
 
 export function TeacherDashboard({ user, activeSection }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms'>('overview')
 
   useEffect(() => {
     if (!activeSection) return
@@ -92,6 +101,12 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
       setActiveTab('commentary')
     } else if (activeSection === 'calendar') {
       setActiveTab('assignments')
+    } else if (activeSection === 'media') {
+      setActiveTab('media')
+    } else if (activeSection === 'lessonPlan') {
+      setActiveTab('lessonPlan')
+    } else if (activeSection === 'liveRooms') {
+      setActiveTab('liveRooms')
     }
   }, [activeSection])
   const [profile, setProfile] = useState<TeacherProfile | null>(null)
@@ -119,6 +134,10 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
   const [selectedFormCommentary, setSelectedFormCommentary] = useState<number>(0) // index in formAllocations
   const [commentaryRecords, setCommentaryRecords] = useState<Record<number, string>>({})
   const [savingCommentary, setSavingCommentary] = useState<Record<number, boolean>>({})
+  const [originalAiRemarks, setOriginalAiRemarks] = useState<Record<number, string>>({})
+  const [isAiGeneratedFlags, setIsAiGeneratedFlags] = useState<Record<number, boolean>>({})
+  const [generatingAi, setGeneratingAi] = useState<Record<number, boolean>>({})
+  const [selectedTags, setSelectedTags] = useState<Record<number, string[]>>({})
 
   // Report Cards State
   const [reportCards, setReportCards] = useState<any[]>([])
@@ -348,10 +367,19 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
         setStudents(rosterRes.students)
 
         const initialCommentaries: Record<number, string> = {}
-        rosterRes.students.forEach(std => {
+        const initialOriginalAiRemarks: Record<number, string> = {}
+        const initialIsAiGeneratedFlags: Record<number, boolean> = {}
+        const initialTags: Record<number, string[]> = {}
+        rosterRes.students.forEach((std: any) => {
           initialCommentaries[std.id] = std.remark || ''
+          initialOriginalAiRemarks[std.id] = std.originalAiRemark || ''
+          initialIsAiGeneratedFlags[std.id] = std.isAiGenerated || false
+          initialTags[std.id] = []
         })
         setCommentaryRecords(initialCommentaries)
+        setOriginalAiRemarks(initialOriginalAiRemarks)
+        setIsAiGeneratedFlags(initialIsAiGeneratedFlags)
+        setSelectedTags(initialTags)
 
         // 2. Fetch Report Card Marks
         const reportRes = await apiSlice.get<{ success: boolean; marks: any[] }>(
@@ -449,18 +477,63 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
 
     try {
       const remark = commentaryRecords[studentId] || ''
+      const originalAiRemark = originalAiRemarks[studentId] || ''
+      const isAiGenerated = isAiGeneratedFlags[studentId] || false
+
       await apiSlice.post(endpoints.teacher.commentary, {
         classId: allocation.classId,
         sectionId: allocation.sectionId,
         studentId,
-        remark
+        remark,
+        originalAiRemark,
+        isAiGenerated
       })
+
+      // Refresh students roster to fetch updated status badge & notes
+      const rosterRes = await apiSlice.get<{ success: boolean; students: Student[] }>(
+        `${endpoints.teacher.students}?classId=${allocation.classId}&sectionId=${allocation.sectionId}`
+      )
+      setStudents(rosterRes.students)
 
       showNotification('Remarks and behavioral commentary updated.')
     } catch (err: any) {
       setError(err.message || 'Failed to save commentary.')
     } finally {
       setSavingCommentary(prev => ({ ...prev, [studentId]: false }))
+    }
+  }
+
+  // Handle AI Commentary Generation
+  const handleGenerateAiCommentary = async (studentId: number) => {
+    if (!profile) return
+    const allocation = profile.formAllocations[selectedFormCommentary]
+    if (!allocation) return
+
+    setGeneratingAi(prev => ({ ...prev, [studentId]: true }))
+    setError(null)
+
+    try {
+      const tags = selectedTags[studentId] || []
+      const res = await apiSlice.post<{ success: boolean; draft: string }>(
+        endpoints.teacher.generateAiCommentary,
+        {
+          classId: allocation.classId,
+          sectionId: allocation.sectionId,
+          studentId,
+          behavioralTags: tags
+        }
+      )
+
+      if (res.success) {
+        setCommentaryRecords(prev => ({ ...prev, [studentId]: res.draft }))
+        setOriginalAiRemarks(prev => ({ ...prev, [studentId]: res.draft }))
+        setIsAiGeneratedFlags(prev => ({ ...prev, [studentId]: true }))
+        showNotification('AI commentary generated successfully. Review and save below.')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate AI commentary.')
+    } finally {
+      setGeneratingAi(prev => ({ ...prev, [studentId]: false }))
     }
   }
 
@@ -883,6 +956,37 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
             </button>
           </>
         )}
+
+        <button
+          onClick={() => setActiveTab('media')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
+            activeTab === 'media'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+        >
+          Media Library
+        </button>
+        <button
+          onClick={() => setActiveTab('lessonPlan')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
+            activeTab === 'lessonPlan'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+        >
+          AI Lesson Planner
+        </button>
+        <button
+          onClick={() => setActiveTab('liveRooms')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
+            activeTab === 'liveRooms'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+        >
+          Virtual Classroom Hub
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -1626,8 +1730,39 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                       <div key={student.id} className="p-5 rounded-xl bg-slate-50 border border-slate-200/80 shadow-xs space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200/60 pb-3">
                           <div>
-                            <p className="text-sm font-black text-slate-900">{student.lastName}, {student.firstName}</p>
-                            <p className="text-xs font-semibold text-slate-400">Reg No: {student.registerNo}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-black text-slate-900">{student.lastName}, {student.firstName}</p>
+                              {(() => {
+                                const status = student.status || 'DRAFT'
+                                switch (status) {
+                                  case 'PRINCIPAL_SIGNED_OFF':
+                                    return (
+                                      <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-md border border-emerald-100 shadow-3xs" title="Approved & Signed Off by Principal">
+                                        Signed Off
+                                      </span>
+                                    )
+                                  case 'TEACHER_APPROVED':
+                                    return (
+                                      <span className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 rounded-md border border-blue-100 shadow-3xs" title="Pending Principal Review">
+                                        Pending Review
+                                      </span>
+                                    )
+                                  case 'REJECTED':
+                                    return (
+                                      <span className="px-2 py-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 rounded-md border border-rose-100 shadow-3xs cursor-help" title={student.reviewNotes || 'Rejected by Admin. Please check remarks.'}>
+                                        Rejected
+                                      </span>
+                                    )
+                                  default:
+                                    return (
+                                      <span className="px-2 py-0.5 text-[10px] font-bold text-amber-700 bg-amber-50 rounded-md border border-amber-100 shadow-3xs" title="Draft">
+                                        Draft
+                                      </span>
+                                    )
+                                }
+                              })()}
+                            </div>
+                            <p className="text-xs font-semibold text-slate-400 mt-0.5">Reg No: {student.registerNo}</p>
                           </div>
                           <button
                             onClick={() => handleExportPdf(student.id, student.lastName, student.firstName)}
@@ -1647,6 +1782,13 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                             )}
                           </button>
                         </div>
+
+                        {/* Rejection Alert Banner */}
+                        {student.status === 'REJECTED' && student.reviewNotes && (
+                          <div className="p-3 bg-rose-50 border border-rose-150 rounded-lg text-xs font-semibold text-rose-800">
+                            <strong>Principal Review Notes:</strong> {student.reviewNotes}
+                          </div>
+                        )}
 
                         {/* Subject Marks Summary */}
                         <div className="space-y-2">
@@ -1672,6 +1814,63 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                           )}
                         </div>
 
+                        {/* AI Commentary Assistant (Only for non-ECD) */}
+                        {!profile.formAllocations[selectedFormCommentary]?.isEcd && (
+                          <div className="p-4 bg-violet-50/50 border border-violet-100 rounded-xl space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-black text-violet-900 flex items-center gap-1">
+                                  <Sparkles size={14} className="text-violet-600 animate-pulse" />
+                                  AI Commentary Assistant
+                                </p>
+                                <p className="text-[10px] text-violet-500 font-semibold mt-0.5">
+                                  Select student attributes to guide the Deepseek AI draft.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleGenerateAiCommentary(student.id)}
+                                disabled={generatingAi[student.id] || student.status === 'PRINCIPAL_SIGNED_OFF'}
+                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-black rounded-lg shadow-sm transition cursor-pointer text-center"
+                              >
+                                {generatingAi[student.id] ? (
+                                  <>
+                                    <Loader2 size={13} className="animate-spin" />
+                                    Generating Draft...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles size={13} />
+                                    Spark AI Draft
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Tags Selection */}
+                            <div className="flex flex-wrap gap-1.5">
+                              {["Diligent", "Creative", "Participative", "Hardworking", "Distracted", "Lacks Math Focus", "Excellent Reader"].map((tag) => {
+                                const currentTags = selectedTags[student.id] || []
+                                const isSelected = currentTags.includes(tag)
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = isSelected 
+                                        ? currentTags.filter(t => t !== tag)
+                                        : [...currentTags, tag]
+                                      setSelectedTags(prev => ({ ...prev, [student.id]: updated }))
+                                    }}
+                                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition ${isSelected ? 'bg-violet-600 text-white border-violet-600 shadow-3xs' : 'bg-white text-violet-700 border-violet-200 hover:bg-violet-50'}`}
+                                  >
+                                    {tag}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Holistic Commentary Commentary Box */}
                         <div className="space-y-2">
                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wide">
@@ -1683,21 +1882,35 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                             </p>
                           ) : (
                             <div className="flex gap-3 items-end">
-                              <textarea
-                                rows={2}
-                                value={commentary}
-                                onChange={(e) => {
-                                  setCommentaryRecords(prev => ({
-                                    ...prev,
-                                    [student.id]: e.target.value
-                                  }))
-                                }}
-                                placeholder="Enter behavioral remarks and holistic term feedback..."
-                                className="flex-1 px-3 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
-                              />
+                              <div className="flex-1 space-y-1.5 w-full">
+                                <textarea
+                                  rows={2}
+                                  value={commentary}
+                                  disabled={student.status === 'PRINCIPAL_SIGNED_OFF'}
+                                  onChange={(e) => {
+                                    setCommentaryRecords(prev => ({
+                                      ...prev,
+                                      [student.id]: e.target.value
+                                    }))
+                                  }}
+                                  placeholder="Enter behavioral remarks and holistic term feedback..."
+                                  className="w-full px-3 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none disabled:bg-slate-100 disabled:text-slate-500"
+                                />
+                                {isAiGeneratedFlags[student.id] && (
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                    <span>🤖 AI-Generated</span>
+                                    <span>•</span>
+                                    <span>
+                                      {commentary !== originalAiRemarks[student.id] 
+                                        ? "✏️ Edited by Instructor" 
+                                        : "📋 Pure AI Draft"}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                               <button
                                 onClick={() => handleSaveCommentary(student.id)}
-                                disabled={isSaving}
+                                disabled={isSaving || student.status === 'PRINCIPAL_SIGNED_OFF'}
                                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-xs font-bold rounded-lg shadow-sm transition h-10 flex items-center gap-1 shrink-0"
                               >
                                 <Save size={14} />
@@ -1716,6 +1929,18 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
             <p className="text-sm text-slate-400 italic text-center py-6">No students found enrolled in this room.</p>
           )}
         </div>
+      )}
+
+      {activeTab === 'media' && profile && (
+        <MediaLibrary teacherId={profile.id} />
+      )}
+
+      {activeTab === 'lessonPlan' && profile && (
+        <AiLessonPlanner profile={profile} />
+      )}
+
+      {activeTab === 'liveRooms' && profile && (
+        <LiveClassroomHub profile={profile} />
       )}
     </div>
   )

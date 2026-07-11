@@ -76,6 +76,8 @@ export const endpoints = {
     recordPayment: `${BASE_URL}/admin/finances/payments`,
     exportFinancesCsv: `${BASE_URL}/admin/finances/export/csv`,
     exportFinancesPdf: `${BASE_URL}/admin/finances/export/pdf`,
+    pendingCommentaries: `${BASE_URL}/admin/commentary/pending`,
+    reviewCommentary: `${BASE_URL}/admin/commentary/review`,
   },
   teacher: {
     profile: `${BASE_URL}/teacher/profile`,
@@ -84,6 +86,7 @@ export const endpoints = {
     scores: `${BASE_URL}/teacher/scores`,
     attendance: `${BASE_URL}/teacher/attendance`,
     commentary: `${BASE_URL}/teacher/commentary`,
+    generateAiCommentary: `${BASE_URL}/teacher/commentary/generate-ai`,
     reportCards: `${BASE_URL}/teacher/report-cards`,
     montessoriSheet: (classId: number, sectionId: number, examId: number) =>
       `${BASE_URL}/teacher/montessori/sheet?classId=${classId}&sectionId=${sectionId}&examId=${examId}`,
@@ -96,6 +99,12 @@ export const endpoints = {
     gradeOnlineExam: (submissionId: number) => `${BASE_URL}/teacher/online-exams/submissions/${submissionId}/grade`,
     exportPdf: (studentId: number, classId: number, sectionId: number, rankingType: string, rankingLimit?: number) =>
       `${BASE_URL}/teacher/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+    gradebookSheet: `${BASE_URL}/teacher/gradebook/sheet`,
+    gradebookSaveSingle: `${BASE_URL}/teacher/gradebook/save-single`,
+    gradebookCsvUpload: `${BASE_URL}/teacher/gradebook/csv-upload`,
+    scanScoreSheet: `${BASE_URL}/teacher/grades/scan`,
+    getScanRecord: (scanId: number) => `${BASE_URL}/teacher/grades/scan/${scanId}`,
+    commitScanRecord: (scanId: number) => `${BASE_URL}/teacher/grades/scan/${scanId}/commit`,
   },
   student: {
     profile: `${BASE_URL}/student/profile`,

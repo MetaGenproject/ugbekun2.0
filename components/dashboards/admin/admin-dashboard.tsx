@@ -29,6 +29,7 @@ import { StudentPromotionModal } from './student-promotion-modal'
 import { ClassroomStudents } from './classroom-students'
 import { IdProvisioning } from './id-provisioning'
 import { FinancesDashboard } from './finances-dashboard'
+import { CommentaryReview } from './commentary-review'
 
 export interface BranchStats {
   branchId: number
@@ -591,6 +592,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'classrooms') {
     return <ClassroomStudents />
+  }
+
+  if (activeSection === 'commentary-review') {
+    return <CommentaryReview />
   }
 
   const activities = [

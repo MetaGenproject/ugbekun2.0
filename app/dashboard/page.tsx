@@ -19,7 +19,9 @@ import {
   Layers,
   Menu,
   X,
-  Award
+  Award,
+  FileText,
+  Video
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -97,6 +99,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
         { id: 'credentials', label: 'ID & Credentials', icon: Award },
+        { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'settings', label: 'Branch Settings', icon: Settings },
@@ -124,6 +127,8 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'My Studies', icon: BookOpen, active: true },
         { id: 'assignments', label: 'Assignments Tracker', icon: CheckSquare },
+        { id: 'media', label: 'Media Library', icon: FileText },
+        { id: 'liveRooms', label: 'Virtual Classrooms', icon: Video },
         { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
         { id: 'grades', label: 'Grade Sheet & GPA', icon: TrendingUp },
         { id: 'timetable', label: 'Timetable Schedule', icon: Calendar },
