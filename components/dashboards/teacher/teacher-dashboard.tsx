@@ -29,6 +29,8 @@ import AttendanceRegister from './attendance-register'
 import { MediaLibrary } from './media-library'
 import { AiLessonPlanner } from './ai-lesson-planner'
 import { LiveClassroomHub } from './live-classroom-hub'
+import TeacherPointsHub from './points-hub'
+import { TeacherAttritionRadar } from './attrition-radar'
 
 interface DashboardProps {
   user: {
@@ -87,7 +89,7 @@ interface Student {
 }
 
 export function TeacherDashboard({ user, activeSection }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms' | 'gamification' | 'attrition'>('overview')
 
   useEffect(() => {
     if (!activeSection) return
@@ -107,6 +109,10 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
       setActiveTab('lessonPlan')
     } else if (activeSection === 'liveRooms') {
       setActiveTab('liveRooms')
+    } else if (activeSection === 'points-hub') {
+      setActiveTab('gamification')
+    } else if (activeSection === 'attrition') {
+      setActiveTab('attrition')
     }
   }, [activeSection])
   const [profile, setProfile] = useState<TeacherProfile | null>(null)
@@ -986,6 +992,26 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
           }`}
         >
           Virtual Classroom Hub
+        </button>
+        <button
+          onClick={() => setActiveTab('gamification')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
+            activeTab === 'gamification'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+        >
+          Points Hub & XP
+        </button>
+        <button
+          onClick={() => setActiveTab('attrition')}
+          className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
+            activeTab === 'attrition'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+        >
+          Attrition Radar
         </button>
       </div>
 
@@ -1932,15 +1958,33 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
       )}
 
       {activeTab === 'media' && profile && (
-        <MediaLibrary teacherId={profile.id} />
+        <MediaLibrary teacherId={profile.teacherId} />
       )}
 
       {activeTab === 'lessonPlan' && profile && (
-        <AiLessonPlanner profile={profile} />
+        <AiLessonPlanner profile={{
+          id: profile.teacherId,
+          name: user.username,
+          isSubjectTeacher: profile.isSubjectTeacher,
+          isFormTeacher: profile.isFormTeacher,
+          subjectAssignments: profile.subjectAssignments
+        }} />
       )}
 
       {activeTab === 'liveRooms' && profile && (
-        <LiveClassroomHub profile={profile} />
+        <LiveClassroomHub profile={{
+          id: profile.teacherId,
+          name: user.username,
+          subjectAssignments: profile.subjectAssignments
+        }} />
+      )}
+
+      {activeTab === 'gamification' && (
+        <TeacherPointsHub />
+      )}
+
+      {activeTab === 'attrition' && (
+        <TeacherAttritionRadar />
       )}
     </div>
   )

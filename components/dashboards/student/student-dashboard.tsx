@@ -26,6 +26,7 @@ import { SchoolHeader } from '../school-header'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { StudentMediaLibrary } from './student-media-library'
 import { StudentLiveClassrooms } from './student-live-classrooms'
+import PointsHub from './points-hub'
 
 interface DashboardProps {
   user: {
@@ -1427,6 +1428,10 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
 
       {activeSection === 'liveRooms' && (
         <StudentLiveClassrooms />
+      )}
+
+      {activeSection === 'points-hub' && (
+        <PointsHub />
       )}
     </div>
   )

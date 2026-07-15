@@ -110,6 +110,8 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'roster', label: 'Student Roster', icon: Users },
         { id: 'grades', label: 'Gradebook & Exams', icon: TrendingUp },
         { id: 'attendance', label: 'Attendance Tracker', icon: CheckSquare },
+        { id: 'points-hub', label: 'Points Hub & XP', icon: Award },
+        { id: 'attrition', label: 'Attrition Radar', icon: Activity },
         { id: 'calendar', label: 'School Calendar', icon: Calendar },
         { id: 'settings', label: 'Personal Settings', icon: Settings },
       ]
@@ -126,6 +128,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
     case 7: // Student
       return [
         { id: 'overview', label: 'My Studies', icon: BookOpen, active: true },
+        { id: 'points-hub', label: 'Points Hub & XP', icon: Award },
         { id: 'assignments', label: 'Assignments Tracker', icon: CheckSquare },
         { id: 'media', label: 'Media Library', icon: FileText },
         { id: 'liveRooms', label: 'Virtual Classrooms', icon: Video },

@@ -30,6 +30,7 @@ import { ClassroomStudents } from './classroom-students'
 import { IdProvisioning } from './id-provisioning'
 import { FinancesDashboard } from './finances-dashboard'
 import { CommentaryReview } from './commentary-review'
+import { BranchSettings } from './branch-settings'
 
 export interface BranchStats {
   branchId: number
@@ -596,6 +597,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'commentary-review') {
     return <CommentaryReview />
+  }
+
+  if (activeSection === 'settings') {
+    return <BranchSettings />
   }
 
   const activities = [

@@ -105,6 +105,11 @@ export const endpoints = {
     scanScoreSheet: `${BASE_URL}/teacher/grades/scan`,
     getScanRecord: (scanId: number) => `${BASE_URL}/teacher/grades/scan/${scanId}`,
     commitScanRecord: (scanId: number) => `${BASE_URL}/teacher/grades/scan/${scanId}/commit`,
+    gamificationProfile: `${BASE_URL}/teacher/gamification/profile`,
+    gamificationLeaderboard: (periodType: string) => `${BASE_URL}/teacher/gamification/leaderboard?periodType=${periodType}`,
+    attritionDashboard: `${BASE_URL}/teacher/attrition/dashboard`,
+    attritionDetail: (studentId: number) => `${BASE_URL}/teacher/attrition/detail/${studentId}`,
+    attritionAction: (alertId: number) => `${BASE_URL}/teacher/attrition/action/${alertId}`,
   },
   student: {
     profile: `${BASE_URL}/student/profile`,
