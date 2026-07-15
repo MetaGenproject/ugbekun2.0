@@ -158,7 +158,7 @@ export function SignupForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full px-6 py-3 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-lg hover:shadow-lg transition-all duration-300 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/95 hover:shadow-md transition-all duration-200 font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">
