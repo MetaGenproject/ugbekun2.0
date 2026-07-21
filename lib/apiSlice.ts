@@ -5,7 +5,7 @@
 
 // 1. Centralized Base URL (can be easily changed here or overridden via env variable)
 //local url
-//export const BASE_URL = 'http://localhost:5001/api';
+//export const BASE_URL = "http://localhost:5001/api"
 
 // production url 
 export const BASE_URL = 'https://ugbekunsmp-backend.onrender.com/api'
@@ -80,8 +80,11 @@ export const endpoints = {
     downloadCertificate: (certId: number) => `${BASE_URL}/admin/certificates/${certId}/download`,
     financesOverview: `${BASE_URL}/admin/finances/overview`,
     feeTypes: `${BASE_URL}/admin/finances/fee-types`,
+    feeTypesBulk: `${BASE_URL}/admin/finances/fee-types/bulk`,
+    feeAssignments: `${BASE_URL}/admin/finances/fee-assignments`,
     invoices: (query = '') => `${BASE_URL}/admin/finances/invoices${query}`,
     createInvoice: `${BASE_URL}/admin/finances/invoices`,
+    bulkInvoice: `${BASE_URL}/admin/finances/invoices/bulk`,
     recordPayment: `${BASE_URL}/admin/finances/payments`,
     exportFinancesCsv: `${BASE_URL}/admin/finances/export/csv`,
     exportFinancesPdf: `${BASE_URL}/admin/finances/export/pdf`,
