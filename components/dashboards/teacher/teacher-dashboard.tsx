@@ -32,6 +32,7 @@ import { LiveClassroomHub } from './live-classroom-hub'
 import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
 import { QuestionBankManager } from './question-bank-manager'
+import SchoolCalendar from '../admin/school-calendar'
 
 interface DashboardProps {
   user: {
@@ -90,7 +91,7 @@ interface Student {
 }
 
 export function TeacherDashboard({ user, activeSection }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms' | 'gamification' | 'attrition'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms' | 'gamification' | 'attrition' | 'calendar'>('overview')
 
   useEffect(() => {
     if (!activeSection) return
@@ -103,7 +104,7 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
     } else if (activeSection === 'roster') {
       setActiveTab('commentary')
     } else if (activeSection === 'calendar') {
-      setActiveTab('assignments')
+      setActiveTab('calendar')
     } else if (activeSection === 'media') {
       setActiveTab('media')
     } else if (activeSection === 'lessonPlan') {
@@ -2048,6 +2049,10 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
 
       {activeTab === 'attrition' && (
         <TeacherAttritionRadar />
+      )}
+
+      {activeTab === 'calendar' && (
+        <SchoolCalendar user={user} />
       )}
     </div>
   )

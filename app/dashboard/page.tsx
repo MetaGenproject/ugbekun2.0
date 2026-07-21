@@ -106,6 +106,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'teacher-duties', label: 'Teacher Duties', icon: CheckSquare },
         { id: 'staff-activities', label: 'Staff Activity Report', icon: Activity },
+        { id: 'calendar', label: 'School Calendar', icon: Calendar },
         { id: 'settings', label: 'Branch Settings', icon: Settings },
       ]
     case 3: // Teacher

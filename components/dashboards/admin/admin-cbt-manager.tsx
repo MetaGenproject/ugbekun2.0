@@ -85,13 +85,21 @@ export function AdminCbtManager() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(false)
 
-  // Load configuration (Classes and Subjects)
+  // Sync state
+  const [academicExams, setAcademicExams] = useState<any[]>([])
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [selectedAcademicExamId, setSelectedAcademicExamId] = useState('')
+  const [syncingStatus, setSyncingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [syncMessage, setSyncMessage] = useState('')
+
+  // Load configuration (Classes, Subjects and Academic Exams)
   const loadConfig = async () => {
     setLoadingConfig(true)
     try {
-      const [classRes, subjectRes] = await Promise.all([
+      const [classRes, subjectRes, examRes] = await Promise.all([
         apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections),
-        apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects)
+        apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
+        apiSlice.get<{ success: boolean; exams: any[] }>(endpoints.admin.exams)
       ])
       
       if (classRes.success && classRes.classes) {
@@ -99,6 +107,12 @@ export function AdminCbtManager() {
       }
       if (subjectRes.success && subjectRes.subjects) {
         setSubjects(subjectRes.subjects)
+      }
+      if (examRes.success && examRes.exams) {
+        setAcademicExams(examRes.exams)
+        if (examRes.exams.length > 0) {
+          setSelectedAcademicExamId(String(examRes.exams[0].id))
+        }
       }
     } catch (err) {
       console.error('[ADMIN CBT] Config fetch error:', err)
@@ -218,6 +232,37 @@ export function AdminCbtManager() {
     }
   }
 
+  // Action: Start CBT to Gradebook synchronization
+  const handleStartSync = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAcademicExamId) {
+      alert('Please select an academic exam for mapping.')
+      return
+    }
+
+    setSyncingStatus('loading')
+    setSyncMessage('')
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.syncCbtMarks,
+        {
+          examId: Number(selectedAcademicExamId)
+        }
+      )
+      if (res.success) {
+        setSyncingStatus('success')
+        setSyncMessage(res.message || 'Sync completed successfully.')
+        loadExams()
+      } else {
+        setSyncingStatus('error')
+        setSyncMessage(res.message || 'Failed to sync CBT marks.')
+      }
+    } catch (err) {
+      setSyncingStatus('error')
+      setSyncMessage(err instanceof Error ? err.message : 'An error occurred during sync.')
+    }
+  }
+
   // Cartesian Product mapping to reuse QuestionBankManager:
   // Since Admins manage the entire school, we construct class-subject pairs dynamically
   // so that the admin is allowed to distribute standard questions for any class and subject.
@@ -288,12 +333,21 @@ export function AdminCbtManager() {
               </p>
             </div>
             
-            <button
-              onClick={loadExams}
-              className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
-            >
-              Refresh List
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSyncModal(true)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm flex items-center gap-1.5"
+              >
+                <Send size={12} className="-rotate-45" />
+                Sync CBT to Gradebook
+              </button>
+              <button
+                onClick={loadExams}
+                className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Refresh List
+              </button>
+            </div>
           </div>
 
           {loadingExams ? (
@@ -588,6 +642,113 @@ export function AdminCbtManager() {
                 Close Report
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SYNC CBT TO GRADEBOOK MODAL */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Send className="text-blue-600 -rotate-45" size={18} />
+                Sync CBT Scores to Gradebook
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSyncModal(false)
+                  setSyncingStatus('idle')
+                  setSyncMessage('')
+                }}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {syncingStatus === 'success' ? (
+              <div className="py-8 flex flex-col items-center justify-center text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shadow-sm">
+                  <CheckCircle2 size={24} className="stroke-[3]" />
+                </div>
+                <h4 className="text-sm font-black text-slate-800">Sync Completed!</h4>
+                <p className="text-xs text-slate-500 font-medium px-4">
+                  {syncMessage}
+                </p>
+                <div className="pt-4 w-full">
+                  <button
+                    onClick={() => {
+                      setShowSyncModal(false)
+                      setSyncingStatus('idle')
+                      setSyncMessage('')
+                    }}
+                    className="w-full py-2 bg-slate-950 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleStartSync} className="space-y-4">
+                <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+                  This copies all student CBT online exam scores into their gradebook records under the <strong>Objective Score (cbtMark)</strong> column for the current session.
+                </p>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">
+                    Select Target Academic Exam / Test
+                  </label>
+                  {academicExams.length === 0 ? (
+                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-xs font-semibold">
+                      No academic exams found. Please create an Exam in the settings first.
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={selectedAcademicExamId}
+                      onChange={(e) => setSelectedAcademicExamId(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white transition cursor-pointer"
+                    >
+                      {academicExams.map((ae) => (
+                        <option key={ae.id} value={ae.id}>
+                          {ae.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {syncingStatus === 'error' && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                    <AlertCircle size={14} />
+                    <span>{syncMessage}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSyncModal(false)
+                      setSyncingStatus('idle')
+                      setSyncMessage('')
+                    }}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={syncingStatus === 'loading' || academicExams.length === 0}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-md shadow-blue-600/10 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {syncingStatus === 'loading' && <Loader2 className="animate-spin" size={13} />}
+                    Start Synchronization
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

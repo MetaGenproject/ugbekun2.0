@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { ScoreScannerModal } from './score-scanner-modal'
+import { safeStorage } from '@/lib/safeStorage'
 
 interface StudentRow {
   studentId: number
@@ -55,8 +56,20 @@ export default function GradebookInterface({
   const [success, setSuccess] = useState<string | null>(null)
   const [sheetData, setSheetData] = useState<StudentRow[]>([])
   
+  // Check if current user is Admin
+  const isAdmin = useMemo(() => {
+    try {
+      const userStr = safeStorage.getItem('ugbekun_user')
+      if (userStr) {
+        const u = JSON.parse(userStr)
+        return u.role === 1 || u.role === 2
+      }
+    } catch (e) {}
+    return false
+  }, [])
+
   // Local edit states
-  const [editedScores, setEditedScores] = useState<Record<number, { theoryMark: string; absent: boolean }>>({})
+  const [editedScores, setEditedScores] = useState<Record<number, { theoryMark: string; objectiveMark: string; absent: boolean }>>({})
   const [savingRowId, setSavingRowId] = useState<number | null>(null)
 
   // CSV Modal state
@@ -85,10 +98,11 @@ export default function GradebookInterface({
       if (res.success) {
         setSheetData(res.sheet)
         // Initialize local edit states
-        const initialEdits: Record<number, { theoryMark: string; absent: boolean }> = {}
+        const initialEdits: Record<number, { theoryMark: string; objectiveMark: string; absent: boolean }> = {}
         res.sheet.forEach((row) => {
           initialEdits[row.studentId] = {
             theoryMark: row.theoryMark !== null ? String(row.theoryMark) : '',
+            objectiveMark: row.objectiveMark !== null ? String(row.objectiveMark) : '0',
             absent: row.absent
           }
         })
@@ -120,10 +134,10 @@ export default function GradebookInterface({
   const computedSheet = useMemo(() => {
     // 1. Calculate cumulative total scores for all students
     const totals = sheetData.map((row) => {
-      const edit = editedScores[row.studentId] || { theoryMark: '', absent: false }
+      const edit = editedScores[row.studentId] || { theoryMark: '', objectiveMark: '0', absent: false }
       const isAbsent = edit.absent
       const theory = isAbsent ? 0 : (Number(edit.theoryMark) || 0)
-      const objective = row.objectiveMark || 0
+      const objective = isAbsent ? 0 : (Number(edit.objectiveMark) || 0)
       const cumulative = isAbsent ? 0 : theory + objective
       return {
         studentId: row.studentId,
@@ -180,7 +194,7 @@ export default function GradebookInterface({
 
   // Save single row
   const handleSaveSingle = async (row: StudentRow) => {
-    const edit = editedScores[row.studentId] || { theoryMark: '', absent: false }
+    const edit = editedScores[row.studentId] || { theoryMark: '', objectiveMark: '0', absent: false }
     setSavingRowId(row.studentId)
     setError(null)
     setSuccess(null)
@@ -194,6 +208,7 @@ export default function GradebookInterface({
           examId,
           studentId: row.studentId,
           theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
+          objectiveMark: edit.absent ? null : (edit.objectiveMark === '' ? null : Number(edit.objectiveMark)),
           absent: edit.absent
         }
       )
@@ -215,7 +230,8 @@ export default function GradebookInterface({
     const edit = editedScores[row.studentId]
     if (!edit) return false
     const originalTheory = row.theoryMark !== null ? String(row.theoryMark) : ''
-    return edit.theoryMark !== originalTheory || edit.absent !== row.absent
+    const originalObjective = row.objectiveMark !== null ? String(row.objectiveMark) : '0'
+    return edit.theoryMark !== originalTheory || edit.objectiveMark !== originalObjective || edit.absent !== row.absent
   }
 
   // CSV Processing
@@ -473,10 +489,10 @@ export default function GradebookInterface({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {sheetData.map((row) => {
-                  const edit = editedScores[row.studentId] || { theoryMark: '', absent: false }
+                  const edit = editedScores[row.studentId] || { theoryMark: '', objectiveMark: '0', absent: false }
                   const isAbsent = edit.absent
                   const theoryVal = isAbsent ? 0 : (Number(edit.theoryMark) || 0)
-                  const objVal = row.objectiveMark || 0
+                  const objVal = isAbsent ? 0 : (Number(edit.objectiveMark) || 0)
                   const totalVal = isAbsent ? 0 : theoryVal + objVal
                   const gradeInfo = calculateGrade(totalVal)
                   const rank = computedSheet.rankMap[row.studentId]
@@ -512,12 +528,37 @@ export default function GradebookInterface({
                         />
                       </td>
 
-                      {/* Objective Score (Locked) */}
+                      {/* Objective Score (Editable for Admin) */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-500 font-extrabold text-xs w-full max-w-[130px] shadow-xs">
-                          <Lock size={12} className="text-slate-400" />
-                          <span>{objVal}</span>
-                        </div>
+                        {isAdmin ? (
+                          <div className="relative">
+                            <input
+                              type="number"
+                              disabled={isAbsent}
+                              min={0}
+                              max={100}
+                              value={isAbsent ? '' : edit.objectiveMark}
+                              onChange={(e) => {
+                                setEditedScores(prev => ({
+                                  ...prev,
+                                  [row.studentId]: { ...prev[row.studentId], objectiveMark: e.target.value }
+                                }))
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveSingle(row)
+                                }
+                              }}
+                              placeholder="Objective Score"
+                              className={`w-full max-w-[130px] px-3 py-1.5 text-xs font-semibold bg-white border rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 border-slate-200`}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-500 font-extrabold text-xs w-full max-w-[130px] shadow-xs">
+                            <Lock size={12} className="text-slate-400" />
+                            <span>{edit.objectiveMark || '0'}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Theory Mark Input */}
@@ -537,7 +578,7 @@ export default function GradebookInterface({
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                handleSaveSingle(row)
+                                  handleSaveSingle(row)
                               }
                             }}
                             placeholder="Theory Score"

@@ -66,6 +66,7 @@ export const endpoints = {
     rejectSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/reject`,
     onlineAdmissions: `${BASE_URL}/admin/online-admissions`,
     updateOnlineAdmissionStatus: (id: number) => `${BASE_URL}/admin/online-admissions/${id}/status`,
+    syncCbtMarks: `${BASE_URL}/admin/cbt/sync`,
 
     // Credentials & Accounting
     idCards: (query = '') => `${BASE_URL}/admin/id-cards${query}`,
@@ -87,6 +88,8 @@ export const endpoints = {
     pendingCommentaries: `${BASE_URL}/admin/commentary/pending`,
     reviewCommentary: `${BASE_URL}/admin/commentary/review`,
     staffActivities: `${BASE_URL}/admin/reports/staff-activities`,
+    events: `${BASE_URL}/admin/events`,
+    eventItem: (id: number) => `${BASE_URL}/admin/events/${id}`,
   },
   teacher: {
     profile: `${BASE_URL}/teacher/profile`,
@@ -123,6 +126,7 @@ export const endpoints = {
     attritionDashboard: `${BASE_URL}/teacher/attrition/dashboard`,
     attritionDetail: (studentId: number) => `${BASE_URL}/teacher/attrition/detail/${studentId}`,
     attritionAction: (alertId: number) => `${BASE_URL}/teacher/attrition/action/${alertId}`,
+    events: `${BASE_URL}/teacher/events`,
   },
   student: {
     profile: `${BASE_URL}/student/profile`,
@@ -134,6 +138,7 @@ export const endpoints = {
     grades: `${BASE_URL}/student/grades`,
     exportPdf: (rankingType: string, rankingLimit?: number) =>
       `${BASE_URL}/student/grades/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+    events: `${BASE_URL}/student/events`,
   },
   common: {
     upload: `${BASE_URL}/upload`,
@@ -149,6 +154,7 @@ export const endpoints = {
     classesSections: `${BASE_URL}/parent/classes-sections`,
     siblingRequests: `${BASE_URL}/parent/sibling-requests`,
     createSiblingRequest: `${BASE_URL}/parent/sibling-requests`,
+    events: `${BASE_URL}/parent/events`,
   },
 };
 

@@ -34,6 +34,7 @@ import { BranchSettings } from './branch-settings'
 import { AdminTeacherDuties } from './admin-teacher-duties'
 import { StaffActivitiesReport } from './staff-activities-report'
 import { AdminCbtManager } from './admin-cbt-manager'
+import SchoolCalendar from './school-calendar'
 
 export interface BranchStats {
   branchId: number
@@ -706,6 +707,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'staff-activities') {
     return <StaffActivitiesReport />
+  }
+
+  if (activeSection === 'calendar') {
+    return <SchoolCalendar user={user} />
   }
 
   const activities = [

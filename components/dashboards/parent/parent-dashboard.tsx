@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import SchoolCalendar from '../admin/school-calendar'
 
 interface DashboardProps {
   user: {
@@ -1266,6 +1267,10 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                 </div>
               )}
             </div>
+          )}
+
+          {activeSection === 'calendar' && (
+            <SchoolCalendar user={user} />
           )}
         </>
       ) : (
