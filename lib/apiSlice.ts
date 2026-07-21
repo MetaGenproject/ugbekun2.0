@@ -50,9 +50,12 @@ export const endpoints = {
     onboardStudent: `${BASE_URL}/admin/students/onboard`,
     importStudentsBulk: `${BASE_URL}/admin/students/import-bulk`,
     promoteStudent: (id: number) => `${BASE_URL}/admin/students/${id}/promote`,
+    toggleStudentStatus: (id: number) => `${BASE_URL}/admin/students/${id}/toggle-status`,
     onboardTeacher: `${BASE_URL}/admin/teachers/onboard`,
     updateTeacher: (id: number) => `${BASE_URL}/admin/teachers/${id}`,
     deleteTeacher: (id: number) => `${BASE_URL}/admin/teachers/${id}`,
+    toggleTeacherStatus: (id: number) => `${BASE_URL}/admin/teachers/${id}/toggle-status`,
+    toggleStaffStatus: (id: number) => `${BASE_URL}/admin/staff/${id}/toggle-status`,
     siblingRequests: `${BASE_URL}/admin/sibling-requests`,
     approveSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/approve`,
     rejectSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/reject`,
@@ -78,6 +81,7 @@ export const endpoints = {
     exportFinancesPdf: `${BASE_URL}/admin/finances/export/pdf`,
     pendingCommentaries: `${BASE_URL}/admin/commentary/pending`,
     reviewCommentary: `${BASE_URL}/admin/commentary/review`,
+    staffActivities: `${BASE_URL}/admin/reports/staff-activities`,
   },
   teacher: {
     profile: `${BASE_URL}/teacher/profile`,
@@ -93,6 +97,9 @@ export const endpoints = {
     saveMontessoriSingle: `${BASE_URL}/teacher/montessori/save-single`,
     homeworks: `${BASE_URL}/teacher/homeworks`,
     onlineExams: `${BASE_URL}/teacher/online-exams`,
+    questionBank: `${BASE_URL}/teacher/question-bank`,
+    questionBankItem: (id: number) => `${BASE_URL}/teacher/question-bank/${id}`,
+    distributeExam: `${BASE_URL}/teacher/online-exams/distribute`,
     homeworkSubmissions: (homeworkId: number) => `${BASE_URL}/teacher/homeworks/${homeworkId}/submissions`,
     onlineExamSubmissions: (examId: number) => `${BASE_URL}/teacher/online-exams/${examId}/submissions`,
     gradeHomework: (submissionId: number) => `${BASE_URL}/teacher/homeworks/submissions/${submissionId}/grade`,
@@ -142,7 +149,17 @@ export const endpoints = {
 // Helper to get authorization headers
 const getAuthHeaders = (): HeadersInit => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_token') : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  if (typeof window !== 'undefined') {
+    const impersonatedTeacherId = localStorage.getItem('ugbekun_admin_impersonated_teacher_id');
+    if (impersonatedTeacherId) {
+      headers['x-admin-teacher-id'] = impersonatedTeacherId;
+    }
+  }
+  return headers;
 };
 
 /**

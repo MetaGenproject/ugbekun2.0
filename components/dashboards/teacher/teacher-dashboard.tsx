@@ -31,6 +31,7 @@ import { AiLessonPlanner } from './ai-lesson-planner'
 import { LiveClassroomHub } from './live-classroom-hub'
 import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
+import { QuestionBankManager } from './question-bank-manager'
 
 interface DashboardProps {
   user: {
@@ -185,6 +186,10 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
   const [gradingSubmission, setGradingSubmission] = useState<any | null>(null)
   const [gradingScore, setGradingScore] = useState<number>(0)
   const [gradingFeedback, setGradingFeedback] = useState('')
+
+  // Question Bank Integration State
+  const [assignmentsActiveTab, setAssignmentsActiveTab] = useState<'workspace' | 'bank'>('workspace')
+  const [showBankImportModal, setShowBankImportModal] = useState(false)
 
   // Fetch initial profile allocation & exams
   const fetchAssessments = async () => {
@@ -1318,15 +1323,27 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                 <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <p className="text-xs font-bold text-slate-700">Add Question to Builder</p>
-                    <label className="px-2 py-0.5 text-[10px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg cursor-pointer transition">
-                      Import MCQ CSV
-                      <input
-                        type="file"
-                        accept=".csv"
-                        onChange={handleCsvImport}
-                        className="hidden"
-                      />
-                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <label className="px-2 py-0.5 text-[10px] font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg cursor-pointer transition">
+                        Import CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleCsvImport}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentsActiveTab('bank')
+                          showNotification('Please select questions from the repository and click Import to Builder.')
+                        }}
+                        className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg cursor-pointer transition"
+                      >
+                        From Bank
+                      </button>
+                    </div>
                   </div>
                   <p className="text-[9px] text-slate-400 leading-tight">
                     CSV headers: <code className="bg-slate-100 px-1 rounded text-slate-600">Question,OptionA,OptionB,OptionC,OptionD,CorrectAnswer,Points</code> (First row must be header)
@@ -1452,12 +1469,57 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
 
             {/* Published list & Submissions Workspace */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Published Assessments List */}
-              <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
-                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                  <Clock size={18} className="text-slate-600" />
-                  Published Assessments Workspace
-                </h3>
+              {/* Sub-navigation Tabs */}
+              <div className="flex border-b border-slate-200 gap-1.5 p-1 bg-slate-50/50 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setAssignmentsActiveTab('workspace')}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                    assignmentsActiveTab === 'workspace'
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Published Assessments
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignmentsActiveTab('bank')}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                    assignmentsActiveTab === 'bank'
+                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Question Bank Repository
+                </button>
+              </div>
+
+              {assignmentsActiveTab === 'bank' ? (
+                <QuestionBankManager
+                  profile={profile}
+                  onImportToBuilder={(imported) => {
+                    // Convert QuestionBankItem format to builder format
+                    const formatted = imported.map((q) => ({
+                      id: Math.random().toString(36).substring(2, 9),
+                      type: q.questionType === 'mcq' ? 'MCQ' : q.questionType === 'tf' ? 'TF' : 'DOCUMENT',
+                      questionText: q.questionText,
+                      options: q.options || [],
+                      correctAnswer: q.correctOption || '',
+                      points: q.marks || 1
+                    }))
+                    setBuilderQuestions(prev => [...prev, ...formatted])
+                    setAssignmentsActiveTab('workspace')
+                    alert(`Successfully imported ${imported.length} questions to builder!`)
+                  }}
+                />
+              ) : (
+                /* Published Assessments List */
+                <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Clock size={18} className="text-slate-600" />
+                    Published Assessments Workspace
+                  </h3>
 
                 {loadingAssessments ? (
                   <div className="flex items-center justify-center py-12">
@@ -1536,6 +1598,7 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
                   </div>
                 )}
               </div>
+              )}
 
               {/* Submissions Details Drawer/Overlay */}
               {viewingSubmissionsId && (

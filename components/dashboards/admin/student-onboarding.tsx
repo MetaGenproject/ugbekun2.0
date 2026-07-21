@@ -79,6 +79,28 @@ interface OnboardResponse {
   pdfBase64?: string | null
 }
 
+interface PendingStudent {
+  id: string
+  student: {
+    firstName: string
+    lastName: string
+    gender: string
+    birthday: string
+    classId: string
+    sectionId: string
+    currentAddress: string
+    previousDetails: string
+  }
+  parent: {
+    name: string
+    relation: string
+    email: string
+    mobileno: string
+  }
+  classLabel: string
+  sectionLabel: string
+}
+
 export interface OnlineAdmissionData {
   id: number
   referenceNo: string | null
@@ -525,6 +547,12 @@ export function StudentOnboarding() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [resultData, setResultData] = useState<OnboardResponse | null>(null)
 
+  // Batch Onboarding States
+  const [pendingStudentsList, setPendingStudentsList] = useState<PendingStudent[]>([])
+  const [batchResultData, setBatchResultData] = useState<(OnboardResponse & { name: string; registerNo?: string; error?: string })[]>([])
+  const [showPasswordMap, setShowPasswordMap] = useState<Record<string, boolean>>({})
+  const [copiedFieldMap, setCopiedFieldMap] = useState<Record<string, boolean>>({})
+
   // Copy & toggle visibility states
   const [showStudentPass, setShowStudentPass] = useState(false)
   const [showParentPass, setShowParentPass] = useState(false)
@@ -671,27 +699,171 @@ export function StudentOnboarding() {
     setErrorMsg(null)
     setIsSubmitting(true)
 
-    try {
-      const payload = {
+    const itemsToSubmit = [...pendingStudentsList]
+
+    // If the active form is valid, include it in the submission batch
+    const sName = studentForm.firstName.trim()
+    const sLastName = studentForm.lastName.trim()
+    const pName = parentForm.name.trim()
+    const pEmail = parentForm.email.trim()
+    const pPhone = parentForm.mobileno.trim()
+
+    if (sName && sLastName && studentForm.classId && studentForm.sectionId && pName && (pEmail || pPhone)) {
+      const selectedClass = classes.find(c => c.id === Number(studentForm.classId))
+      const classLabel = selectedClass ? selectedClass.name : ''
+      const selectedSection = availableSections.find(s => s.id === Number(studentForm.sectionId))
+      const sectionLabel = selectedSection ? selectedSection.name : ''
+
+      itemsToSubmit.push({
+        id: 'active-form',
         student: {
           ...studentForm,
-          classId: Number(studentForm.classId),
-          sectionId: Number(studentForm.sectionId),
+          firstName: sName,
+          lastName: sLastName,
         },
-        parent: parentForm,
-      }
-
-      const res = await apiSlice.post<OnboardResponse>(
-        endpoints.admin.onboardStudent,
-        payload
-      )
-
-      setResultData(res)
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Onboarding pipeline failed.')
-    } finally {
-      setIsSubmitting(false)
+        parent: {
+          ...parentForm,
+          name: pName,
+          email: pEmail,
+          mobileno: pPhone,
+        },
+        classLabel,
+        sectionLabel,
+      })
     }
+
+    if (itemsToSubmit.length === 0) {
+      setErrorMsg('Please enter student details or add them to the pending list.')
+      setIsSubmitting(false)
+      return
+    }
+
+    const results: typeof batchResultData = []
+
+    for (const item of itemsToSubmit) {
+      try {
+        const payload = {
+          student: {
+            ...item.student,
+            classId: Number(item.student.classId),
+            sectionId: Number(item.student.sectionId),
+          },
+          parent: item.parent,
+        }
+
+        const res = await apiSlice.post<OnboardResponse>(
+          endpoints.admin.onboardStudent,
+          payload
+        )
+        results.push({
+          ...res,
+          name: `${item.student.firstName} ${item.student.lastName}`,
+          registerNo: res.data?.student?.registerNo || '',
+        })
+      } catch (err: any) {
+        results.push({
+          success: false,
+          data: {
+            student: {
+              id: 0,
+              registerNo: '',
+              firstName: item.student.firstName,
+              lastName: item.student.lastName,
+              gender: item.student.gender,
+              birthday: null,
+              idCardToken: '',
+              createdAt: new Date().toISOString(),
+            },
+            parent: {
+              id: 0,
+              name: item.parent.name,
+              relation: item.parent.relation,
+              email: item.parent.email,
+              mobileno: item.parent.mobileno,
+            }
+          },
+          emailSent: false,
+          name: `${item.student.firstName} ${item.student.lastName}`,
+          error: err.message || 'Onboarding failed.'
+        })
+      }
+    }
+
+    setBatchResultData(results)
+    setIsSubmitting(false)
+  }
+
+  const handleAddMore = () => {
+    setErrorMsg(null)
+    const sName = studentForm.firstName.trim()
+    const sLastName = studentForm.lastName.trim()
+    const pName = parentForm.name.trim()
+    const pEmail = parentForm.email.trim()
+    const pPhone = parentForm.mobileno.trim()
+
+    if (!sName || !sLastName) {
+      setErrorMsg('Student First Name and Last Name are required.')
+      return
+    }
+    if (!studentForm.classId || !studentForm.sectionId) {
+      setErrorMsg('Student Class and Section selection are required.')
+      return
+    }
+    if (!pName) {
+      setErrorMsg('Parent Name is required.')
+      return
+    }
+    if (!pEmail && !pPhone) {
+      setErrorMsg('At least one Parent Contact Info (Email or Phone) is required.')
+      return
+    }
+
+    const selectedClass = classes.find(c => c.id === Number(studentForm.classId))
+    const classLabel = selectedClass ? selectedClass.name : ''
+    const selectedSection = availableSections.find(s => s.id === Number(studentForm.sectionId))
+    const sectionLabel = selectedSection ? selectedSection.name : ''
+
+    const newItem: PendingStudent = {
+      id: Math.random().toString(),
+      student: {
+        ...studentForm,
+        firstName: sName,
+        lastName: sLastName,
+      },
+      parent: {
+        ...parentForm,
+        name: pName,
+        email: pEmail,
+        mobileno: pPhone,
+      },
+      classLabel,
+      sectionLabel,
+    }
+
+    setPendingStudentsList([...pendingStudentsList, newItem])
+    setParseSuccessMsg('')
+
+    // Reset student input fields, keeping class/section selection for fast entry
+    setStudentForm(prev => ({
+      ...prev,
+      firstName: '',
+      lastName: '',
+      birthday: '',
+      currentAddress: '',
+      previousDetails: '',
+    }))
+    setParentForm({
+      name: '',
+      relation: 'Father',
+      email: '',
+      mobileno: '',
+    })
+
+    setActiveStep(1)
+  }
+
+  const handleRemovePending = (id: string) => {
+    setPendingStudentsList(pendingStudentsList.filter(item => item.id !== id))
   }
 
   // Reset Form for next student
@@ -714,6 +886,10 @@ export function StudentOnboarding() {
     })
     setParseSuccessMsg('')
     setResultData(null)
+    setPendingStudentsList([])
+    setBatchResultData([])
+    setShowPasswordMap({})
+    setCopiedFieldMap({})
     setActiveStep(1)
     setErrorMsg(null)
     setShowStudentPass(false)
@@ -755,6 +931,198 @@ export function StudentOnboarding() {
     } finally {
       setIsRejecting(false)
     }
+  }
+
+  if (batchResultData.length > 0) {
+    const totalBatchCount = batchResultData.length
+    const successBatchCount = batchResultData.filter(r => r.success).length
+    const hasPDFs = batchResultData.some(r => r.success && r.pdfBase64)
+
+    const handleDownloadAllPDFs = () => {
+      batchResultData.forEach((res) => {
+        if (res.success && res.pdfBase64) {
+          const link = document.createElement('a')
+          link.href = `data:application/pdf;base64,${res.pdfBase64}`
+          link.download = `login_slip_student_${res.name.toLowerCase().replace(/\s+/g, '_')}.pdf`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+        }
+      })
+    }
+
+    const handleCopyTextWithMap = (text: string, key: string) => {
+      navigator.clipboard.writeText(text)
+      setCopiedFieldMap(prev => ({ ...prev, [key]: true }))
+      setTimeout(() => {
+        setCopiedFieldMap(prev => ({ ...prev, [key]: false }))
+      }, 2000)
+    }
+
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto animate-fade-in pb-12">
+        {/* Success Header */}
+        <div className="text-center space-y-2.5 py-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+            <CheckCircle2 size={36} className="stroke-[2.5]" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Onboarding Pipeline Completed!</h2>
+          <p className="text-slate-505 text-sm font-medium">
+            Processed {totalBatchCount} student registrations. {successBatchCount} succeeded, {totalBatchCount - successBatchCount} failed.
+          </p>
+        </div>
+
+        {/* Results Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {batchResultData.map((res, idx) => (
+            <div key={idx} className={`rounded-xl border p-5 space-y-4 relative overflow-hidden bg-white shadow-sm ${
+              res.success ? 'border-slate-250' : 'border-rose-200 bg-rose-50/20'
+            }`}>
+              <div className={`absolute top-0 left-0 w-1.5 h-full ${res.success ? 'bg-blue-600' : 'bg-rose-500'}`} />
+
+              <div className="flex justify-between items-start pl-2">
+                <div>
+                  <h4 className="font-black text-slate-900 text-sm">{res.name}</h4>
+                  {res.success && res.registerNo && (
+                    <p className="text-[10px] text-slate-500 font-bold">Reg No: {res.registerNo}</p>
+                  )}
+                </div>
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                  res.success ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {res.success ? 'Success' : 'Failed'}
+                </span>
+              </div>
+
+              {res.success ? (
+                <div className="space-y-3 pl-2">
+                  {/* Student Credentials */}
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider mb-1">Student Username & Password</label>
+                    <div className="flex items-center gap-2 bg-slate-550 border border-slate-200 rounded-lg p-2 text-xs font-mono text-slate-800 shadow-inner">
+                      <span className="flex-1 select-all truncate">{res.credentials?.student.username}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTextWithMap(res.credentials?.student.username || '', `stud-user-${idx}`)}
+                        className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition shrink-0"
+                      >
+                        {copiedFieldMap[`stud-user-${idx}`] ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-550 border border-slate-200 rounded-lg p-2 text-xs font-mono text-slate-800 shadow-inner mt-1">
+                      <input
+                        type={showPasswordMap[`stud-${idx}`] ? 'text' : 'password'}
+                        value={res.credentials?.student.password || ''}
+                        readOnly
+                        className="flex-1 bg-transparent border-none outline-none select-all truncate w-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordMap(prev => ({ ...prev, [`stud-${idx}`]: !prev[`stud-${idx}`] }))}
+                        className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition shrink-0"
+                      >
+                        {showPasswordMap[`stud-${idx}`] ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTextWithMap(res.credentials?.student.password || '', `stud-pass-${idx}`)}
+                        className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition shrink-0"
+                      >
+                        {copiedFieldMap[`stud-pass-${idx}`] ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Parent Credentials */}
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider mb-1">Parent Username & Password</label>
+                    {res.credentials?.parent ? (
+                      <>
+                        <div className="flex items-center gap-2 bg-slate-550 border border-slate-200 rounded-lg p-2 text-xs font-mono text-slate-800 shadow-inner">
+                          <span className="flex-1 select-all truncate">{res.credentials.parent.username}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyTextWithMap(res.credentials?.parent?.username || '', `par-user-${idx}`)}
+                            className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900 transition shrink-0"
+                          >
+                            {copiedFieldMap[`par-user-${idx}`] ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 bg-slate-550 border border-slate-200 rounded-lg p-2 text-xs font-mono text-slate-800 shadow-inner mt-1">
+                          <input
+                            type={showPasswordMap[`par-${idx}`] ? 'text' : 'password'}
+                            value={res.credentials.parent.password || ''}
+                            readOnly
+                            className="flex-1 bg-transparent border-none outline-none select-all truncate w-full"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPasswordMap(prev => ({ ...prev, [`par-${idx}`]: !prev[`par-${idx}`] }))}
+                            className="p-1 hover:bg-slate-100 rounded text-slate-550 hover:text-slate-900 transition shrink-0"
+                          >
+                            {showPasswordMap[`par-${idx}`] ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyTextWithMap(res.credentials?.parent?.password || '', `par-pass-${idx}`)}
+                            className="p-1 hover:bg-slate-100 rounded text-slate-550 hover:text-slate-900 transition shrink-0"
+                          >
+                            {copiedFieldMap[`par-pass-${idx}`] ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 font-semibold p-2 bg-slate-50 border border-slate-200/60 rounded-lg shadow-inner">
+                        Reused existing parent credentials.
+                      </p>
+                    )}
+                  </div>
+
+                  {res.pdfBase64 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const link = document.createElement('a')
+                        link.href = `data:application/pdf;base64,${res.pdfBase64}`
+                        link.download = `login_slip_student_${res.name.toLowerCase().replace(/\s+/g, '_')}.pdf`
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      }}
+                      className="w-full mt-2 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                    >
+                      <Download size={13} /> Download Login Slip (PDF)
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="pl-2 py-1 text-xs text-rose-600 font-bold">
+                  {res.error || 'Server error occurred during student registration.'}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-slate-200">
+          {hasPDFs && (
+            <button
+              onClick={handleDownloadAllPDFs}
+              className="flex-1 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-sm active:scale-[0.98]"
+            >
+              <Download size={15} /> Download All Printable Slips (PDFs)
+            </button>
+          )}
+          <button
+            onClick={handleReset}
+            className="flex-1 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center transition active:scale-[0.98]"
+          >
+            Onboard Another Batch
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (resultData) {
@@ -1124,7 +1492,8 @@ export function StudentOnboarding() {
               <p className="text-slate-500 text-sm font-semibold">Configuring environment...</p>
             </div>
           ) : (
-            <form onSubmit={handleOnboardSubmit} className="space-y-6">
+            <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
+              <form onSubmit={handleOnboardSubmit} className="flex-1 space-y-6 w-full">
               {/* STEP 1: STUDENT PROFILE */}
               {activeStep === 1 && (
                 <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-5 animate-fade-in">
@@ -1334,26 +1703,102 @@ export function StudentOnboarding() {
                     </div>
                   </div>
 
-                  <div className="pt-4 flex justify-between gap-4">
+                  <div className="pt-4 flex flex-col sm:flex-row justify-between gap-3 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={() => setActiveStep(1)}
-                      className="px-5 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs transition cursor-pointer"
+                      className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs transition cursor-pointer"
                     >
                       Back to Student Profile
                     </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddMore}
+                        className="px-4 py-2.5 rounded-xl bg-slate-600 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm hover:shadow-md"
+                      >
+                        <UserPlus size={14} /> Save and Add More
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" /> Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Check size={14} /> Complete Onboarding ({pendingStudentsList.length + 1})
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              </form>
+
+              {/* Pending Queue Side */}
+              {pendingStudentsList.length > 0 && (
+                <div className="w-full lg:w-80 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 shrink-0 max-h-[600px] flex flex-col">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <Users size={16} className="text-blue-600" /> Pending Queue
+                    </h4>
+                    <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-black">
+                      {pendingStudentsList.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 overflow-y-auto flex-1 pr-1 max-h-[400px]">
+                    {pendingStudentsList.map((item) => (
+                      <div key={item.id} className="p-3 bg-slate-50 border border-slate-200/60 rounded-xl flex items-start justify-between gap-3 shadow-sm hover:shadow-md transition">
+                        <div className="min-w-0">
+                          <h5 className="font-bold text-xs text-slate-900 truncate">
+                            {item.student.firstName} {item.student.lastName}
+                          </h5>
+                          <p className="text-[10px] text-slate-500 font-semibold truncate">
+                            {item.classLabel} - {item.sectionLabel}
+                          </p>
+                          <p className="text-[9px] text-slate-400 font-medium truncate">
+                            Parent: {item.parent.name}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePending(item.id)}
+                          className="text-slate-400 hover:text-rose-600 p-1 hover:bg-slate-100 rounded-lg transition shrink-0"
+                          title="Remove Student"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100">
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={(e) => handleOnboardSubmit(e)}
                       disabled={isSubmitting}
-                      className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/10 animate-pulse-subtle"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-[0.98] disabled:opacity-50"
                     >
-                      {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                      Complete Onboarding Pipeline
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" /> Processing Queue...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={13} /> Submit Queue ({pendingStudentsList.length})
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               )}
-            </form>
+            </div>
           )}
         </>
       )}

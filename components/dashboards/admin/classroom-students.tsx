@@ -50,6 +50,7 @@ interface Student {
   parentRelation: string | null
   parentMobile: string | null
   parentEmail: string | null
+  active?: boolean
 }
 
 interface ClassroomStats {
@@ -145,6 +146,30 @@ export function ClassroomStudents() {
       setRosterError(err instanceof Error ? err.message : 'Failed to fetch student roster.')
     } finally {
       setIsLoadingRoster(false)
+    }
+  }
+
+  const [togglingStatusId, setTogglingStatusId] = useState<number | null>(null)
+
+  const handleToggleStudentStatus = async (studentId: number) => {
+    setTogglingStatusId(studentId)
+    try {
+      await apiSlice.post(endpoints.admin.toggleStudentStatus(studentId), {})
+      // Re-fetch the roster
+      const res = await apiSlice.get<{
+        success: boolean
+        students: Student[]
+        formTeacher: string
+        stats: ClassroomStats
+      }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
+      
+      setStudents(res.students)
+      setFormTeacher(res.formTeacher)
+      setStats(res.stats)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Status update failed.')
+    } finally {
+      setTogglingStatusId(null)
     }
   }
 
@@ -338,7 +363,7 @@ export function ClassroomStudents() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-32">Reg. No</TableHead>
@@ -346,6 +371,7 @@ export function ClassroomStudents() {
                       <TableHead>Gender</TableHead>
                       <TableHead>Parent / Guardian</TableHead>
                       <TableHead>Contact Details</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -375,6 +401,21 @@ export function ClassroomStudents() {
                         <TableCell>
                           <div className="text-xs font-medium text-slate-600">{student.parentMobile || student.mobileno || '—'}</div>
                           <div className="text-xs text-slate-400">{student.parentEmail || student.email || '—'}</div>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => handleToggleStudentStatus(student.id)}
+                            disabled={togglingStatusId === student.id}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                              student.active !== false
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                            }`}
+                            title={student.active !== false ? "Click to suspend student" : "Click to activate student"}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            {student.active !== false ? 'Active' : 'Suspended'}
+                          </button>
                         </TableCell>
                       </TableRow>
                     ))}

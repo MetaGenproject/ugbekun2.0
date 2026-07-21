@@ -31,6 +31,8 @@ import { IdProvisioning } from './id-provisioning'
 import { FinancesDashboard } from './finances-dashboard'
 import { CommentaryReview } from './commentary-review'
 import { BranchSettings } from './branch-settings'
+import { AdminTeacherDuties } from './admin-teacher-duties'
+import { StaffActivitiesReport } from './staff-activities-report'
 
 export interface BranchStats {
   branchId: number
@@ -63,6 +65,7 @@ interface StudentRow {
   email: string | null
   parentName: string | null
   className?: string | null
+  active?: boolean
 }
 
 interface ParentRow {
@@ -74,6 +77,7 @@ interface ParentRow {
   city: string | null
   state: string | null
   studentCount: number
+  active?: boolean
 }
 
 interface TeacherRow {
@@ -82,6 +86,7 @@ interface TeacherRow {
   email: string | null
   phone: string | null
   classCount: number
+  active?: boolean
 }
 
 interface StaffRow {
@@ -90,6 +95,7 @@ interface StaffRow {
   role: number
   roleLabel: string
   lastLogin: string | null
+  active?: boolean
 }
 
 function formatCount(value: number, label: string) {
@@ -145,6 +151,44 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null)
   const [deactivatingTeacher, setDeactivatingTeacher] = useState<TeacherRow | null>(null)
   const [isDeactivating, setIsDeactivating] = useState(false)
+
+  const [togglingStatusId, setTogglingStatusId] = useState<number | null>(null)
+
+  const handleToggleStudentStatus = async (studentId: number) => {
+    setTogglingStatusId(studentId)
+    try {
+      await apiSlice.post(endpoints.admin.toggleStudentStatus(studentId), {})
+      loadList()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Status update failed.')
+    } finally {
+      setTogglingStatusId(null)
+    }
+  }
+
+  const handleToggleTeacherStatus = async (teacherId: number) => {
+    setTogglingStatusId(teacherId)
+    try {
+      await apiSlice.post(endpoints.admin.toggleTeacherStatus(teacherId), {})
+      loadList()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Status update failed.')
+    } finally {
+      setTogglingStatusId(null)
+    }
+  }
+
+  const handleToggleStaffStatus = async (staffId: number) => {
+    setTogglingStatusId(staffId)
+    try {
+      await apiSlice.post(endpoints.admin.toggleStaffStatus(staffId), {})
+      loadList()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Status update failed.')
+    } finally {
+      setTogglingStatusId(null)
+    }
+  }
 
   const handleDeactivateTeacher = async (teacherId: number) => {
     setIsDeactivating(true)
@@ -299,6 +343,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                   <TableHead>Gender</TableHead>
                   <TableHead>Parent</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -315,6 +360,21 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                     <TableCell>{student.gender || '—'}</TableCell>
                     <TableCell>{student.parentName || '—'}</TableCell>
                     <TableCell>{student.mobileno || '—'}</TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleStudentStatus(student.id)}
+                        disabled={togglingStatusId === student.id}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                          student.active !== false
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                        }`}
+                        title={student.active !== false ? "Click to suspend student" : "Click to activate student"}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        {student.active !== false ? 'Active' : 'Suspended'}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-right">
                       <button
                         onClick={() => setPromotingStudent({
@@ -447,6 +507,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Class Allocations</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -460,6 +521,21 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                         {teacher.classCount} {teacher.classCount === 1 ? 'class' : 'classes'}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleTeacherStatus(teacher.id)}
+                        disabled={togglingStatusId === teacher.id}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                          teacher.active !== false
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                        }`}
+                        title={teacher.active !== false ? "Click to suspend teacher" : "Click to activate teacher"}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${teacher.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        {teacher.active !== false ? 'Active' : 'Suspended'}
+                      </button>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -503,6 +579,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                   <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Last Login</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -514,6 +591,21 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                       {member.lastLogin
                         ? new Date(member.lastLogin).toLocaleDateString()
                         : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleStaffStatus(member.id)}
+                        disabled={togglingStatusId === member.id}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                          member.active !== false
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                        }`}
+                        title={member.active !== false ? "Click to suspend staff" : "Click to activate staff"}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${member.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        {member.active !== false ? 'Active' : 'Suspended'}
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -601,6 +693,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'settings') {
     return <BranchSettings />
+  }
+
+  if (activeSection === 'teacher-duties') {
+    return <AdminTeacherDuties user={user} />
+  }
+
+  if (activeSection === 'staff-activities') {
+    return <StaffActivitiesReport />
   }
 
   const activities = [
