@@ -4,7 +4,12 @@
  */
 
 // 1. Centralized Base URL (can be easily changed here or overridden via env variable)
-export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+//local url
+//export const BASE_URL = 'http://localhost:5001/api';
+
+// production url 
+export const BASE_URL = 'https://ugbekunsmp-backend.onrender.com/api'
+
 
 // 2. Centralized Endpoints Catalog
 export const endpoints = {
@@ -61,7 +66,7 @@ export const endpoints = {
     rejectSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/reject`,
     onlineAdmissions: `${BASE_URL}/admin/online-admissions`,
     updateOnlineAdmissionStatus: (id: number) => `${BASE_URL}/admin/online-admissions/${id}/status`,
-    
+
     // Credentials & Accounting
     idCards: (query = '') => `${BASE_URL}/admin/id-cards${query}`,
     provisionStudentIdCard: (studentId: number) => `${BASE_URL}/admin/id-cards/provision/student/${studentId}`,
@@ -97,6 +102,7 @@ export const endpoints = {
     saveMontessoriSingle: `${BASE_URL}/teacher/montessori/save-single`,
     homeworks: `${BASE_URL}/teacher/homeworks`,
     onlineExams: `${BASE_URL}/teacher/online-exams`,
+    onlineExamItem: (id: number) => `${BASE_URL}/teacher/online-exams/${id}`,
     questionBank: `${BASE_URL}/teacher/question-bank`,
     questionBankItem: (id: number) => `${BASE_URL}/teacher/question-bank/${id}`,
     distributeExam: `${BASE_URL}/teacher/online-exams/distribute`,

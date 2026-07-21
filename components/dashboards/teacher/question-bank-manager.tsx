@@ -58,6 +58,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [distributeClassIds, setDistributeClassIds] = useState<number[]>([])
   const [distributeSubjectId, setDistributeSubjectId] = useState<number>(0)
   const [distributingStatus, setDistributingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [distributeExamDate, setDistributeExamDate] = useState<string>('')
 
   // Fetch all subjects taught by teacher to populate dropdowns
   const uniqueSubjectsMap = new Map<number, string>()
@@ -193,6 +194,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     
     setDistributeTitle('CBT Assessment - ' + new Date().toLocaleDateString())
     setDistributeClassIds([])
+    setDistributeExamDate('')
     setDistributingStatus('idle')
     setIsDistributing(true)
   }
@@ -227,7 +229,8 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       passingMark: distributePassingMark,
       duration: distributeDuration,
       questions: formattedQuestions,
-      classIds: distributeClassIds
+      classIds: distributeClassIds,
+      examDate: distributeExamDate || null
     }
 
     try {
@@ -603,6 +606,16 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
                     onChange={(e) => setDistributeTitle(e.target.value)}
                     placeholder="e.g. Science Midterm Exam"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Schedule Start Date & Time (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={distributeExamDate}
+                    onChange={(e) => setDistributeExamDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition cursor-pointer"
                   />
                 </div>
 

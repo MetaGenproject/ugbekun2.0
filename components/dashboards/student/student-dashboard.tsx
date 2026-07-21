@@ -98,6 +98,7 @@ interface TaskData {
     score: number | null
     submittedAt: string | null
     duration?: number
+    examDate?: string | null
     createdAt: string
   }>
   homeworks: Array<{
@@ -828,38 +829,50 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
                 <p className="text-sm font-semibold text-slate-400">No online exams allocated to your class yet.</p>
               ) : (
                 <div className="space-y-4">
-                  {tasks?.onlineExams.map((ex) => (
-                    <div key={ex.id} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{ex.title}</p>
-                        <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                          {ex.subjectName} {(ex.duration && ex.duration > 0) ? `• ${ex.duration} Mins` : ''}
-                        </p>
-                        {ex.submitted && ex.submittedAt && (
-                          <span className="text-[10px] text-slate-400 font-bold block pt-1 uppercase">
-                            Submitted on {new Date(ex.submittedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        {ex.submitted ? (
-                          <div className="text-right">
-                            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 rounded-full inline-block mb-1">
-                              Completed
+                  {tasks?.onlineExams.map((ex) => {
+                    const isUpcoming = ex.examDate ? new Date(ex.examDate).getTime() > Date.now() : false
+                    return (
+                      <div key={ex.id} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{ex.title}</p>
+                          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                            {ex.subjectName} {(ex.duration && ex.duration > 0) ? `• ${ex.duration} Mins` : ''}
+                          </p>
+                          {ex.examDate && (
+                            <span className="text-[10px] text-violet-600 font-bold block pt-1">
+                              Scheduled: {new Date(ex.examDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                             </span>
-                            <p className="text-sm font-black text-slate-800">{ex.score} Marks</p>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleStartExamAttempt(ex)}
-                            className="px-2.5 py-1 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg inline-block transition"
-                          >
-                            Take Exam
-                          </button>
-                        )}
+                          )}
+                          {ex.submitted && ex.submittedAt && (
+                            <span className="text-[10px] text-slate-400 font-bold block pt-1 uppercase">
+                              Submitted on {new Date(ex.submittedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          {ex.submitted ? (
+                            <div className="text-right">
+                              <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 rounded-full inline-block mb-1">
+                                Completed
+                              </span>
+                              <p className="text-sm font-black text-slate-800">{ex.score} Marks</p>
+                            </div>
+                          ) : isUpcoming ? (
+                            <span className="px-2.5 py-1 text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg inline-block">
+                              Locked
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleStartExamAttempt(ex)}
+                              className="px-2.5 py-1 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg inline-block transition cursor-pointer"
+                            >
+                              Take Exam
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

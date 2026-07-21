@@ -33,6 +33,7 @@ import { CommentaryReview } from './commentary-review'
 import { BranchSettings } from './branch-settings'
 import { AdminTeacherDuties } from './admin-teacher-duties'
 import { StaffActivitiesReport } from './staff-activities-report'
+import { AdminCbtManager } from './admin-cbt-manager'
 
 export interface BranchStats {
   branchId: number
@@ -689,6 +690,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'commentary-review') {
     return <CommentaryReview />
+  }
+
+  if (activeSection === 'cbt-exams') {
+    return <AdminCbtManager />
   }
 
   if (activeSection === 'settings') {

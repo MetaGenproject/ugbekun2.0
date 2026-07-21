@@ -100,6 +100,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
         { id: 'credentials', label: 'ID & Credentials', icon: Award },
         { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
+        { id: 'cbt-exams', label: 'Exams & CBT', icon: Award },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'teacher-duties', label: 'Teacher Duties', icon: CheckSquare },
