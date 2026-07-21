@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 
 export function LoginForm() {
   const router = useRouter()
@@ -37,16 +38,26 @@ export function LoginForm() {
     try {
       const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password })
 
-      // Save token and user details to localStorage
-      localStorage.setItem('ugbekun_token', data.token)
-      localStorage.setItem('ugbekun_user', JSON.stringify(data.user))
+      if (!data || !data.token || !data.user) {
+        throw new Error('Invalid credentials or empty server response.')
+      }
+
+      // Save token and user details to safeStorage
+      safeStorage.setItem('ugbekun_token', data.token)
+      safeStorage.setItem('ugbekun_user', JSON.stringify(data.user))
 
       // Redirect to role-based dashboard
       router.push('/dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
-
-      setErrorMsg(err.message || 'Network connection error. Is the backend server running?')
+      
+      const friendlyMsg = err && typeof err === 'object' && err.message
+        ? err.message
+        : typeof err === 'string'
+          ? err
+          : 'Network connection error. Is the backend server running?'
+      
+      setErrorMsg(friendlyMsg)
     } finally {
       setIsLoading(false)
     }

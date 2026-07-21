@@ -32,6 +32,7 @@ import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashbo
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
+import { safeStorage } from '@/lib/safeStorage'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
 // Role 1 = 1 global user  → Superadmin / Master
@@ -158,8 +159,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Check authentication token and user context
-    const token = localStorage.getItem('ugbekun_token')
-    const userDataStr = localStorage.getItem('ugbekun_user')
+    const token = safeStorage.getItem('ugbekun_token')
+    const userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
       router.push('/login')
@@ -170,8 +171,8 @@ export default function DashboardPage() {
       const parsedUser = JSON.parse(userDataStr)
       setUser(parsedUser)
     } catch (e) {
-      localStorage.removeItem('ugbekun_token')
-      localStorage.removeItem('ugbekun_user')
+      safeStorage.removeItem('ugbekun_token')
+      safeStorage.removeItem('ugbekun_user')
       router.push('/login')
     } finally {
       setIsLoading(false)
@@ -199,8 +200,8 @@ export default function DashboardPage() {
   }, [user])
 
   const handleLogout = () => {
-    localStorage.removeItem('ugbekun_token')
-    localStorage.removeItem('ugbekun_user')
+    safeStorage.removeItem('ugbekun_token')
+    safeStorage.removeItem('ugbekun_user')
     router.push('/login')
   }
 

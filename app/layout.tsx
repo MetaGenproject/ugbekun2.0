@@ -33,57 +33,88 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                try {
-                  var testKey = '__storage_test__';
-                  window.localStorage.setItem(testKey, testKey);
-                  window.localStorage.removeItem(testKey);
-                } catch (e) {
-                  console.warn('localStorage is restricted (e.g. private browsing). Applying memory/cookie fallback.');
-                  var memoryStore = {};
+                function checkStorageSupport() {
                   try {
-                    var originalSet = Storage.prototype.setItem;
-                    Storage.prototype.setItem = function(key, value) {
-                      try {
-                        originalSet.call(this, key, value);
-                      } catch (err) {
-                        memoryStore[key] = String(value);
-                        try {
-                          document.cookie = encodeURIComponent(key) + "=" + encodeURIComponent(value) + "; path=/; max-age=31536000; SameSite=Lax";
-                        } catch (ce) {}
-                      }
-                    };
+                    var testKey = '__storage_test__';
+                    window.localStorage.setItem(testKey, testKey);
+                    var val = window.localStorage.getItem(testKey);
+                    window.localStorage.removeItem(testKey);
+                    return val === testKey;
+                  } catch (e) {
+                    return false;
+                  }
+                }
 
-                    var originalGet = Storage.prototype.getItem;
-                    Storage.prototype.getItem = function(key) {
-                      try {
-                        var val = originalGet.call(this, key);
-                        if (val !== null) return val;
-                      } catch (err) {}
-                      if (key in memoryStore) return memoryStore[key];
-                      try {
-                        var prefix = encodeURIComponent(key) + "=";
-                        var cookies = document.cookie.split('; ');
-                        for (var i = 0; i < cookies.length; i++) {
-                          if (cookies[i].indexOf(prefix) === 0) {
-                            return decodeURIComponent(cookies[i].substring(prefix.length));
+                if (!checkStorageSupport()) {
+                  console.warn('localStorage is restricted or not supported. Overwriting window.localStorage with a robust cookie/memory fallback.');
+                  
+                  var makeMockStorage = function() {
+                    var memoryStore = {};
+                    
+                    try {
+                      var cookies = document.cookie.split('; ');
+                      for (var i = 0; i < cookies.length; i++) {
+                        var parts = cookies[i].split('=');
+                        if (parts.length >= 2) {
+                          var key = decodeURIComponent(parts[0]);
+                          var value = decodeURIComponent(parts.slice(1).join('='));
+                          memoryStore[key] = value;
+                        }
+                      }
+                    } catch (ce) {}
+
+                    return {
+                      getItem: function(key) {
+                        var k = String(key);
+                        return k in memoryStore ? memoryStore[k] : null;
+                      },
+                      setItem: function(key, value) {
+                        var k = String(key);
+                        var v = String(value);
+                        memoryStore[k] = v;
+                        try {
+                          document.cookie = encodeURIComponent(k) + "=" + encodeURIComponent(v) + "; path=/; max-age=31536000; SameSite=Lax";
+                        } catch (ce) {}
+                      },
+                      removeItem: function(key) {
+                        var k = String(key);
+                        delete memoryStore[k];
+                        try {
+                          document.cookie = encodeURIComponent(k) + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+                        } catch (ce) {}
+                      },
+                      clear: function() {
+                        for (var key in memoryStore) {
+                          if (memoryStore.hasOwnProperty(key)) {
+                            this.removeItem(key);
                           }
                         }
-                      } catch (ce) {}
-                      return null;
+                        memoryStore = {};
+                      },
+                      key: function(index) {
+                        var keys = Object.keys(memoryStore);
+                        return keys[index] || null;
+                      },
+                      get length() {
+                        return Object.keys(memoryStore).length;
+                      }
                     };
+                  };
 
-                    var originalRemove = Storage.prototype.removeItem;
-                    Storage.prototype.removeItem = function(key) {
-                      try {
-                        originalRemove.call(this, key);
-                      } catch (err) {}
-                      delete memoryStore[key];
-                      try {
-                        document.cookie = encodeURIComponent(key) + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                      } catch (ce) {}
-                    };
-                  } catch (patchError) {
-                    console.error('Failed to patch Storage.prototype:', patchError);
+                  try {
+                    Object.defineProperty(window, 'localStorage', {
+                      value: makeMockStorage(),
+                      writable: true,
+                      configurable: true
+                    });
+                    Object.defineProperty(window, 'sessionStorage', {
+                      value: makeMockStorage(),
+                      writable: true,
+                      configurable: true
+                    });
+                  } catch (definePropertyError) {
+                    window.localStorage = makeMockStorage();
+                    window.sessionStorage = makeMockStorage();
                   }
                 }
               })();

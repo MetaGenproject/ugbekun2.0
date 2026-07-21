@@ -152,18 +152,18 @@ export const endpoints = {
   },
 };
 
+import { safeStorage } from './safeStorage';
+
 // Helper to get authorization headers
 const getAuthHeaders = (): HeadersInit => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_token') : null;
+  const token = safeStorage.getItem('ugbekun_token');
   const headers: Record<string, string> = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  if (typeof window !== 'undefined') {
-    const impersonatedTeacherId = localStorage.getItem('ugbekun_admin_impersonated_teacher_id');
-    if (impersonatedTeacherId) {
-      headers['x-admin-teacher-id'] = impersonatedTeacherId;
-    }
+  const impersonatedTeacherId = safeStorage.getItem('ugbekun_admin_impersonated_teacher_id');
+  if (impersonatedTeacherId) {
+    headers['x-admin-teacher-id'] = impersonatedTeacherId;
   }
   return headers;
 };

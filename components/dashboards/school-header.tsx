@@ -10,11 +10,13 @@ interface Branch {
   logo?: string | null
 }
 
+import { safeStorage } from '@/lib/safeStorage'
+
 export function SchoolHeader() {
   const [branch, setBranch] = useState<Branch | null>(null)
 
   useEffect(() => {
-    const userStr = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_user') : null
+    const userStr = safeStorage.getItem('ugbekun_user')
     if (userStr) {
       try {
         const user = JSON.parse(userStr)
