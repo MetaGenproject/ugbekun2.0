@@ -46,8 +46,14 @@ export function LoginForm() {
       safeStorage.setItem('ugbekun_token', data.token)
       safeStorage.setItem('ugbekun_user', JSON.stringify(data.user))
 
-      // Redirect to role-based dashboard
-      router.push('/dashboard')
+      // Redirect to role-based dashboard using a broader-compatible navigation path
+      try {
+        router.replace('/dashboard')
+      } catch {
+        if (typeof window !== 'undefined') {
+          window.location.assign('/dashboard')
+        }
+      }
     } catch (err: any) {
       console.error('Login error:', err)
       
