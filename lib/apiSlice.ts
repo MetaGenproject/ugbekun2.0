@@ -9,9 +9,12 @@ const getBaseUrl = (): string => {
   }
 
   if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+    
+    // Local development loopback or local Wi-Fi LAN IP (e.g. 192.168.x.x or 10.x.x.x)
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(hostname) || /^10\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return `${protocol}//${hostname}:5001/api`;
     }
   }
 
@@ -196,33 +199,59 @@ export const apiSlice = {
    * GET Request
    */
   async get<T = any>(url: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...(options?.headers || {}),
-      },
-      ...options,
-    });
-    return handleResponse<T>(response);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+          ...(options?.headers || {}),
+        },
+        signal: controller.signal,
+        ...options,
+      });
+      return handleResponse<T>(response);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Connection timed out. Please check your internet connection or server availability.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   /**
    * POST Request
    */
   async post<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...(options?.headers || {}),
-      },
-      body: JSON.stringify(body),
-      ...options,
-    });
-    return handleResponse<T>(response);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+          ...(options?.headers || {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+        ...options,
+      });
+      return handleResponse<T>(response);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Server connection timed out. If using remote backend, please wait a moment for server wake up and try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   /**

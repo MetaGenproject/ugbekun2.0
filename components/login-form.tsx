@@ -20,9 +20,8 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Front-end Username & Password Validation
+    // Front-end Username Validation
     const trimmedUsername = username.trim()
-    const trimmedPassword = password.trim()
 
     if (!trimmedUsername) {
       setErrorMsg('Username is required.')
@@ -34,7 +33,7 @@ export function LoginForm() {
       return
     }
 
-    if (!trimmedPassword) {
+    if (!password) {
       setErrorMsg('Password is required.')
       return
     }
@@ -43,7 +42,7 @@ export function LoginForm() {
     setErrorMsg('')
 
     try {
-      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password: trimmedPassword })
+      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password })
 
       if (!data || !data.token || !data.user) {
         throw new Error('Invalid credentials or empty server response.')
@@ -112,7 +111,7 @@ export function LoginForm() {
       )}
 
       {/* Login Form */}
-      <form onSubmit={handleSubmit} action="javascript:void(0);" className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {/* Username/Email Field */}
         <div>
           <label htmlFor="login" className="block text-sm font-semibold text-foreground mb-2">
