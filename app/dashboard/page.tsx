@@ -169,15 +169,18 @@ export default function DashboardPage() {
         token = safeStorage.getItem('ugbekun_token')
         userDataStr = safeStorage.getItem('ugbekun_user')
         if (!token || !userDataStr) {
-          router.push('/login')
+          router.replace('/login')
         } else {
           try {
             const parsedUser = JSON.parse(userDataStr)
+            if (!parsedUser || typeof parsedUser !== 'object' || !parsedUser.id || !parsedUser.role) {
+              throw new Error('Invalid session payload')
+            }
             setUser(parsedUser)
           } catch (e) {
             safeStorage.removeItem('ugbekun_token')
             safeStorage.removeItem('ugbekun_user')
-            router.push('/login')
+            router.replace('/login')
           } finally {
             setIsLoading(false)
           }
@@ -188,11 +191,14 @@ export default function DashboardPage() {
 
     try {
       const parsedUser = JSON.parse(userDataStr)
+      if (!parsedUser || typeof parsedUser !== 'object' || !parsedUser.id || !parsedUser.role) {
+        throw new Error('Invalid session payload')
+      }
       setUser(parsedUser)
     } catch (e) {
       safeStorage.removeItem('ugbekun_token')
       safeStorage.removeItem('ugbekun_user')
-      router.push('/login')
+      router.replace('/login')
     } finally {
       setIsLoading(false)
     }

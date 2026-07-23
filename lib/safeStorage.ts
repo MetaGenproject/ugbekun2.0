@@ -67,11 +67,11 @@ export const safeStorage = {
   setItem(key: string, value: string): void {
     let sanitizedValue = value;
 
-    // Payload size safety: if setting user JSON payload, remove any large base64 data to keep payload <1KB
-    if (key === 'ugbekun_user' && value && value.includes('data:image')) {
+    // Payload size safety: if setting user JSON payload, remove any logo data to guarantee <200-byte storage footprint
+    if (key === 'ugbekun_user' && value) {
       try {
         const obj = JSON.parse(value);
-        if (obj?.branch?.logo && (obj.branch.logo.startsWith('data:') || obj.branch.logo.length > 500)) {
+        if (obj?.branch && 'logo' in obj.branch) {
           delete obj.branch.logo;
         }
         sanitizedValue = JSON.stringify(obj);

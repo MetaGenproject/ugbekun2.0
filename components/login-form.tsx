@@ -48,11 +48,19 @@ export function LoginForm() {
         throw new Error('Invalid credentials or empty server response.')
       }
 
-      // Sanitize user object to keep session storage lightweight for mobile compatibility (<1KB)
-      const userToStore = { ...data.user }
-      if (userToStore.branch && userToStore.branch.logo && (userToStore.branch.logo.startsWith('data:') || userToStore.branch.logo.length > 500)) {
-        const { logo, ...cleanBranch } = userToStore.branch
-        userToStore.branch = cleanBranch
+      // Construct lightweight user payload (~100 bytes) for guaranteed cross-browser mobile storage persistence
+      const userToStore = {
+        id: data.user.id,
+        username: data.user.username,
+        role: data.user.role,
+        roleName: data.user.roleName,
+        legacyUserId: data.user.legacyUserId || null,
+        lastLogin: data.user.lastLogin || null,
+        branch: data.user.branch ? {
+          id: data.user.branch.id,
+          name: data.user.branch.name,
+          code: data.user.branch.code,
+        } : null,
       }
 
       // Save token and user details to safeStorage
