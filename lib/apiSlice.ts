@@ -3,12 +3,22 @@
  * Define the Base URL and manage all endpoints and fetch requests in one place.
  */
 
-// 1. Centralized Base URL (can be easily changed here or overridden via env variable)
-//local url
-//export const BASE_URL = "http://localhost:5001/api"
+const getBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
 
-// production url 
-export const BASE_URL = 'https://ugbekunsmp-backend.onrender.com/api'
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+    }
+  }
+
+  return 'https://ugbekunsmp-backend.onrender.com/api';
+};
+
+export const BASE_URL = getBaseUrl();
 
 
 // 2. Centralized Endpoints Catalog

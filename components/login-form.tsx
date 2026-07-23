@@ -112,7 +112,7 @@ export function LoginForm() {
       )}
 
       {/* Login Form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} action="javascript:void(0);" className="space-y-5">
         {/* Username/Email Field */}
         <div>
           <label htmlFor="login" className="block text-sm font-semibold text-foreground mb-2">
