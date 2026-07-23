@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, Trophy, Flame, Loader2, Play, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 
 interface Badge {
   id: number
@@ -62,7 +63,7 @@ export default function PointsHub() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const headers: Record<string, string> = {}
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
@@ -146,7 +147,7 @@ export default function PointsHub() {
     setSubmittingTrivia(true)
 
     try {
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(`${endpoints.health.replace('/health', '')}/student/trivia/submit`, {
         method: 'POST',
         headers: {

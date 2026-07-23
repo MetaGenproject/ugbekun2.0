@@ -20,8 +20,10 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Front-end Username Validation
+    // Front-end Username & Password Validation
     const trimmedUsername = username.trim()
+    const trimmedPassword = password.trim()
+
     if (!trimmedUsername) {
       setErrorMsg('Username is required.')
       return
@@ -32,26 +34,38 @@ export function LoginForm() {
       return
     }
 
+    if (!trimmedPassword) {
+      setErrorMsg('Password is required.')
+      return
+    }
+
     setIsLoading(true)
     setErrorMsg('')
 
     try {
-      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password })
+      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password: trimmedPassword })
 
       if (!data || !data.token || !data.user) {
         throw new Error('Invalid credentials or empty server response.')
       }
 
+      // Sanitize user object to keep session storage lightweight for mobile compatibility (<1KB)
+      const userToStore = { ...data.user }
+      if (userToStore.branch && userToStore.branch.logo && (userToStore.branch.logo.startsWith('data:') || userToStore.branch.logo.length > 500)) {
+        const { logo, ...cleanBranch } = userToStore.branch
+        userToStore.branch = cleanBranch
+      }
+
       // Save token and user details to safeStorage
       safeStorage.setItem('ugbekun_token', data.token)
-      safeStorage.setItem('ugbekun_user', JSON.stringify(data.user))
+      safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
 
-      // Redirect to role-based dashboard using a broader-compatible navigation path
+      // Redirect to role-based dashboard using mobile-compatible navigation fallback
       try {
         router.replace('/dashboard')
       } catch {
         if (typeof window !== 'undefined') {
-          window.location.assign('/dashboard')
+          window.location.href = '/dashboard'
         }
       }
     } catch (err: any) {

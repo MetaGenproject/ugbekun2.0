@@ -65,11 +65,26 @@ export const safeStorage = {
   },
 
   setItem(key: string, value: string): void {
+    let sanitizedValue = value;
+
+    // Payload size safety: if setting user JSON payload, remove any large base64 data to keep payload <1KB
+    if (key === 'ugbekun_user' && value && value.includes('data:image')) {
+      try {
+        const obj = JSON.parse(value);
+        if (obj?.branch?.logo && (obj.branch.logo.startsWith('data:') || obj.branch.logo.length > 500)) {
+          delete obj.branch.logo;
+        }
+        sanitizedValue = JSON.stringify(obj);
+      } catch {
+        // ignore parse error
+      }
+    }
+
     const storage = getStorage();
 
     try {
       if (storage) {
-        storage.setItem(key, value);
+        storage.setItem(key, sanitizedValue);
       }
     } catch (e) {
       console.warn(`safeStorage.setItem failed for key "${key}":`, e);
@@ -77,15 +92,20 @@ export const safeStorage = {
 
     try {
       if (typeof document !== 'undefined') {
-        const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-        const secureFlag = isSecure ? '; Secure' : '';
-        document.cookie = encodeURIComponent(key) + '=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax' + secureFlag;
+        const encodedKey = encodeURIComponent(key);
+        const encodedVal = encodeURIComponent(sanitizedValue);
+        // Only set cookie if under browser size limit (~3800 bytes)
+        if (encodedKey.length + encodedVal.length <= 3800) {
+          const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+          const secureFlag = isSecure ? '; Secure' : '';
+          document.cookie = `${encodedKey}=${encodedVal}; path=/; max-age=31536000; SameSite=Lax${secureFlag}`;
+        }
       }
     } catch (ce) {
       // ignore cookie failures
     }
 
-    inMemoryStore[key] = value;
+    inMemoryStore[key] = sanitizedValue;
   },
 
   removeItem(key: string): void {

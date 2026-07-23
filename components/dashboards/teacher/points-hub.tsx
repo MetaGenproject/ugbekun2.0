@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Trophy, Sparkles, Award, Loader2, Calendar, Clock, Activity, CheckSquare } from 'lucide-react'
 import { endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 
 interface LeaderboardEntry {
   rank: number
@@ -34,7 +35,7 @@ export default function TeacherPointsHub() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const headers: Record<string, string> = {}
       if (token) {
         headers['Authorization'] = `Bearer ${token}`

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 import {
   UserPlus,
   Users,
@@ -646,7 +647,7 @@ export function StudentOnboarding() {
     formData.append('file', file)
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_token') : null
+      const token = safeStorage.getItem('ugbekun_token')
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
       const response = await fetch(`${apiUrl}/admin/students/parse-document`, {
         method: 'POST',

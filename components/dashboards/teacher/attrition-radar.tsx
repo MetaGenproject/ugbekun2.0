@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Activity, AlertTriangle, User, Calendar, Shield, ArrowRight, CheckCircle, FileText, TrendingDown, DollarSign, X } from 'lucide-react'
 import { endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 
 interface Student {
   id: number
@@ -49,7 +50,7 @@ export function TeacherAttritionRadar() {
     setLoading(true)
     setErrorMessage(null)
     try {
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(endpoints.teacher.attritionDashboard, {
         headers: {
           Authorization: `Bearer ${token}`
@@ -72,7 +73,7 @@ export function TeacherAttritionRadar() {
   const handleAction = async (alertId: number, nextStatus: string) => {
     setActionLoading(true)
     try {
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(endpoints.teacher.attritionAction(alertId), {
         method: 'POST',
         headers: {

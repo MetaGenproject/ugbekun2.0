@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Settings, Save, Loader2, ShieldCheck, HelpCircle } from 'lucide-react'
 import { endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 
 export function BranchSettings() {
   const [weeklyMintLimit, setWeeklyMintLimit] = useState<number>(5000)
@@ -14,7 +15,7 @@ export function BranchSettings() {
   const loadConfig = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const headers: Record<string, string> = {}
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
@@ -42,7 +43,7 @@ export function BranchSettings() {
     setSaving(true)
     setMessage(null)
     try {
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token')
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(`${endpoints.health.replace('/health', '')}/admin/gamification/config`, {
         method: 'POST',
         headers: {

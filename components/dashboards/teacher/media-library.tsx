@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 import { FileText, FolderPlus, Download, Trash2, Plus, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
 
 interface MediaItem {
@@ -87,7 +88,7 @@ export function MediaLibrary({ teacherId }: MediaLibraryProps) {
 
     try {
       const url = `${endpoints.teacher.gradebookSheet.split('/gradebook')[0]}/media`
-      const token = localStorage.getItem('ugbekun_token') || localStorage.getItem('token') || ''
+      const token = safeStorage.getItem('ugbekun_token') || ''
       
       const response = await fetch(url, {
         method: 'POST',

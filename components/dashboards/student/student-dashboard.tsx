@@ -23,6 +23,7 @@ import {
   Upload
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
+import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { StudentMediaLibrary } from './student-media-library'
 import { StudentLiveClassrooms } from './student-live-classrooms'
@@ -290,11 +291,12 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
 
   const handleStartExamAttempt = async (exam: any) => {
     try {
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(endpoints.student.startOnlineExam(exam.id), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       })
       const data = await res.json()
@@ -332,11 +334,12 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
         ? endpoints.student.submitHomework(activeAssessment.id)
         : endpoints.student.submitOnlineExam(activeAssessment.id)
       
+      const token = safeStorage.getItem('ugbekun_token')
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ answers: assessmentAnswers })
       })
@@ -445,7 +448,7 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
   const handleExportPdf = async () => {
     try {
       setExportingPdf(true)
-      const token = localStorage.getItem('ugbekun_token')
+      const token = safeStorage.getItem('ugbekun_token')
       const url = endpoints.student.exportPdf(rankingType, rankingType === 'topn' ? rankingLimit : undefined)
       
       const response = await fetch(url, {

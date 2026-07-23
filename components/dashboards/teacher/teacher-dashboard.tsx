@@ -22,6 +22,7 @@ import {
   Sparkles
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
+import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
 import GradebookInterface from './gradebook-interface'
 import MontessoriMatrix from './montessori-matrix'
@@ -196,8 +197,9 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
   const fetchAssessments = async () => {
     setLoadingAssessments(true)
     try {
+      const token = safeStorage.getItem('ugbekun_token')
       const hwRes = await fetch(endpoints.teacher.homeworks, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       })
       const hwData = await hwRes.json()
       if (hwData.success) {
@@ -205,7 +207,7 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
       }
 
       const examRes = await fetch(endpoints.teacher.onlineExams, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       })
       const examData = await examRes.json()
       if (examData.success) {
@@ -557,7 +559,7 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
     setExportingPdf(prev => ({ ...prev, [studentId]: true }))
 
     try {
-      const token = localStorage.getItem('ugbekun_token')
+      const token = safeStorage.getItem('ugbekun_token')
       const url = endpoints.teacher.exportPdf(
         studentId,
         allocation.classId,
@@ -725,12 +727,13 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
 
     try {
       let res;
+      const token = safeStorage.getItem('ugbekun_token')
       if (assessmentType === 'homework') {
         res = await fetch(endpoints.teacher.homeworks, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}`
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             title: curateTitle,
@@ -746,7 +749,7 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}`
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             title: curateTitle,
@@ -790,8 +793,9 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
       const url = type === 'homework' 
         ? endpoints.teacher.homeworkSubmissions(id)
         : endpoints.teacher.onlineExamSubmissions(id)
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = await res.json()
       if (data.success) {
@@ -818,11 +822,12 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
         ? { score: gradingScore, feedback: gradingFeedback }
         : { score: gradingScore }
 
+      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ugbekun_token') || localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(bodyPayload)
       })

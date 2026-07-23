@@ -160,12 +160,30 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Check authentication token and user context
-    const token = safeStorage.getItem('ugbekun_token')
-    const userDataStr = safeStorage.getItem('ugbekun_user')
+    let token = safeStorage.getItem('ugbekun_token')
+    let userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
-      router.push('/login')
-      return
+      // Short delay retry for mobile browsers where storage write/read sync might take a millisecond
+      const timer = setTimeout(() => {
+        token = safeStorage.getItem('ugbekun_token')
+        userDataStr = safeStorage.getItem('ugbekun_user')
+        if (!token || !userDataStr) {
+          router.push('/login')
+        } else {
+          try {
+            const parsedUser = JSON.parse(userDataStr)
+            setUser(parsedUser)
+          } catch (e) {
+            safeStorage.removeItem('ugbekun_token')
+            safeStorage.removeItem('ugbekun_user')
+            router.push('/login')
+          } finally {
+            setIsLoading(false)
+          }
+        }
+      }, 100)
+      return () => clearTimeout(timer)
     }
 
     try {
