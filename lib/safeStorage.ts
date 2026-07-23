@@ -48,16 +48,16 @@ export const safeStorage = {
     try {
       if (storage) {
         const val = storage.getItem(key);
-        if (val !== null) return val;
+        if (val !== null && val !== '') return val;
       }
     } catch (e) {
       console.warn(`safeStorage.getItem failed for key "${key}":`, e);
     }
 
     const cookieValue = getCookieValue(key);
-    if (cookieValue !== null) return cookieValue;
+    if (cookieValue !== null && cookieValue !== '') return cookieValue;
 
-    if (inMemoryStore[key] !== undefined) {
+    if (inMemoryStore[key] && inMemoryStore[key] !== '') {
       return inMemoryStore[key];
     }
 
