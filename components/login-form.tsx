@@ -67,10 +67,14 @@ export function LoginForm() {
       safeStorage.setItem('ugbekun_token', data.token)
       safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
 
-      // Direct page navigation for mobile browsers to guarantee storage sync before dashboard mount
-      if (typeof window !== 'undefined') {
-        window.location.assign('/dashboard')
-      } else {
+      // Direct page navigation for universal mobile browser compatibility (modern & legacy)
+      try {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/dashboard'
+        } else {
+          router.replace('/dashboard')
+        }
+      } catch {
         router.replace('/dashboard')
       }
     } catch (err: any) {

@@ -199,28 +199,38 @@ export const apiSlice = {
    * GET Request
    */
   async get<T = any>(url: string, options?: RequestInit): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const hasAbort = typeof AbortController !== 'undefined';
+    const controller = hasAbort ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => {
+      try { controller.abort(); } catch (e) {}
+    }, 25000) : null;
 
     try {
-      const response = await fetch(url, {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...((options?.headers as Record<string, string>) || {}),
+      };
+
+      const fetchOpts: RequestInit = {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-          ...(options?.headers || {}),
-        },
-        signal: controller.signal,
+        headers,
         ...options,
-      });
+      };
+
+      if (controller && controller.signal) {
+        fetchOpts.signal = controller.signal;
+      }
+
+      const response = await fetch(url, fetchOpts);
       return handleResponse<T>(response);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err && err.name === 'AbortError') {
         throw new Error('Connection timed out. Please check your internet connection or server availability.');
       }
       throw err;
     } finally {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   },
 
@@ -228,29 +238,39 @@ export const apiSlice = {
    * POST Request
    */
   async post<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const hasAbort = typeof AbortController !== 'undefined';
+    const controller = hasAbort ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => {
+      try { controller.abort(); } catch (e) {}
+    }, 25000) : null;
 
     try {
-      const response = await fetch(url, {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...((options?.headers as Record<string, string>) || {}),
+      };
+
+      const fetchOpts: RequestInit = {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-          ...(options?.headers || {}),
-        },
+        headers,
         body: JSON.stringify(body),
-        signal: controller.signal,
         ...options,
-      });
+      };
+
+      if (controller && controller.signal) {
+        fetchOpts.signal = controller.signal;
+      }
+
+      const response = await fetch(url, fetchOpts);
       return handleResponse<T>(response);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err && err.name === 'AbortError') {
         throw new Error('Server connection timed out. If using remote backend, please wait a moment for server wake up and try again.');
       }
       throw err;
     } finally {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   },
 

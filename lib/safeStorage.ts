@@ -71,11 +71,11 @@ export const safeStorage = {
     if (key === 'ugbekun_user' && value) {
       try {
         const obj = JSON.parse(value);
-        if (obj?.branch && 'logo' in obj.branch) {
+        if (obj && obj.branch && typeof obj.branch === 'object') {
           delete obj.branch.logo;
         }
         sanitizedValue = JSON.stringify(obj);
-      } catch {
+      } catch (e) {
         // ignore parse error
       }
     }
