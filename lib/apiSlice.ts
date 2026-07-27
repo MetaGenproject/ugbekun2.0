@@ -255,7 +255,6 @@ export const apiSlice = {
       const headers = {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
-        ...getCacheBustingHeaders(),
         ...((options?.headers as Record<string, string>) || {}),
       };
 
@@ -291,7 +290,6 @@ export const apiSlice = {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
-        ...getCacheBustingHeaders(),
         ...(options?.headers || {}),
       },
       body: JSON.stringify(body),
@@ -309,7 +307,6 @@ export const apiSlice = {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
-        ...getCacheBustingHeaders(),
         ...(options?.headers || {}),
       },
       ...options,
