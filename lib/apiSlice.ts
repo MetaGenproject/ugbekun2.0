@@ -175,6 +175,8 @@ export const endpoints = {
 };
 
 import { safeStorage } from './safeStorage';
+import { getCacheBustingHeaders, appendCacheBuster } from './cacheBuster';
+export { getCacheBustingHeaders, appendCacheBuster };
 
 // Helper to get authorization headers
 const getAuthHeaders = (): HeadersInit => {
@@ -198,7 +200,7 @@ export const apiSlice = {
   /**
    * GET Request
    */
-  async get<T = any>(url: string, options?: RequestInit): Promise<T> {
+  async get<T = any>(url: string, options?: RequestInit & { cacheBust?: boolean }): Promise<T> {
     const hasAbort = typeof AbortController !== 'undefined';
     const controller = hasAbort ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => {
@@ -206,9 +208,11 @@ export const apiSlice = {
     }, 25000) : null;
 
     try {
+      const finalUrl = options?.cacheBust ? appendCacheBuster(url) : url;
       const headers = {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getCacheBustingHeaders(),
         ...((options?.headers as Record<string, string>) || {}),
       };
 
@@ -222,7 +226,7 @@ export const apiSlice = {
         fetchOpts.signal = controller.signal;
       }
 
-      const response = await fetch(url, fetchOpts);
+      const response = await fetch(finalUrl, fetchOpts);
       return handleResponse<T>(response);
     } catch (err: any) {
       if (err && err.name === 'AbortError') {
@@ -248,6 +252,7 @@ export const apiSlice = {
       const headers = {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getCacheBustingHeaders(),
         ...((options?.headers as Record<string, string>) || {}),
       };
 
@@ -283,6 +288,7 @@ export const apiSlice = {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getCacheBustingHeaders(),
         ...(options?.headers || {}),
       },
       body: JSON.stringify(body),
@@ -300,6 +306,7 @@ export const apiSlice = {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
+        ...getCacheBustingHeaders(),
         ...(options?.headers || {}),
       },
       ...options,
@@ -310,11 +317,13 @@ export const apiSlice = {
   /**
    * Download a file (CSV, PDF, etc.) with auth headers.
    */
-  async download(url: string, filename: string): Promise<void> {
-    const response = await fetch(url, {
+  async download(url: string, filename: string, options?: { cacheBust?: boolean }): Promise<void> {
+    const finalUrl = options?.cacheBust ? appendCacheBuster(url) : url;
+    const response = await fetch(finalUrl, {
       method: 'GET',
       headers: {
         ...getAuthHeaders(),
+        ...getCacheBustingHeaders(),
       },
     });
 
