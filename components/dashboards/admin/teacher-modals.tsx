@@ -36,6 +36,12 @@ interface EditTeacherModalProps {
     name: string
     email: string | null
     phone: string | null
+    qualifications?: string | null
+    houseAddress?: string | null
+    department?: string | null
+    bankName?: string | null
+    accountNumber?: string | null
+    accountName?: string | null
   } | null
   onClose: () => void
   onSuccess: () => void
@@ -96,6 +102,12 @@ interface PendingStaff {
   name: string
   email: string
   phone: string
+  qualifications?: string
+  houseAddress?: string
+  department?: string
+  bankName?: string
+  accountNumber?: string
+  accountName?: string
   role: string
   roleLabel: string
   isClassTeacher: boolean
@@ -111,6 +123,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [qualifications, setQualifications] = useState('')
+  const [houseAddress, setHouseAddress] = useState('')
+  const [department, setDepartment] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [accountName, setAccountName] = useState('')
 
   const [role, setRole] = useState('3')
   const [isClassTeacher, setIsClassTeacher] = useState(false)
@@ -168,6 +186,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
     setName('')
     setEmail('')
     setPhone('')
+    setQualifications('')
+    setHouseAddress('')
+    setDepartment('')
+    setBankName('')
+    setAccountNumber('')
+    setAccountName('')
     setRole('3')
     setIsClassTeacher(false)
     setIsSubjectTeacher(false)
@@ -210,6 +234,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
       name: trimmedName,
       email: trimmedEmail,
       phone: phone.trim(),
+      qualifications: qualifications.trim(),
+      houseAddress: houseAddress.trim(),
+      department: department.trim(),
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      accountName: accountName.trim(),
       role,
       roleLabel: STAFF_ROLE_LABELS[role] || 'Staff',
       isClassTeacher,
@@ -227,6 +257,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
     setName('')
     setEmail('')
     setPhone('')
+    setQualifications('')
+    setHouseAddress('')
+    setDepartment('')
+    setBankName('')
+    setAccountNumber('')
+    setAccountName('')
     setIsClassTeacher(false)
     setIsSubjectTeacher(false)
     setClassTeacherClassId('')
@@ -284,6 +320,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         name: currentName,
         email: currentEmail,
         phone: phone.trim(),
+        qualifications: qualifications.trim(),
+        houseAddress: houseAddress.trim(),
+        department: department.trim(),
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.trim(),
+        accountName: accountName.trim(),
         role,
         roleLabel: STAFF_ROLE_LABELS[role] || 'Staff',
         isClassTeacher,
@@ -311,6 +353,12 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
           name: item.name,
           email: item.email,
           phone: item.phone || undefined,
+          qualifications: item.qualifications || undefined,
+          houseAddress: item.houseAddress || undefined,
+          department: item.department || undefined,
+          bankName: item.bankName || undefined,
+          accountNumber: item.accountNumber || undefined,
+          accountName: item.accountName || undefined,
           role: Number(item.role),
           isClassTeacher: item.isClassTeacher,
           classTeacherClassId: item.classTeacherClassId ? Number(item.classTeacherClassId) : undefined,
@@ -571,6 +619,85 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500">Department</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Sciences, Humanities, ICT"
+                        value={department}
+                        onChange={(e) => setDepartment(e.target.value)}
+                        disabled={isSubmitting}
+                        className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#0063a6] transition"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-500">Qualifications</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. B.Ed, M.Sc, NCE"
+                        value={qualifications}
+                        onChange={(e) => setQualifications(e.target.value)}
+                        disabled={isSubmitting}
+                        className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#0063a6] transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500">House Address</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Residential house address"
+                      value={houseAddress}
+                      onChange={(e) => setHouseAddress(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#0063a6] transition resize-none"
+                    />
+                  </div>
+
+                  {/* Bank Details for Payroll */}
+                  <div className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-3">
+                    <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      Bank Details (for Payroll)
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400">Bank Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. GTBank, Access"
+                          value={bankName}
+                          onChange={(e) => setBankName(e.target.value)}
+                          disabled={isSubmitting}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400">Account Number</label>
+                        <input
+                          type="text"
+                          placeholder="10 digits"
+                          value={accountNumber}
+                          onChange={(e) => setAccountNumber(e.target.value)}
+                          disabled={isSubmitting}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400">Account Name</label>
+                        <input
+                          type="text"
+                          placeholder="Account Holder Name"
+                          value={accountName}
+                          onChange={(e) => setAccountName(e.target.value)}
+                          disabled={isSubmitting}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {role === '3' && (
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-4">
                       <p className="text-xs font-bold text-slate-700">Teacher Designation & Immediate Class Assignment</p>
@@ -780,6 +907,12 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [qualifications, setQualifications] = useState('')
+  const [houseAddress, setHouseAddress] = useState('')
+  const [department, setDepartment] = useState('')
+  const [bankName, setBankName] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [accountName, setAccountName] = useState('')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -790,6 +923,12 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
       setName(teacher.name || '')
       setEmail(teacher.email || '')
       setPhone(teacher.phone || '')
+      setQualifications(teacher.qualifications || '')
+      setHouseAddress(teacher.houseAddress || '')
+      setDepartment(teacher.department || '')
+      setBankName(teacher.bankName || '')
+      setAccountNumber(teacher.accountNumber || '')
+      setAccountName(teacher.accountName || '')
       setErrorMsg(null)
     }
   }, [teacher])
@@ -806,6 +945,12 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
+        qualifications: qualifications.trim() || undefined,
+        houseAddress: houseAddress.trim() || undefined,
+        department: department.trim() || undefined,
+        bankName: bankName.trim() || undefined,
+        accountNumber: accountNumber.trim() || undefined,
+        accountName: accountName.trim() || undefined,
       }
 
       await apiSlice.put(
@@ -831,7 +976,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
           <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Edit className="text-[#0063a6]" size={18} /> Edit Teacher Details
+            <Edit className="text-[#0063a6]" size={18} /> Edit Staff Details
           </h2>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition">
             <X size={18} />
@@ -848,7 +993,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-500">Teacher Full Name <span className="text-rose-500">*</span></label>
+              <label className="text-xs font-bold text-slate-500">Staff Full Name <span className="text-rose-500">*</span></label>
               <input
                 type="text"
                 required
@@ -883,6 +1028,83 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                 disabled={isSubmitting}
                 className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[#0063a6] transition"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">Department</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sciences, ICT"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">Qualifications</label>
+                <input
+                  type="text"
+                  placeholder="e.g. B.Ed, M.Sc, NCE"
+                  value={qualifications}
+                  onChange={(e) => setQualifications(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-500">House Address</label>
+              <textarea
+                rows={2}
+                placeholder="House Address"
+                value={houseAddress}
+                onChange={(e) => setHouseAddress(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition resize-none"
+              />
+            </div>
+
+            {/* Bank Details for Payroll */}
+            <div className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-3">
+              <p className="text-xs font-bold text-slate-700">Bank Details (for Payroll)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400">Bank Name</label>
+                  <input
+                    type="text"
+                    placeholder="Bank Name"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    disabled={isSubmitting}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400">Account Number</label>
+                  <input
+                    type="text"
+                    placeholder="Account No"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    disabled={isSubmitting}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400">Account Name</label>
+                  <input
+                    type="text"
+                    placeholder="Account Name"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    disabled={isSubmitting}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-3 border-t border-slate-100 mt-6">

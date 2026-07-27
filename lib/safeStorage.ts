@@ -1,35 +1,18 @@
 /**
- * Safe Storage utility with transparent cookie and sessionStorage fallback.
+ * Safe Storage utility with transparent cookie, sessionStorage, and memory fallback.
  * Prevents SecurityError / DOMException crashes in restricted browser environments
- * (e.g., Safari Private Browsing, blocked cookies, inside sandboxed iframes).
+ * (e.g., Safari Private Browsing, iOS WebKit restrictions, blocked cookies).
  */
 const inMemoryStore: Record<string, string> = {};
 
-const getStorage = (): Storage | null => {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    if (window.localStorage) return window.localStorage;
-  } catch (e) {
-    // ignore and fall back
-  }
-
-  try {
-    if (window.sessionStorage) return window.sessionStorage;
-  } catch (e) {
-    // ignore and fall back
-  }
-
-  return null;
-};
-
 const getCookieValue = (key: string): string | null => {
   try {
-    if (typeof document === 'undefined') return null;
+    if (typeof document === 'undefined' || !document.cookie) return null;
 
     const prefix = encodeURIComponent(key) + '=';
-    const cookies = document.cookie.split('; ');
-    for (const cookie of cookies) {
+    const rawCookies = document.cookie.split(';');
+    for (let c of rawCookies) {
+      const cookie = c.trim();
       if (cookie.indexOf(prefix) === 0) {
         return decodeURIComponent(cookie.substring(prefix.length));
       }
@@ -43,20 +26,31 @@ const getCookieValue = (key: string): string | null => {
 
 export const safeStorage = {
   getItem(key: string): string | null {
-    const storage = getStorage();
-
+    // 1. Try localStorage
     try {
-      if (storage) {
-        const val = storage.getItem(key);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const val = window.localStorage.getItem(key);
         if (val !== null && val !== '') return val;
       }
     } catch (e) {
-      console.warn(`safeStorage.getItem failed for key "${key}":`, e);
+      // ignore
     }
 
+    // 2. Try sessionStorage
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const val = window.sessionStorage.getItem(key);
+        if (val !== null && val !== '') return val;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 3. Try document.cookie
     const cookieValue = getCookieValue(key);
     if (cookieValue !== null && cookieValue !== '') return cookieValue;
 
+    // 4. Try inMemoryStore
     if (inMemoryStore[key] && inMemoryStore[key] !== '') {
       return inMemoryStore[key];
     }
@@ -67,7 +61,7 @@ export const safeStorage = {
   setItem(key: string, value: string): void {
     let sanitizedValue = value;
 
-    // Payload size safety: if setting user JSON payload, remove any logo data to guarantee <200-byte storage footprint
+    // Payload size safety: if setting user JSON payload, remove logo data to guarantee compact storage footprint
     if (key === 'ugbekun_user' && value) {
       try {
         const obj = JSON.parse(value);
@@ -80,43 +74,60 @@ export const safeStorage = {
       }
     }
 
-    const storage = getStorage();
+    // Always update inMemoryStore first
+    inMemoryStore[key] = sanitizedValue;
 
+    // 1. Set localStorage
     try {
-      if (storage) {
-        storage.setItem(key, sanitizedValue);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, sanitizedValue);
       }
     } catch (e) {
-      console.warn(`safeStorage.setItem failed for key "${key}":`, e);
+      console.warn(`safeStorage.setItem localStorage failed for key "${key}":`, e);
     }
 
+    // 2. Set sessionStorage
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.setItem(key, sanitizedValue);
+      }
+    } catch (e) {
+      console.warn(`safeStorage.setItem sessionStorage failed for key "${key}":`, e);
+    }
+
+    // 3. Set document.cookie
     try {
       if (typeof document !== 'undefined') {
         const encodedKey = encodeURIComponent(key);
         const encodedVal = encodeURIComponent(sanitizedValue);
-        // Only set cookie if under browser size limit (~3800 bytes)
         if (encodedKey.length + encodedVal.length <= 3800) {
           const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
           const secureFlag = isSecure ? '; Secure' : '';
-          document.cookie = `${encodedKey}=${encodedVal}; path=/; max-age=31536000; SameSite=Lax${secureFlag}`;
+          document.cookie = `${encodedKey}=${encodedVal}; path=/; max-age=31536000${secureFlag}`;
         }
       }
     } catch (ce) {
       // ignore cookie failures
     }
-
-    inMemoryStore[key] = sanitizedValue;
   },
 
   removeItem(key: string): void {
-    const storage = getStorage();
+    delete inMemoryStore[key];
 
     try {
-      if (storage) {
-        storage.removeItem(key);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
       }
     } catch (e) {
-      console.warn(`safeStorage.removeItem failed for key "${key}":`, e);
+      // ignore
+    }
+
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.removeItem(key);
+      }
+    } catch (e) {
+      // ignore
     }
 
     try {
@@ -124,9 +135,7 @@ export const safeStorage = {
         document.cookie = encodeURIComponent(key) + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       }
     } catch (ce) {
-      // ignore cookie failures
+      // ignore
     }
-
-    delete inMemoryStore[key];
   }
 };

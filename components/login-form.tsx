@@ -68,16 +68,19 @@ export function LoginForm() {
       safeStorage.setItem('ugbekun_token', data.token)
       safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
 
-      // Direct page navigation for universal mobile browser compatibility (modern & legacy)
+      // Navigation for universal mobile & desktop browser compatibility
       try {
-        if (typeof window !== 'undefined') {
-          window.location.href = '/dashboard'
-        } else {
-          router.replace('/dashboard')
-        }
-      } catch {
         router.replace('/dashboard')
+      } catch (e) {
+        // fallback
       }
+
+      // Smooth delayed fallback for older WebKit engines (e.g. iOS 15 iPhone 7+)
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
+          window.location.href = '/dashboard'
+        }
+      }, 250)
     } catch (err: any) {
       console.error('Login error:', err)
       

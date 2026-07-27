@@ -164,7 +164,7 @@ export default function DashboardPage() {
     let userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
-      // Short delay retry for mobile browsers where storage write/read sync might take a millisecond
+      // Extended retry buffer for legacy mobile engines (e.g. iOS 15 Safari/Chrome on iPhone 7+)
       const timer = setTimeout(() => {
         token = safeStorage.getItem('ugbekun_token')
         userDataStr = safeStorage.getItem('ugbekun_user')
@@ -185,7 +185,7 @@ export default function DashboardPage() {
             setIsLoading(false)
           }
         }
-      }, 100)
+      }, 350)
       return () => clearTimeout(timer)
     }
 
