@@ -20,8 +20,9 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Front-end Username Validation
-    const trimmedUsername = username.trim()
+    // Front-end Username & Password Validation (Strip all accidental whitespace)
+    const trimmedUsername = username.trim().replace(/\s+/g, '')
+    const trimmedPassword = password.trim()
 
     if (!trimmedUsername) {
       setErrorMsg('Username is required.')
@@ -33,7 +34,7 @@ export function LoginForm() {
       return
     }
 
-    if (!password) {
+    if (!trimmedPassword) {
       setErrorMsg('Password is required.')
       return
     }
@@ -42,7 +43,7 @@ export function LoginForm() {
     setErrorMsg('')
 
     try {
-      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password })
+      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password: trimmedPassword })
 
       if (!data || !data.token || !data.user) {
         throw new Error('Invalid credentials or empty server response.')
@@ -132,7 +133,7 @@ export function LoginForm() {
             type="text"
             placeholder="username or email"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => setUsername(e.target.value.trim().replace(/\s+/g, ''))}
             required
             autoCapitalize="none"
             autoCorrect="off"
@@ -153,7 +154,7 @@ export function LoginForm() {
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value.trim())}
               required
               autoComplete="current-password"
               className="w-full px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-foreground placeholder-foreground/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition text-sm pr-12"

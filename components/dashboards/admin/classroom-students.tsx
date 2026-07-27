@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { 
-  Search, 
-  School, 
-  Users, 
-  Loader2, 
+import {
+  Search,
+  School,
+  Users,
+  Loader2,
   Info,
   SlidersHorizontal,
   UserCheck,
   TrendingUp,
-  UserCheck2
+  UserCheck2,
+  Edit3
 } from 'lucide-react'
+import { EditStudentModal } from './student-modals'
 import {
   Table,
   TableHeader,
@@ -74,7 +76,7 @@ export function ClassroomStudents() {
   const [students, setStudents] = useState<Student[]>([])
   const [formTeacher, setFormTeacher] = useState<string>('Unassigned')
   const [stats, setStats] = useState<ClassroomStats>({ total: 0, male: 0, female: 0 })
-  
+
   // Roster status
   const [isLoadingRoster, setIsLoadingRoster] = useState(false)
   const [rosterError, setRosterError] = useState<string | null>(null)
@@ -82,6 +84,10 @@ export function ClassroomStudents() {
 
   // Inline filter query
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Edit student modal state
+  const [editingStudentId, setEditingStudentId] = useState<number | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   // Load Classes & Sections configurations
   useEffect(() => {
@@ -106,7 +112,7 @@ export function ClassroomStudents() {
   const handleClassChange = (classIdStr: string) => {
     setSelectedClassId(classIdStr)
     setSelectedSectionId('') // Reset section selection
-    
+
     if (!classIdStr) {
       setAvailableSections([])
       return
@@ -123,8 +129,8 @@ export function ClassroomStudents() {
   }
 
   // Fetch student roster for classroom
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!selectedClassId || !selectedSectionId) return
 
     setIsLoadingRoster(true)
@@ -137,7 +143,7 @@ export function ClassroomStudents() {
         formTeacher: string
         stats: ClassroomStats
       }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
-      
+
       setStudents(res.students)
       setFormTeacher(res.formTeacher)
       setStats(res.stats)
@@ -162,7 +168,7 @@ export function ClassroomStudents() {
         formTeacher: string
         stats: ClassroomStats
       }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
-      
+
       setStudents(res.students)
       setFormTeacher(res.formTeacher)
       setStats(res.stats)
@@ -184,7 +190,7 @@ export function ClassroomStudents() {
   // Selected class & section text descriptors for displays
   const selectedClassObj = classes.find(c => c.id === Number(selectedClassId))
   const selectedSectionObj = availableSections.find(s => s.id === Number(selectedSectionId))
-  const classroomLabel = selectedClassObj && selectedSectionObj 
+  const classroomLabel = selectedClassObj && selectedSectionObj
     ? `${selectedClassObj.name} - Section ${selectedSectionObj.name}`
     : ''
 
@@ -285,7 +291,7 @@ export function ClassroomStudents() {
         </div>
       ) : hasSearched ? (
         <div className="space-y-6 animate-fade-in">
-          
+
           {/* Classroom Information Cards */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm flex items-center justify-between">
@@ -331,14 +337,14 @@ export function ClassroomStudents() {
 
           {/* Student Roster Table Panel */}
           <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-            
+
             {/* Table Header controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-sm font-black text-slate-900">{classroomLabel} Roster</h3>
                 <p className="text-xs text-slate-400 font-medium">All students currently active in this classroom.</p>
               </div>
-              
+
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 <input
@@ -363,7 +369,7 @@ export function ClassroomStudents() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                 <Table>
+                <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-32">Reg. No</TableHead>
@@ -372,6 +378,7 @@ export function ClassroomStudents() {
                       <TableHead>Parent / Guardian</TableHead>
                       <TableHead>Contact Details</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -382,13 +389,12 @@ export function ClassroomStudents() {
                           {[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}
                         </TableCell>
                         <TableCell>
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border capitalize ${
-                            student.gender?.toLowerCase() === 'male'
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border capitalize ${student.gender?.toLowerCase() === 'male'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                               : student.gender?.toLowerCase() === 'female'
-                              ? 'bg-purple-50 text-purple-700 border-purple-100'
-                              : 'bg-slate-50 text-slate-700 border-slate-100'
-                          }`}>
+                                ? 'bg-purple-50 text-purple-700 border-purple-100'
+                                : 'bg-slate-50 text-slate-700 border-slate-100'
+                            }`}>
                             {student.gender || '—'}
                           </span>
                         </TableCell>
@@ -406,15 +412,27 @@ export function ClassroomStudents() {
                           <button
                             onClick={() => handleToggleStudentStatus(student.id)}
                             disabled={togglingStatusId === student.id}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
-                              student.active !== false
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${student.active !== false
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
                                 : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                            }`}
+                              }`}
                             title={student.active !== false ? "Click to suspend student" : "Click to activate student"}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                             {student.active !== false ? 'Active' : 'Suspended'}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <button
+                            onClick={() => {
+                              setEditingStudentId(student.id)
+                              setIsEditModalOpen(true)
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-[#0063a6] bg-[#0063a6]/10 hover:bg-[#0063a6] hover:text-white rounded-lg transition"
+                            title="Edit Student Information"
+                          >
+                            <Edit3 size={13} />
+                            Edit
                           </button>
                         </TableCell>
                       </TableRow>
@@ -441,6 +459,18 @@ export function ClassroomStudents() {
           </div>
         </div>
       )}
+
+      {/* Edit Student Modal */}
+      <EditStudentModal
+        isOpen={isEditModalOpen}
+        studentId={editingStudentId}
+        classes={classes}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setEditingStudentId(null)
+        }}
+        onSuccess={() => { handleSearch(); }}
+      />
     </div>
   )
 }
