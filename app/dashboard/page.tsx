@@ -21,7 +21,10 @@ import {
   X,
   Award,
   FileText,
-  Video
+  Video,
+  ShieldCheck,
+  Building2,
+  FileSpreadsheet
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -97,13 +100,20 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
             ? `${branchStats.teachers.toLocaleString()} · ${branchStats.staff.toLocaleString()}`
             : undefined,
         },
+        { id: 'roles', label: 'Role Management', icon: ShieldCheck },
         { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
         { id: 'credentials', label: 'ID & Credentials', icon: Award },
         { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
         { id: 'cbt-exams', label: 'Exams & CBT', icon: Award },
+        { id: 'exam-schedule', label: 'Exam Timetable', icon: Calendar },
+        { id: 'exam-halls', label: 'Exam Halls', icon: Building2 },
+        { id: 'evaluation-matrices', label: 'Evaluation Matrices', icon: Layers },
+        { id: 'marks-entry', label: 'Marks Entry Desk', icon: FileSpreadsheet },
+        { id: 'attendance', label: 'Attendance Desk', icon: CheckSquare },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
+        { id: 'timetable', label: 'Timetables & Schedule', icon: Calendar },
         { id: 'teacher-duties', label: 'Teacher Duties', icon: CheckSquare },
         { id: 'staff-activities', label: 'Staff Activity Report', icon: Activity },
         { id: 'calendar', label: 'School Calendar', icon: Calendar },

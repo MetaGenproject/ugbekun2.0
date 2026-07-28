@@ -141,6 +141,14 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
 
   const [classes, setClasses] = useState<ClassData[]>([])
   const [subjects, setSubjects] = useState<SubjectData[]>([])
+  const [availableRoles, setAvailableRoles] = useState<{ roleCode: number; name: string; isSystem: boolean }[]>([
+    { roleCode: 3, name: 'Teacher', isSystem: true },
+    { roleCode: 4, name: 'Accountant', isSystem: true },
+    { roleCode: 8, name: 'Receptionist', isSystem: true },
+    { roleCode: 9, name: 'Proprietor', isSystem: true },
+    { roleCode: 12, name: 'Librarian', isSystem: true },
+    { roleCode: 13, name: 'Staff', isSystem: true },
+  ])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -159,15 +167,19 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
 
   const loadSetupData = async () => {
     try {
-      const [classRes, subjectRes] = await Promise.all([
+      const [classRes, subjectRes, rolesRes] = await Promise.all([
         apiSlice.get<{ success: boolean; classes: ClassData[] }>(endpoints.admin.classesSections),
         apiSlice.get<{ success: boolean; subjects: SubjectData[] }>(endpoints.admin.subjects),
+        apiSlice.get<{ success: boolean; roles: { roleCode: number; name: string; isSystem: boolean }[] }>(endpoints.admin.roles),
       ])
       if (classRes.success && classRes.classes) {
         setClasses(classRes.classes)
       }
       if (subjectRes.success && subjectRes.subjects) {
         setSubjects(subjectRes.subjects)
+      }
+      if (rolesRes.success && rolesRes.roles) {
+        setAvailableRoles(rolesRes.roles)
       }
     } catch (err) {
       console.error('Failed to load setup data for onboarding:', err)
@@ -229,6 +241,8 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
       return
     }
 
+    const resolvedRoleName = availableRoles.find((r) => String(r.roleCode) === role)?.name || STAFF_ROLE_LABELS[role] || 'Staff'
+
     const newItem: PendingStaff = {
       id: Math.random().toString(),
       name: trimmedName,
@@ -241,7 +255,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
       accountNumber: accountNumber.trim(),
       accountName: accountName.trim(),
       role,
-      roleLabel: STAFF_ROLE_LABELS[role] || 'Staff',
+      roleLabel: resolvedRoleName,
       isClassTeacher,
       classTeacherClassId,
       classTeacherSectionId,
@@ -315,6 +329,8 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         return
       }
 
+      const resolvedRoleName = availableRoles.find((r) => String(r.roleCode) === role)?.name || STAFF_ROLE_LABELS[role] || 'Staff'
+
       itemsToOnboard.push({
         id: 'current-form',
         name: currentName,
@@ -327,7 +343,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         accountNumber: accountNumber.trim(),
         accountName: accountName.trim(),
         role,
-        roleLabel: STAFF_ROLE_LABELS[role] || 'Staff',
+        roleLabel: resolvedRoleName,
         isClassTeacher,
         classTeacherClassId,
         classTeacherSectionId,
@@ -571,14 +587,13 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                         }
                       }}
                       disabled={isSubmitting}
-                      className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition"
+                      className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition font-semibold"
                     >
-                      <option value="3">Teacher</option>
-                      <option value="4">Accountant</option>
-                      <option value="8">Receptionist</option>
-                      <option value="9">Proprietor</option>
-                      <option value="12">Librarian</option>
-                      <option value="13">Staff</option>
+                      {availableRoles.map((r) => (
+                        <option key={r.roleCode} value={String(r.roleCode)}>
+                          {r.name} {!r.isSystem ? '(Custom Role)' : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

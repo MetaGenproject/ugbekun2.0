@@ -35,6 +35,13 @@ import { AdminTeacherDuties } from './admin-teacher-duties'
 import { StaffActivitiesReport } from './staff-activities-report'
 import { AdminCbtManager } from './admin-cbt-manager'
 import SchoolCalendar from './school-calendar'
+import { RoleManagement } from './role-management'
+import { TimetableManager } from './timetable-manager'
+import { EvaluationMatrices } from './evaluation-matrices'
+import { ExamHalls } from './exam-halls'
+import { ExamScheduleManager } from './exam-schedule-manager'
+import { MarksEntry } from './marks-entry'
+import { AttendanceManager } from './attendance-manager'
 
 export interface BranchStats {
   branchId: number
@@ -669,6 +676,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     )
   }
 
+  if (activeSection === 'roles') {
+    return <RoleManagement />
+  }
+
+  if (activeSection === 'timetable') {
+    return <TimetableManager />
+  }
+
   if (activeSection === 'curriculum') {
     return <BranchSetup />
   }
@@ -695,6 +710,26 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'cbt-exams') {
     return <AdminCbtManager />
+  }
+
+  if (activeSection === 'exam-schedule') {
+    return <ExamScheduleManager />
+  }
+
+  if (activeSection === 'exam-halls') {
+    return <ExamHalls />
+  }
+
+  if (activeSection === 'evaluation-matrices') {
+    return <EvaluationMatrices />
+  }
+
+  if (activeSection === 'marks-entry') {
+    return <MarksEntry />
+  }
+
+  if (activeSection === 'attendance') {
+    return <AttendanceManager />
   }
 
   if (activeSection === 'settings') {
