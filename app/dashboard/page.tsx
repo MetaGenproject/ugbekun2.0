@@ -25,7 +25,8 @@ import {
   ShieldCheck,
   Building2,
   FileSpreadsheet,
-  CreditCard
+  CreditCard,
+  CalendarDays
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -104,6 +105,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'roles', label: 'Role Management', icon: ShieldCheck },
         { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
+        { id: 'promotions', label: 'Student Promotions', icon: TrendingUp },
         { id: 'credentials', label: 'ID & Credentials', icon: Award },
         { id: 'card-management', label: 'Card Management', icon: CreditCard },
         { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
@@ -113,6 +115,8 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'evaluation-matrices', label: 'Evaluation Matrices', icon: Layers },
         { id: 'marks-entry', label: 'Marks Entry Desk', icon: FileSpreadsheet },
         { id: 'attendance', label: 'Attendance Desk', icon: CheckSquare },
+        { id: 'leave-management', label: 'HR & Leave Desk', icon: CalendarDays },
+        { id: 'library', label: 'Library & E-Learning', icon: BookOpen },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'timetable', label: 'Timetables & Schedule', icon: Calendar },

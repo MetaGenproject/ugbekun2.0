@@ -43,6 +43,9 @@ import { ExamScheduleManager } from './exam-schedule-manager'
 import { MarksEntry } from './marks-entry'
 import { AttendanceManager } from './attendance-manager'
 import { CardManagement } from './card-management'
+import { HrLeaveManagement } from './hr-leave-management'
+import { StudentPromotions } from './student-promotions'
+import { LibraryManagement } from './library-management'
 
 export interface BranchStats {
   branchId: number
@@ -735,6 +738,18 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'card-management') {
     return <CardManagement />
+  }
+
+  if (activeSection === 'leave-management') {
+    return <HrLeaveManagement />
+  }
+
+  if (activeSection === 'promotions') {
+    return <StudentPromotions />
+  }
+
+  if (activeSection === 'library') {
+    return <LibraryManagement />
   }
 
   if (activeSection === 'settings') {
