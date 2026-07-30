@@ -24,7 +24,8 @@ import {
   Video,
   ShieldCheck,
   Building2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  CreditCard
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -104,6 +105,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'classrooms', label: 'Classrooms Directory', icon: School },
         { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
         { id: 'credentials', label: 'ID & Credentials', icon: Award },
+        { id: 'card-management', label: 'Card Management', icon: CreditCard },
         { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
         { id: 'cbt-exams', label: 'Exams & CBT', icon: Award },
         { id: 'exam-schedule', label: 'Exam Timetable', icon: Calendar },
@@ -174,13 +176,33 @@ export default function DashboardPage() {
     let userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
-      // Extended retry buffer for legacy mobile engines (e.g. iOS 15 Safari/Chrome on iPhone 7+)
-      const timer = setTimeout(() => {
+      // Two-stage retry for legacy mobile engines (iOS 14-15, Samsung Internet, in-app WebViews)
+      // Stage 1: Quick retry at 800ms (covers most slow phones)
+      const timer1 = setTimeout(() => {
         token = safeStorage.getItem('ugbekun_token')
         userDataStr = safeStorage.getItem('ugbekun_user')
-        if (!token || !userDataStr) {
-          router.replace('/login')
-        } else {
+        if (token && userDataStr) {
+          try {
+            const parsedUser = JSON.parse(userDataStr)
+            if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
+              setUser(parsedUser)
+              setIsLoading(false)
+              return
+            }
+          } catch (e) {
+            // fall through to stage 2
+          }
+        }
+
+        // Stage 2: Final retry at 1500ms for extremely slow devices
+        const timer2 = setTimeout(() => {
+          token = safeStorage.getItem('ugbekun_token')
+          userDataStr = safeStorage.getItem('ugbekun_user')
+          if (!token || !userDataStr) {
+            router.replace('/login')
+            setIsLoading(false)
+            return
+          }
           try {
             const parsedUser = JSON.parse(userDataStr)
             if (!parsedUser || typeof parsedUser !== 'object' || !parsedUser.id || !parsedUser.role) {
@@ -194,9 +216,11 @@ export default function DashboardPage() {
           } finally {
             setIsLoading(false)
           }
-        }
-      }, 350)
-      return () => clearTimeout(timer)
+        }, 700)
+
+        return () => clearTimeout(timer2)
+      }, 800)
+      return () => clearTimeout(timer1)
     }
 
     try {

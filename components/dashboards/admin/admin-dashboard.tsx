@@ -42,6 +42,7 @@ import { ExamHalls } from './exam-halls'
 import { ExamScheduleManager } from './exam-schedule-manager'
 import { MarksEntry } from './marks-entry'
 import { AttendanceManager } from './attendance-manager'
+import { CardManagement } from './card-management'
 
 export interface BranchStats {
   branchId: number
@@ -730,6 +731,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'attendance') {
     return <AttendanceManager />
+  }
+
+  if (activeSection === 'card-management') {
+    return <CardManagement />
   }
 
   if (activeSection === 'settings') {

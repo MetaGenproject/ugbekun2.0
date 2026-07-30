@@ -127,6 +127,8 @@ export const endpoints = {
     provisionBatchIdCard: `${BASE_URL}/admin/id-cards/provision/batch`,
     revokeIdCard: (cardId: number) => `${BASE_URL}/admin/id-cards/${cardId}/revoke`,
     downloadIdCard: (cardId: number) => `${BASE_URL}/admin/id-cards/${cardId}/download`,
+    cardTemplate: `${BASE_URL}/admin/card-template`,
+    idCardStats: `${BASE_URL}/admin/id-cards/stats`,
     certificates: (query = '') => `${BASE_URL}/admin/certificates${query}`,
     issueCertificate: `${BASE_URL}/admin/certificates/issue`,
     downloadCertificate: (certId: number) => `${BASE_URL}/admin/certificates/${certId}/download`,

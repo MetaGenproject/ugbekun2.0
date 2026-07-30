@@ -64,23 +64,36 @@ export function LoginForm() {
         } : null,
       }
 
-      // Save token and user details to safeStorage
-      safeStorage.setItem('ugbekun_token', data.token)
-      safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
+      // Save token and user details to safeStorage (with write verification)
+      const tokenSaved = safeStorage.setItem('ugbekun_token', data.token)
+      const userSaved = safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
+
+      // Verify the token can be read back before navigating
+      const readBack = safeStorage.getItem('ugbekun_token')
+      if (!readBack) {
+        console.warn('[Login] Token write-back verification failed. Storage backend:', safeStorage.getActiveBackend())
+      }
 
       // Navigation for universal mobile & desktop browser compatibility
       try {
         router.replace('/dashboard')
       } catch (e) {
-        // fallback
+        // fallback for older routers
       }
 
-      // Smooth delayed fallback for older WebKit engines (e.g. iOS 15 iPhone 7+)
+      // Delayed fallback for older WebKit engines (iOS 14-15, Samsung Internet, in-app browsers)
       setTimeout(() => {
         if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
           window.location.href = '/dashboard'
         }
-      }, 250)
+      }, 600)
+
+      // Second hard-navigate fallback for extremely slow mobile JS engines
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
+          window.location.replace('/dashboard')
+        }
+      }, 1200)
     } catch (err: any) {
       console.error('Login error:', err)
       
@@ -136,7 +149,7 @@ export function LoginForm() {
             type="text"
             placeholder="username or email"
             value={username}
-            onChange={(e) => setUsername(e.target.value.trim().replace(/\s+/g, ''))}
+            onChange={(e) => setUsername(e.target.value)}
             required
             autoCapitalize="none"
             autoCorrect="off"
@@ -157,7 +170,7 @@ export function LoginForm() {
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value.trim())}
+              onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
               className="w-full px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-foreground placeholder-foreground/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition text-sm pr-12"
