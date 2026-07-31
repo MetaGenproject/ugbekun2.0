@@ -1,67 +1,61 @@
 'use client'
 
-import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { School } from 'lucide-react'
 
-interface Branch {
-  id: number
-  name: string
-  code: string
-  logo?: string | null
+interface SchoolInfoData {
+  schoolName: string
+  logoUrl: string | null
+  academicSession: string
+  currentTerm: string
 }
 
-import { safeStorage } from '@/lib/safeStorage'
-
 export function SchoolHeader() {
-  const [branch, setBranch] = useState<Branch | null>(null)
+  const [info, setInfo] = useState<SchoolInfoData | null>(null)
 
   useEffect(() => {
-    const userStr = safeStorage.getItem('ugbekun_user')
-    if (userStr) {
+    async function loadInfo() {
       try {
-        const user = JSON.parse(userStr)
-        if (user.branch) {
-          setBranch(user.branch)
-        }
+        const res = await apiSlice.get<{ success: boolean; data: SchoolInfoData }>(endpoints.admin.schoolInfo)
+        if (res.data) setInfo(res.data)
       } catch (err) {
-        console.error('Error parsing user data:', err)
+        console.error('Error fetching school info:', err)
       }
     }
+    loadInfo()
+
+    const handleUpdate = () => loadInfo()
+    window.addEventListener('branch-settings-updated', handleUpdate)
+    return () => window.removeEventListener('branch-settings-updated', handleUpdate)
   }, [])
 
-  if (!branch) {
-    return null
-  }
+  if (!info) return null
 
   return (
-    <div className="mb-6 rounded-2xl border border-slate-200/80 bg-slate-100/50 p-5 shadow-sm">
+    <div className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-4">
         {/* School Logo */}
-        {branch.logo ? (
-          <div className="relative h-16 w-16 flex-shrink-0">
-            <Image
-              src={branch.logo}
-              alt={`${branch.name} logo`}
-              fill
-              className="object-contain"
-              onError={(e) => {
-                // Fallback if image fails to load
-                e.currentTarget.style.display = 'none'
-              }}
+        {info.logoUrl ? (
+          <div className="w-14 h-14 rounded-xl bg-slate-50 p-1 flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden shadow-sm">
+            <img
+              src={info.logoUrl}
+              alt={info.schoolName}
+              className="w-full h-full object-contain rounded-lg"
             />
           </div>
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#001a4e] shadow-sm">
-            <div className="text-xl font-extrabold text-white">
-              {branch.name.charAt(0).toUpperCase()}
-            </div>
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#001a4e] text-white shadow-sm shrink-0">
+            <School size={24} className="stroke-[2.5]" />
           </div>
         )}
 
         {/* School Info */}
-        <div className="flex-1">
-          <h2 className="text-base font-extrabold text-slate-800 tracking-tight">{branch.name}</h2>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-0.5">School Code: {branch.code}</p>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-black text-slate-900 tracking-tight truncate">{info.schoolName}</h2>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+            {info.currentTerm} ({info.academicSession})
+          </p>
         </div>
       </div>
     </div>

@@ -19,7 +19,8 @@ import {
   Clock,
   Download,
   Loader2,
-  Sparkles
+  Sparkles,
+  Upload
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
@@ -66,6 +67,12 @@ interface SubjectAssignment {
 
 interface TeacherProfile {
   teacherId: number
+  name?: string
+  email?: string | null
+  phone?: string | null
+  photo?: string | null
+  department?: string | null
+  qualifications?: string | null
   isFormTeacher: boolean
   isSubjectTeacher: boolean
   formAllocations: FormAllocation[]
@@ -93,6 +100,36 @@ interface Student {
 
 export function TeacherDashboard({ user, activeSection }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'attendance' | 'commentary' | 'assignments' | 'media' | 'lessonPlan' | 'liveRooms' | 'gamification' | 'attrition' | 'calendar'>('overview')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const handlePhotoUpload = async (file: File) => {
+    setUploadingPhoto(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = safeStorage.getItem('ugbekun_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(endpoints.admin.uploadProfilePhoto, {
+        method: 'POST',
+        headers,
+        body: formData
+      })
+      const result = await res.json()
+      if (result.success && result.photoUrl) {
+        setProfile((prev) => prev ? { ...prev, photo: result.photoUrl } : null)
+        showNotification('Profile photo uploaded to Cloudinary & active across ID cards and workspace!')
+      } else {
+        alert(result.message || 'Failed to upload photo.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error uploading profile photo.')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   useEffect(() => {
     if (!activeSection) return
@@ -871,28 +908,57 @@ export function TeacherDashboard({ user, activeSection }: DashboardProps) {
           <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-40" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
-                Academic Year 2026
-              </span>
-              {profile?.isFormTeacher && (
-                <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block flex items-center gap-1">
-                  <Award size={12} /> Form Teacher
-                </span>
+          <div className="flex items-center gap-5">
+            <div className="relative group shrink-0">
+              {profile?.photo ? (
+                <img
+                  src={profile.photo}
+                  alt={profile.name || user.username}
+                  className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover border-2 border-white/40 shadow-xl"
+                />
+              ) : (
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white/20 border-2 border-white/40 shadow-xl flex items-center justify-center font-black text-white text-xl uppercase">
+                  {user.username.substring(0, 2)}
+                </div>
               )}
-              {profile?.isSubjectTeacher && (
-                <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block flex items-center gap-1">
-                  <BookOpen size={12} /> Subject Teacher
-                </span>
-              )}
+              <label className="absolute -bottom-1 -right-1 bg-white text-slate-800 p-1.5 rounded-full shadow-md cursor-pointer hover:bg-slate-100 transition" title="Upload Profile Photo to Cloudinary">
+                {uploadingPhoto ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <Upload size={14} />}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handlePhotoUpload(e.target.files[0])
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
             </div>
-            <h1 className="text-3xl font-black text-white tracking-tight">
-              Welcome Back, {user.username}
-            </h1>
-            <p className="text-white/80 text-sm max-w-xl font-medium">
-              Academic Portal — Configure dynamic subject grading sheets, online assignments, class attendance, and holistic commentary.
-            </p>
+
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
+                  Academic Year 2026
+                </span>
+                {profile?.isFormTeacher && (
+                  <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block flex items-center gap-1">
+                    <Award size={12} /> Form Teacher
+                  </span>
+                )}
+                {profile?.isSubjectTeacher && (
+                  <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block flex items-center gap-1">
+                    <BookOpen size={12} /> Subject Teacher
+                  </span>
+                )}
+              </div>
+              <h1 className="text-3xl font-black text-white tracking-tight">
+                Welcome Back, {profile?.name || user.username}
+              </h1>
+              <p className="text-white/80 text-sm max-w-xl font-medium">
+                Academic Portal — Configure dynamic subject grading sheets, online assignments, class attendance, and holistic commentary.
+              </p>
+            </div>
           </div>
         </div>
       </div>

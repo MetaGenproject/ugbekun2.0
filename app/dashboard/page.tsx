@@ -26,7 +26,9 @@ import {
   Building2,
   FileSpreadsheet,
   CreditCard,
-  CalendarDays
+  CalendarDays,
+  BarChart3,
+  Boxes
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -118,6 +120,8 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'leave-management', label: 'HR & Leave Desk', icon: CalendarDays },
         { id: 'library', label: 'Library & E-Learning', icon: BookOpen },
         { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
+        { id: 'inventory', label: 'Inventory & Stock', icon: Boxes },
+        { id: 'comprehensive-reports', label: 'Reports & Analytics', icon: BarChart3 },
         { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
         { id: 'timetable', label: 'Timetables & Schedule', icon: Calendar },
         { id: 'teacher-duties', label: 'Teacher Duties', icon: CheckSquare },
@@ -173,6 +177,12 @@ export default function DashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState('overview')
   const [branchStats, setBranchStats] = useState<BranchStats | null>(null)
+  const [schoolInfo, setSchoolInfo] = useState<{
+    schoolName: string
+    logoUrl: string | null
+    academicSession: string
+    currentTerm: string
+  } | null>(null)
 
   useEffect(() => {
     // Check authentication token and user context
@@ -243,23 +253,45 @@ export default function DashboardPage() {
   }, [router])
 
   useEffect(() => {
-    if (!user || user.role !== 2) return
+    if (!user) return
 
     let cancelled = false
 
-    async function loadBranchStats() {
+    async function loadSchoolInfo() {
       try {
-        const res = await apiSlice.get<{ success: boolean; data: BranchStats }>(
-          endpoints.admin.stats
-        )
-        if (!cancelled) setBranchStats(res.data)
+        if (user?.role === 2) {
+          const res = await apiSlice.get<{ success: boolean; data: BranchStats }>(endpoints.admin.stats)
+          if (!cancelled && res.data) {
+            setBranchStats(res.data)
+            setSchoolInfo({
+              schoolName: res.data.branchName || 'Ugbekun 2.0',
+              logoUrl: res.data.settings?.logoUrl || null,
+              academicSession: res.data.settings?.academicSession || '2025/2026',
+              currentTerm: res.data.settings?.currentTerm || 'First Term',
+            })
+          }
+        } else {
+          const res = await apiSlice.get<{ success: boolean; data: { schoolName: string; logoUrl: string | null; academicSession: string; currentTerm: string } }>(endpoints.admin.schoolInfo)
+          if (!cancelled && res.data) {
+            setSchoolInfo(res.data)
+          }
+        }
       } catch {
-        if (!cancelled) setBranchStats(null)
+        if (!cancelled) setSchoolInfo(null)
       }
     }
 
-    loadBranchStats()
-    return () => { cancelled = true }
+    loadSchoolInfo()
+
+    const handleSettingsUpdated = () => {
+      loadSchoolInfo()
+    }
+    window.addEventListener('branch-settings-updated', handleSettingsUpdated)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('branch-settings-updated', handleSettingsUpdated)
+    }
   }, [user])
 
   const handleLogout = () => {
@@ -278,6 +310,14 @@ export default function DashboardPage() {
   }
 
   if (!user) return null
+
+  const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl
+  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || 'Ugbekun 2.0'
+  const displayTermLabel = branchStats?.settings?.currentTerm
+    ? `${branchStats.settings.currentTerm} (${branchStats.settings.academicSession})`
+    : schoolInfo?.currentTerm
+    ? `${schoolInfo.currentTerm} (${schoolInfo.academicSession})`
+    : 'SaaS SMP Portal'
 
   const navLinks = getNavLinks(user.role, branchStats)
   const activeSection = navLinks.some((link) => link.id === selectedSection)
@@ -311,11 +351,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex">
-      {/* Semi-transparent backdrop for mobile sidebar drawer */}
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900 overflow-x-hidden">
+      {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -330,13 +370,27 @@ export default function DashboardPage() {
         <div className="space-y-8">
           {/* Logo Header */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-[#003da5] text-white shadow-sm shadow-[#003da5]/20">
-                <School size={22} className="stroke-[2.5]" />
-              </div>
-              <div>
-                <span className="font-extrabold text-white text-lg tracking-tight block">Ugbekun 2.0</span>
-                <p className="text-[10px] text-slate-300/80 font-bold uppercase tracking-wider">SaaS SMP Portal</p>
+            <div className="flex items-center gap-3 min-w-0">
+              {displayLogo ? (
+                <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center border border-white/20 shrink-0 overflow-hidden shadow-sm">
+                  <img
+                    src={displayLogo}
+                    alt={displaySchoolName}
+                    className="w-full h-full object-contain rounded-lg"
+                  />
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-[#003da5] text-white shadow-sm shadow-[#003da5]/20 shrink-0">
+                  <School size={22} className="stroke-[2.5]" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <span className="font-extrabold text-white text-lg tracking-tight block truncate max-w-[140px]" title={displaySchoolName}>
+                  {displaySchoolName}
+                </span>
+                <p className="text-[10px] text-slate-300/80 font-bold uppercase tracking-wider truncate max-w-[140px]">
+                  {displayTermLabel}
+                </p>
               </div>
             </div>
             {/* Close Button on Mobile Drawer */}

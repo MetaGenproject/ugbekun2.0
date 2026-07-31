@@ -146,6 +146,36 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
   const [rankingType, setRankingType] = useState<string>('full')
   const [rankingLimit, setRankingLimit] = useState<number>(3)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
+  const handlePhotoUpload = async (file: File) => {
+    setUploadingPhoto(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = safeStorage.getItem('ugbekun_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(endpoints.admin.uploadProfilePhoto, {
+        method: 'POST',
+        headers,
+        body: formData
+      })
+      const result = await res.json()
+      if (result.success && result.photoUrl) {
+        setProfile((prev) => prev ? { ...prev, photo: result.photoUrl } : null)
+        alert('Profile photo uploaded to Cloudinary & active on ID cards, report cards, and student portal!')
+      } else {
+        alert(result.message || 'Failed to upload photo.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error uploading profile photo.')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   // Assessment Workspace states
   const [activeAssessment, setActiveAssessment] = useState<any | null>(null)
@@ -497,16 +527,47 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-40" />
         </div>
-        <div className="relative z-10 space-y-2.5">
-          <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
-            {profile.branchName || 'Academy Workspace'}
-          </span>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Welcome Back, {profile.firstName} {profile.lastName}
-          </h1>
-          <p className="text-white/80 text-sm max-w-xl font-medium">
-            Room: <span className="text-white font-bold">{profile.className || 'Not Enrolled'} ({profile.sectionName || 'N/A'})</span> | Reg: <span className="text-white font-bold">{profile.registerNo || 'N/A'}</span>
-          </p>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="relative group shrink-0">
+              {profile.photo ? (
+                <img
+                  src={profile.photo}
+                  alt={`${profile.firstName} ${profile.lastName}`}
+                  className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover border-2 border-white/40 shadow-xl"
+                />
+              ) : (
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white/20 border-2 border-white/40 shadow-xl flex items-center justify-center font-black text-white text-xl uppercase">
+                  {profile.firstName.substring(0, 1)}{profile.lastName.substring(0, 1)}
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 bg-white text-slate-800 p-1.5 rounded-full shadow-md cursor-pointer hover:bg-slate-100 transition" title="Upload Student Photo to Cloudinary">
+                {uploadingPhoto ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <Upload size={14} />}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handlePhotoUpload(e.target.files[0])
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
+                {profile.branchName || 'Academy Workspace'}
+              </span>
+              <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                Welcome Back, {profile.firstName} {profile.lastName}
+              </h1>
+              <p className="text-white/80 text-sm max-w-xl font-medium">
+                Room: <span className="text-white font-bold">{profile.className || 'Not Enrolled'} ({profile.sectionName || 'N/A'})</span> | Reg: <span className="text-white font-bold">{profile.registerNo || 'N/A'}</span>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

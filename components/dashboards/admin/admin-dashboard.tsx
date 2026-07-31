@@ -38,6 +38,7 @@ import SchoolCalendar from './school-calendar'
 import { RoleManagement } from './role-management'
 import { TimetableManager } from './timetable-manager'
 import { EvaluationMatrices } from './evaluation-matrices'
+import { InventoryDashboard } from './inventory-dashboard'
 import { ExamHalls } from './exam-halls'
 import { ExamScheduleManager } from './exam-schedule-manager'
 import { MarksEntry } from './marks-entry'
@@ -46,6 +47,7 @@ import { CardManagement } from './card-management'
 import { HrLeaveManagement } from './hr-leave-management'
 import { StudentPromotions } from './student-promotions'
 import { LibraryManagement } from './library-management'
+import { ComprehensiveReports } from './comprehensive-reports'
 
 export interface BranchStats {
   branchId: number
@@ -55,6 +57,14 @@ export interface BranchStats {
   parents: number
   teachers: number
   staff: number
+  settings?: {
+    academicSession?: string
+    currentTerm?: string
+    schoolName?: string
+    logoUrl?: string
+    principalSignatureUrl?: string
+    currencySymbol?: string
+  } | null
 }
 
 interface DashboardProps {
@@ -98,6 +108,7 @@ interface TeacherRow {
   name: string
   email: string | null
   phone: string | null
+  photo?: string | null
   classCount: number
   active?: boolean
 }
@@ -107,6 +118,7 @@ interface StaffRow {
   username: string
   role: number
   roleLabel: string
+  photo?: string | null
   lastLogin: string | null
   active?: boolean
 }
@@ -120,18 +132,20 @@ function SectionBanner({
   description,
   branchName,
   branchCode,
+  logoUrl,
 }: {
   title: string
   description: string
   branchName?: string
   branchCode?: string | null
+  logoUrl?: string | null
 }) {
   return (
-    <div className="relative rounded-2xl bg-gradient-to-r from-[#003da5] via-[#0063a6] to-[#009ca6] p-6 md:p-8 shadow-md overflow-hidden">
+    <div className="relative rounded-2xl bg-gradient-to-r from-[#003da5] via-[#0063a6] to-[#009ca6] p-6 md:p-8 shadow-md overflow-hidden flex items-center justify-between gap-6">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-40" />
       </div>
-      <div className="relative z-10 space-y-2.5">
+      <div className="relative z-10 space-y-2.5 flex-1 min-w-0">
         <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
           {branchName || 'Branch Admin'}
           {branchCode ? ` · ${branchCode}` : ''}
@@ -139,6 +153,11 @@ function SectionBanner({
         <h1 className="text-3xl font-extrabold text-white tracking-tight">{title}</h1>
         <p className="text-white/80 text-sm max-w-xl font-medium">{description}</p>
       </div>
+      {logoUrl && (
+        <div className="relative z-10 w-20 h-20 md:w-24 md:h-24 bg-white/20 backdrop-blur-md rounded-2xl p-2 border border-white/30 shadow-xl shrink-0 flex items-center justify-center">
+          <img src={logoUrl} alt="School Logo" className="w-full h-full object-contain rounded-xl" />
+        </div>
+      )}
     </div>
   )
 }
@@ -527,7 +546,18 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
               <TableBody>
                 {teachers.map((teacher) => (
                   <TableRow key={teacher.id}>
-                    <TableCell className="font-semibold text-slate-800">{teacher.name}</TableCell>
+                    <TableCell className="font-semibold text-slate-800">
+                      <div className="flex items-center gap-3">
+                        {teacher.photo ? (
+                          <img src={teacher.photo} alt={teacher.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                            {teacher.name.substring(0, 2)}
+                          </div>
+                        )}
+                        <span>{teacher.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{teacher.email || '—'}</TableCell>
                     <TableCell>{teacher.phone || '—'}</TableCell>
                     <TableCell>
@@ -752,6 +782,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <LibraryManagement />
   }
 
+  if (activeSection === 'comprehensive-reports') {
+    return <ComprehensiveReports />
+  }
+
+  if (activeSection === 'inventory') {
+    return <InventoryDashboard />
+  }
+
   if (activeSection === 'settings') {
     return <BranchSettings />
   }
@@ -786,7 +824,8 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
       <SectionBanner
         title={stats?.branchName || 'School Administration Panel'}
         description={`Role 2 · Branch-level controls — registrations, accounting, staff and curriculum tools.${stats?.branchCode ? ` · ${stats.branchCode}` : ''}`}
-        branchName="Academic Year 2026"
+        branchName={stats?.settings?.currentTerm ? `${stats.settings.currentTerm} (${stats.settings.academicSession})` : 'Academic Year 2026'}
+        logoUrl={stats?.settings?.logoUrl}
       />
 
       {statsError && (
