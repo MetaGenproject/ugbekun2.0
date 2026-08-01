@@ -30,6 +30,7 @@ import {
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { toast } from 'sonner'
+import { IncomeVsExpensesChart, AnnualFeeSummaryCard } from './financial-visuals'
 
 export interface OverviewData {
   summary: {
@@ -498,6 +499,26 @@ export function FinancesDashboard() {
       {/* TAB 1: OVERVIEW & ANALYTICS */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Income vs Expenses Visual Graph (Blue Income vs Red Expenses) */}
+          <IncomeVsExpensesChart
+            totalIncome={Number(reportsData?.incomeExpenses?.totalIncome || overview?.summary?.totalRevenue || 0)}
+            totalExpenses={Number(reportsData?.incomeExpenses?.totalExpenses || 0)}
+            feeIncome={Number(reportsData?.incomeExpenses?.totalFeeIncome || overview?.summary?.totalRevenue || 0)}
+            otherIncome={Number(reportsData?.incomeExpenses?.totalOfficeIncome || 0)}
+            netSurplus={
+              Number(reportsData?.incomeExpenses?.totalIncome || overview?.summary?.totalRevenue || 0) -
+              Number(reportsData?.incomeExpenses?.totalExpenses || 0)
+            }
+          />
+
+          {/* Annual Fee Collection Summary */}
+          <AnnualFeeSummaryCard
+            totalInvoiced={Number(overview?.summary?.totalInvoiced || 0)}
+            totalCollected={Number(overview?.summary?.totalRevenue || 0)}
+            totalOutstanding={Number(overview?.summary?.totalOutstanding || 0)}
+            collectionRate={overview?.summary?.collectionRate || 0}
+          />
+
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-900 text-base">Students with Highest Outstanding Balances</h3>
             <div className="overflow-x-auto">

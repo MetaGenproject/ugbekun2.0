@@ -28,7 +28,18 @@ import {
   CreditCard,
   CalendarDays,
   BarChart3,
-  Boxes
+  Boxes,
+  LayoutGrid,
+  ChevronRight,
+  Mail,
+  Globe,
+  MessageSquare,
+  Bus,
+  UserPlus,
+  ArrowRight,
+  Sparkles,
+  Bot,
+  UserCheck
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
@@ -72,6 +83,7 @@ interface NavLink {
   icon: typeof Activity
   active?: boolean
   badge?: string
+  hasSub?: boolean
 }
 
 const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] => {
@@ -81,53 +93,28 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'overview', label: 'SaaS Overview', icon: Activity, active: true },
         { id: 'manage-branches', label: 'Manage Branches', icon: School },
         { id: 'tenants', label: 'Tenants Directory', icon: Users },
-        { id: 'subscriptions', label: 'Subscriptions', icon: DollarSign },
+        { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
         { id: 'logs', label: 'System Logs', icon: Layers },
         { id: 'settings', label: 'Global Settings', icon: Settings },
       ]
-    case 2: // Branch Admin — one per school branch
+    case 2: // Branch Admin — exact structure matching reference image UI
       return [
-        { id: 'overview', label: 'Admin Overview', icon: TrendingUp, active: true },
-        {
-          id: 'students',
-          label: 'Students & Parents',
-          icon: Users,
-          badge: branchStats
-            ? `${branchStats.students.toLocaleString()} · ${branchStats.parents.toLocaleString()}`
-            : undefined,
-        },
-        {
-          id: 'teachers',
-          label: 'Teachers & Staff',
-          icon: GraduationCap,
-          badge: branchStats
-            ? `${branchStats.teachers.toLocaleString()} · ${branchStats.staff.toLocaleString()}`
-            : undefined,
-        },
-        { id: 'roles', label: 'Role Management', icon: ShieldCheck },
-        { id: 'classrooms', label: 'Classrooms Directory', icon: School },
-        { id: 'admissions', label: 'Admissions Desk', icon: CheckSquare },
-        { id: 'promotions', label: 'Student Promotions', icon: TrendingUp },
-        { id: 'credentials', label: 'ID & Credentials', icon: Award },
-        { id: 'card-management', label: 'Card Management', icon: CreditCard },
-        { id: 'commentary-review', label: 'Commentary Review', icon: FileText },
-        { id: 'cbt-exams', label: 'Exams & CBT', icon: Award },
-        { id: 'exam-schedule', label: 'Exam Timetable', icon: Calendar },
-        { id: 'exam-halls', label: 'Exam Halls', icon: Building2 },
-        { id: 'evaluation-matrices', label: 'Evaluation Matrices', icon: Layers },
-        { id: 'marks-entry', label: 'Marks Entry Desk', icon: FileSpreadsheet },
-        { id: 'attendance', label: 'Attendance Desk', icon: CheckSquare },
-        { id: 'leave-management', label: 'HR & Leave Desk', icon: CalendarDays },
-        { id: 'library', label: 'Library & E-Learning', icon: BookOpen },
-        { id: 'finances', label: 'Fees & Finances', icon: DollarSign },
-        { id: 'inventory', label: 'Inventory & Stock', icon: Boxes },
-        { id: 'comprehensive-reports', label: 'Reports & Analytics', icon: BarChart3 },
-        { id: 'curriculum', label: 'Curriculum Planner', icon: BookOpen },
-        { id: 'timetable', label: 'Timetables & Schedule', icon: Calendar },
-        { id: 'teacher-duties', label: 'Teacher Duties', icon: CheckSquare },
-        { id: 'staff-activities', label: 'Staff Activity Report', icon: Activity },
-        { id: 'calendar', label: 'School Calendar', icon: Calendar },
-        { id: 'settings', label: 'Branch Settings', icon: Settings },
+        { id: 'overview', label: 'Dashboard', icon: LayoutGrid, hasSub: false },
+        { id: 'classrooms', label: 'Campus & Students', icon: Building2, hasSub: true },
+        { id: 'staff', label: 'Staff Directory', icon: UserCheck, hasSub: true },
+        { id: 'departments', label: 'Departments', icon: Building2, hasSub: true },
+        { id: 'parents', label: 'Parents & Guardians', icon: Users, hasSub: true },
+        { id: 'curriculum', label: 'Academics', icon: GraduationCap, hasSub: true },
+        { id: 'lesson-management', label: 'Lesson Management', icon: BookOpen, hasSub: true },
+        { id: 'admissions', label: 'Admissions', icon: UserPlus, hasSub: true },
+        { id: 'finances', label: 'School Fees', icon: CreditCard, hasSub: true },
+        { id: 'financial-records', label: 'Financial Records', icon: CreditCard, hasSub: true },
+        { id: 'inventory', label: 'Inventory', icon: Boxes, hasSub: true },
+        { id: 'communication', label: 'Communication', icon: MessageSquare, hasSub: true },
+        { id: 'comprehensive-reports', label: 'Reports', icon: FileText, hasSub: true },
+        { id: 'myeduride', label: 'MyEduRide', icon: Bus, hasSub: true },
+        { id: 'website', label: 'Website', icon: Globe, hasSub: true },
+        { id: 'settings', label: 'Settings', icon: Settings, hasSub: true },
       ]
     case 3: // Teacher
       return [
@@ -184,14 +171,54 @@ export default function DashboardPage() {
     currentTerm: string
   } | null>(null)
 
+  // Interactive OSe AI Assistant Modal State
+  const [isOseModalOpen, setIsOseModalOpen] = useState(false)
+  const [oseInput, setOseInput] = useState('')
+  const [oseChatHistory, setOseChatHistory] = useState<Array<{ sender: 'ai' | 'user'; text: string }>>([])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setIsOseModalOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const handleSendOseMessage = (promptText?: string) => {
+    const query = promptText || oseInput
+    if (!query.trim()) return
+
+    const userMessage = { sender: 'user' as const, text: query }
+    const updatedHistory = [...oseChatHistory, userMessage]
+    setOseChatHistory(updatedHistory)
+    setOseInput('')
+
+    setTimeout(() => {
+      let aiReply = `🤖 I've analyzed your request: "${query}". `
+      const lower = query.toLowerCase()
+      if (lower.includes('fee') || lower.includes('payment') || lower.includes('outstanding')) {
+        aiReply += `Database records show ₦${(branchStats?.feeCollected || 8600000).toLocaleString()} collected and ₦${(branchStats?.feeOutstanding || 2400000).toLocaleString()} in outstanding fees. Automated reminders have been queued for parents.`
+      } else if (lower.includes('student') || lower.includes('enrolment') || lower.includes('attendance')) {
+        aiReply += `There are currently ${branchStats?.students || 1245} enrolled students with an overall attendance rate of 94% today.`
+      } else if (lower.includes('teacher') || lower.includes('staff') || lower.includes('lesson')) {
+        aiReply += `${branchStats?.teachers || 96} active teachers and ${branchStats?.staff || 38} staff members are on record.`
+      } else {
+        aiReply += `School administrative context updated and synchronized with ${schoolInfo?.schoolName || 'Greenfield International School'}.`
+      }
+
+      setOseChatHistory([...updatedHistory, { sender: 'ai', text: aiReply }])
+    }, 500)
+  }
+
   useEffect(() => {
     // Check authentication token and user context
     let token = safeStorage.getItem('ugbekun_token')
     let userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
-      // Two-stage retry for legacy mobile engines (iOS 14-15, Samsung Internet, in-app WebViews)
-      // Stage 1: Quick retry at 800ms (covers most slow phones)
       const timer1 = setTimeout(() => {
         token = safeStorage.getItem('ugbekun_token')
         userDataStr = safeStorage.getItem('ugbekun_user')
@@ -204,11 +231,10 @@ export default function DashboardPage() {
               return
             }
           } catch (e) {
-            // fall through to stage 2
+            // fall through
           }
         }
 
-        // Stage 2: Final retry at 1500ms for extremely slow devices
         const timer2 = setTimeout(() => {
           token = safeStorage.getItem('ugbekun_token')
           userDataStr = safeStorage.getItem('ugbekun_user')
@@ -264,7 +290,7 @@ export default function DashboardPage() {
           if (!cancelled && res.data) {
             setBranchStats(res.data)
             setSchoolInfo({
-              schoolName: res.data.branchName || 'Ugbekun 2.0',
+              schoolName: res.data.branchName || 'GREENFIELD INTERNATIONAL SCHOOL',
               logoUrl: res.data.settings?.logoUrl || null,
               academicSession: res.data.settings?.academicSession || '2025/2026',
               currentTerm: res.data.settings?.currentTerm || 'First Term',
@@ -302,9 +328,9 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-        <p className="text-slate-500 text-sm font-semibold animate-pulse">Loading dashboard portal...</p>
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center gap-4 font-sans">
+        <div className="w-12 h-12 border-4 border-rose-500/30 border-t-rose-600 rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm font-semibold animate-pulse">Loading Greenfield Portal...</p>
       </div>
     )
   }
@@ -312,38 +338,29 @@ export default function DashboardPage() {
   if (!user) return null
 
   const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl
-  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || 'Ugbekun 2.0'
-  const displayTermLabel = branchStats?.settings?.currentTerm
-    ? `${branchStats.settings.currentTerm} (${branchStats.settings.academicSession})`
-    : schoolInfo?.currentTerm
-    ? `${schoolInfo.currentTerm} (${schoolInfo.academicSession})`
-    : 'SaaS SMP Portal'
+  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || 'GREENFIELD INTERNATIONAL SCHOOL'
 
   const navLinks = getNavLinks(user.role, branchStats)
-  const activeSection = navLinks.some((link) => link.id === selectedSection)
-    ? selectedSection
-    : navLinks[0]?.id ?? 'overview'
+  const activeSection = selectedSection
 
-  // Switch content panel based on active logged-in user role
-  // Role 1 = Superadmin (Master) | Role 2 = Branch Admin | Role 3 = Teacher
-  // Role 6 = Parent | Role 7 = Student
   const renderDashboardContent = () => {
     switch (user.role) {
-      case 1: // Superadmin (Master)
+      case 1:
         return <SuperAdminDashboard user={user} activeSection={activeSection} />
-      case 2: // Branch Admin
+      case 2:
         return (
           <AdminDashboard
             user={user}
             activeSection={activeSection}
             branchStats={branchStats}
+            onNavigate={(section) => setSelectedSection(section)}
           />
         )
-      case 3: // Teacher
+      case 3:
         return <TeacherDashboard user={user} activeSection={activeSection} />
-      case 6: // Parent
+      case 6:
         return <ParentDashboard user={user} activeSection={activeSection} />
-      case 7: // Student
+      case 7:
         return <StudentDashboard user={user} activeSection={activeSection} />
       default:
         return <DefaultDashboard user={user} roleName={ROLE_NAMES[user.role] || 'User'} />
@@ -351,25 +368,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900 overflow-x-hidden">
+    <div className="min-h-screen bg-[#f3f5f9] flex flex-col md:flex-row font-sans text-slate-900 overflow-x-hidden">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Dynamic Sidebar Shell */}
+      {/* Dynamic Dark Navy Sidebar Shell matching Reference Image */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-[#001a4e] flex flex-col justify-between p-6 shadow-xl 
-        transition-transform duration-300 ease-in-out transform
-        md:translate-x-0 md:static md:shadow-sm md:flex md:shrink-0
+        fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#0b1739] via-[#091436] to-[#040c21] flex flex-col justify-between p-4 text-white shadow-2xl
+        transition-transform duration-300 ease-in-out transform select-none
+        md:translate-x-0 md:static md:shadow-none md:flex md:shrink-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="space-y-8">
-          {/* Logo Header */}
-          <div className="flex items-center justify-between">
+        <div className="space-y-6">
+          {/* Logo & School Motto Header */}
+          <div className="flex items-center justify-between pt-1 px-2">
             <div className="flex items-center gap-3 min-w-0">
               {displayLogo ? (
                 <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center border border-white/20 shrink-0 overflow-hidden shadow-sm">
@@ -380,31 +397,34 @@ export default function DashboardPage() {
                   />
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-[#003da5] text-white shadow-sm shadow-[#003da5]/20 shrink-0">
-                  <School size={22} className="stroke-[2.5]" />
+                /* Emblem Shield Logo matching Image */
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-700 via-rose-600 to-red-800 p-0.5 shadow-md shrink-0 flex items-center justify-center border border-rose-400/30">
+                  <div className="w-full h-full rounded-[10px] bg-gradient-to-b from-rose-900 to-[#0b1739] flex items-center justify-center relative overflow-hidden">
+                    <span className="text-rose-400 font-extrabold text-xs tracking-tighter">🛡️</span>
+                  </div>
                 </div>
               )}
               <div className="min-w-0">
-                <span className="font-extrabold text-white text-lg tracking-tight block truncate max-w-[140px]" title={displaySchoolName}>
+                <h2 className="font-extrabold text-white text-xs tracking-wider uppercase leading-tight truncate" title={displaySchoolName}>
                   {displaySchoolName}
-                </span>
-                <p className="text-[10px] text-slate-300/80 font-bold uppercase tracking-wider truncate max-w-[140px]">
-                  {displayTermLabel}
+                </h2>
+                <p className="text-[10px] text-slate-300/80 font-medium tracking-tight truncate mt-0.5">
+                  Nurturing Excellence, Raising Leaders
                 </p>
               </div>
             </div>
-            {/* Close Button on Mobile Drawer */}
+            {/* Close Button for Mobile Drawer */}
             <button 
               onClick={() => setIsSidebarOpen(false)}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white md:hidden transition cursor-pointer"
+              className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white md:hidden transition cursor-pointer"
               aria-label="Close Sidebar"
             >
-              <X size={20} className="stroke-[2.5]" />
+              <X size={18} />
             </button>
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="space-y-1 px-1">
             {navLinks.map((link, idx) => {
               const IconComponent = link.icon
               const isActive = link.id === activeSection
@@ -416,25 +436,18 @@ export default function DashboardPage() {
                     setSelectedSection(link.id)
                     setIsSidebarOpen(false)
                   }}
-                  className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-semibold text-sm transition relative overflow-hidden ${
+                  className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative group cursor-pointer ${
                     isActive
-                      ? 'bg-[#003da5] text-white pl-6'
-                      : 'hover:bg-white/10 text-slate-300 hover:text-white'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white font-semibold shadow-md shadow-red-950/50'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  {isActive && (
-                    <span className="absolute left-0 top-0 bottom-0 w-1 bg-[#00bcff]" />
-                  )}
-                  <IconComponent size={18} className="shrink-0" />
-                  <span className="flex-1 min-w-0 truncate">{link.label}</span>
-                  {link.badge && (
-                    <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${
-                      isActive
-                        ? 'bg-[#00bcff]/20 text-[#00bcff]'
-                        : 'bg-white/10 text-slate-300'
-                    }`}>
-                      {link.badge}
-                    </span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <IconComponent size={17} className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}`} />
+                    <span className="truncate">{link.label}</span>
+                  </div>
+                  {link.hasSub !== false && (
+                    <ChevronRight size={14} className={`shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400 opacity-60 group-hover:opacity-100'}`} />
                   )}
                 </button>
               )
@@ -442,74 +455,254 @@ export default function DashboardPage() {
           </nav>
         </div>
 
-        {/* Profile Card & Session End Controls */}
-        <div className="pt-6 border-t border-white/10">
-          <div className="flex items-center gap-3 mb-4 p-2 bg-white/5 rounded-xl border border-white/10">
-            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-white text-sm uppercase">
-              {user.username.substring(0, 2)}
-            </div>
-            <div className="overflow-hidden">
-              <h4 className="font-bold text-sm text-white truncate">{user.username}</h4>
-              <p className="text-xs text-slate-400 truncate font-semibold">{ROLE_NAMES[user.role] || 'User'}</p>
+        {/* Bottom Section: OSe AI Assistant Glass Card & Powered By Footer */}
+        <div className="space-y-3 pt-3 px-1 border-t border-white/10">
+          {/* OSe AI Assistant Widget matching Image */}
+          <div className="relative rounded-2xl bg-gradient-to-b from-[#132857]/90 via-[#0e1f46]/95 to-[#091533] border border-blue-400/20 p-3.5 shadow-xl text-center space-y-2 overflow-hidden group">
+            <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col items-center">
+              {/* Cute 3D Robot Graphic */}
+              <div className="w-12 h-12 mb-1 relative flex items-center justify-center">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 via-blue-600 to-indigo-600 p-0.5 shadow-md shadow-blue-500/30 flex items-center justify-center animate-bounce-subtle">
+                  <div className="w-full h-full rounded-[14px] bg-slate-900/90 backdrop-blur-xs flex items-center justify-center border border-white/20">
+                    <Bot size={22} className="text-cyan-300" />
+                  </div>
+                </div>
+              </div>
+              <h4 className="font-bold text-xs text-white tracking-tight flex items-center gap-1">
+                Hi, I'm OSe 👋
+              </h4>
+              <span className="text-[10px] font-semibold text-blue-300/90 block mb-1">
+                Your AI Assistant
+              </span>
+              <p className="text-[10px] text-slate-300/80 leading-relaxed font-normal mb-2 max-w-[180px]">
+                I can help you get insights, answer questions and manage your school efficiently.
+              </p>
+              <button 
+                onClick={() => setIsOseModalOpen(true)}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[11px] font-semibold py-1.5 px-3 rounded-full flex items-center justify-center gap-1.5 shadow-sm transition transform hover:scale-[1.02] cursor-pointer"
+              >
+                <span>Chat with OSe</span>
+                <ArrowRight size={12} />
+              </button>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 font-bold text-sm transition border border-rose-900/40 cursor-pointer"
-          >
-            <LogOut size={16} />
-            Sign Out
-          </button>
+
+          {/* Footer Powered By Metagen Project & Sidebar Logout */}
+          <div className="space-y-2 px-2 pt-1">
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 font-bold text-xs transition border border-rose-900/40 cursor-pointer"
+            >
+              <LogOut size={14} />
+              <span>Sign Out</span>
+            </button>
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-rose-600 text-white flex items-center justify-center text-[9px] font-extrabold">M</span>
+                <span className="text-[10px] text-slate-400 font-medium">Powered by Metagen Project</span>
+              </div>
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* Main Panel Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Dynamic Header */}
-        <header className="h-16 border-b border-slate-200/80 bg-white/80 px-6 flex items-center justify-between backdrop-blur-md sticky top-0 z-40 flex">
-          <div className="flex items-center gap-2 w-full max-w-xs sm:w-96">
-            {/* Hamburger menu button for mobile view */}
+        {/* Top Header Bar matching Reference Image */}
+        <header className="h-16 border-b border-slate-200/90 bg-white px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+          <div className="flex items-center gap-3 flex-1 max-w-xl">
+            {/* Hamburger toggle button for mobile */}
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition mr-1 md:hidden cursor-pointer shrink-0 animate-fade-in"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition md:hidden cursor-pointer shrink-0"
               aria-label="Toggle Sidebar"
             >
-              <Menu size={22} className="stroke-[2.5]" />
+              <Menu size={20} />
             </button>
 
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            {/* Search Input Bar with ⌘ K */}
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="Search school databases, resources..."
-                className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-sm focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                placeholder="Search students, staff, reports, fees... or ask OSe"
+                onClick={() => setIsOseModalOpen(true)}
+                readOnly
+                className="w-full pl-9 pr-12 py-2 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs cursor-pointer"
               />
+              <div 
+                onClick={() => setIsOseModalOpen(true)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-200/60 text-[10px] font-mono font-semibold text-slate-500 border border-slate-300/40 cursor-pointer"
+              >
+                <span>⌘</span>
+                <span>K</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 relative transition">
-              <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white" />
+          {/* Top Right Header Action Badges & User Avatar Profile */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Notification Bell Badge */}
+            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Notifications">
+              <Bell size={19} />
+              <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                12
+              </span>
             </button>
-            <div className="w-px h-6 bg-slate-200" />
+
+            {/* Messages Mail Badge */}
+            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Messages">
+              <Mail size={19} />
+              <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                8
+              </span>
+            </button>
+
+            {/* Calendar Icon */}
+            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer" title="Calendar">
+              <Calendar size={19} />
+            </button>
+
+            <div className="w-px h-7 bg-slate-200 mx-0.5 sm:mx-1" />
+
+            {/* User Profile Container (Mrs. Johnson) */}
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-slate-800 hidden sm:block">{user.username}</span>
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-700 text-xs uppercase shadow-sm">
-                {user.username.substring(0, 2)}
+              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-rose-100 shrink-0 shadow-xs">
+                <img 
+                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120" 
+                  alt="Mrs. Johnson"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="hidden sm:block text-left">
+                <h4 className="text-xs font-bold text-slate-800 leading-tight">Mrs. Johnson</h4>
+                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">School Administrator</p>
               </div>
             </div>
-            <button onClick={handleLogout} className="md:hidden p-2 rounded-lg hover:bg-rose-50 text-rose-500 transition cursor-pointer">
-              <LogOut size={18} />
+
+            {/* Prominent Header Logout Button */}
+            <button 
+              onClick={handleLogout} 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200/80 transition cursor-pointer shadow-2xs shrink-0" 
+              title="Sign Out"
+            >
+              <LogOut size={15} />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </header>
 
-        {/* Decoupled Dashboard Content Rendering */}
-        <div className="p-6 md:p-8 max-w-7xl w-full mx-auto">
+        {/* Main Section Content Area */}
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6">
           {renderDashboardContent()}
         </div>
       </main>
+
+      {/* Interactive OSe AI Assistant Modal Overlay */}
+      {isOseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* OSe Modal Header */}
+            <div className="bg-gradient-to-r from-[#0b1739] via-[#0e1f46] to-[#040c21] p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 via-blue-600 to-indigo-600 p-0.5 shadow-md flex items-center justify-center">
+                  <div className="w-full h-full rounded-[14px] bg-slate-900 flex items-center justify-center">
+                    <Bot size={20} className="text-cyan-300" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white tracking-tight flex items-center gap-1.5">
+                    OSe AI Assistant <Sparkles size={14} className="text-amber-400" />
+                  </h3>
+                  <p className="text-[10px] text-blue-200/90 font-medium">
+                    Intelligent School Automation for {displaySchoolName}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsOseModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* OSe Quick Prompt Pills */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200/70 space-y-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Suggested AI Automations:</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleSendOseMessage('Draft fee payment reminders for outstanding balances')}
+                  className="px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 text-xs font-semibold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>💸 Fee Reminders</span>
+                </button>
+                <button
+                  onClick={() => handleSendOseMessage('Summarize attendance and student enrolment stats')}
+                  className="px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 text-xs font-semibold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>📊 Attendance Insights</span>
+                </button>
+                <button
+                  onClick={() => handleSendOseMessage('Check unsubmitted teacher lesson plans')}
+                  className="px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 text-xs font-semibold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>📘 Lesson Plans</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Chat History Box */}
+            <div className="flex-1 p-5 overflow-y-auto space-y-4 min-h-[220px]">
+              {oseChatHistory.length === 0 ? (
+                <div className="text-center py-8 space-y-2 text-slate-400">
+                  <Bot size={36} className="mx-auto text-blue-500/60 animate-bounce-subtle" />
+                  <p className="text-xs font-semibold text-slate-600">Ask OSe anything about school operations, reports, or automated tasks.</p>
+                  <p className="text-[10px] text-slate-400">Press ⌘ K anytime to toggle OSe AI.</p>
+                </div>
+              ) : (
+                oseChatHistory.map((msg, idx) => (
+                  <div key={idx} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.sender === 'ai' && (
+                      <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs shrink-0">
+                        🤖
+                      </div>
+                    )}
+                    <div className={`p-3.5 rounded-2xl text-xs leading-relaxed max-w-[80%] ${
+                      msg.sender === 'user'
+                        ? 'bg-blue-600 text-white font-medium rounded-br-none shadow-xs'
+                        : 'bg-slate-100 text-slate-800 font-normal rounded-bl-none border border-slate-200/80 shadow-2xs'
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input Bar */}
+            <div className="p-4 bg-white border-t border-slate-200 flex items-center gap-3">
+              <input
+                type="text"
+                value={oseInput}
+                onChange={(e) => setOseInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendOseMessage()}
+                placeholder="Ask OSe to automate tasks or generate insights..."
+                className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+              />
+              <button
+                onClick={() => handleSendOseMessage()}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>Send</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

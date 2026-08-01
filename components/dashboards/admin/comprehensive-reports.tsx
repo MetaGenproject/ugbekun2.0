@@ -25,6 +25,7 @@ import {
   Star,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { IncomeVsExpensesChart, AnnualFeeSummaryCard } from './financial-visuals'
 
 interface ReportData {
   incomeExpenses: {
@@ -344,6 +345,15 @@ export function ComprehensiveReports() {
               {/* ── INCOME & EXPENSES ── */}
               {activeTab === 'income-expenses' && (
                 <div className="space-y-6">
+                  {/* Visual Income vs Expenses Prominent Graph (Blue Income vs Red Expenses) */}
+                  <IncomeVsExpensesChart
+                    totalIncome={Number(data.incomeExpenses.totalIncome)}
+                    totalExpenses={Number(data.incomeExpenses.totalExpenses)}
+                    feeIncome={Number(data.incomeExpenses.totalFeeIncome)}
+                    otherIncome={Number(data.incomeExpenses.totalOfficeIncome)}
+                    netSurplus={Number(data.incomeExpenses.netSurplus)}
+                  />
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard label="Fee Collections" value={`₦${Number(data.incomeExpenses.totalFeeIncome).toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
                     <StatCard label="Other Income" value={`₦${Number(data.incomeExpenses.totalOfficeIncome).toLocaleString()}`} icon={TrendingUp} color="blue" />
@@ -397,6 +407,14 @@ export function ComprehensiveReports() {
               {/* ── FEES REPORT ── */}
               {activeTab === 'fees' && (
                 <div className="space-y-6">
+                  {/* Annual Fee Summary Card */}
+                  <AnnualFeeSummaryCard
+                    totalInvoiced={Number(data.fees.totalInvoiced)}
+                    totalCollected={Number(data.fees.totalCollected)}
+                    totalOutstanding={Number(data.fees.totalOutstanding)}
+                    collectionRate={data.fees.collectionRate}
+                  />
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard label="Total Invoiced" value={`₦${Number(data.fees.totalInvoiced).toLocaleString()}`} icon={FileText} color="blue" />
                     <StatCard label="Total Collected" value={`₦${Number(data.fees.totalCollected).toLocaleString()}`} icon={CheckCircle2} color="emerald" trend="up" />

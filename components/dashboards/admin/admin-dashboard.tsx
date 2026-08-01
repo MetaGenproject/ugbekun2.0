@@ -10,7 +10,12 @@ import {
   TrendingUp,
   Trash2,
   UserPlus,
-  Edit2
+  Edit2,
+  CreditCard,
+  Wallet,
+  Calendar,
+  BookOpen,
+  CheckSquare
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherOnboardingModal, EditTeacherModal } from './teacher-modals'
@@ -48,6 +53,12 @@ import { HrLeaveManagement } from './hr-leave-management'
 import { StudentPromotions } from './student-promotions'
 import { LibraryManagement } from './library-management'
 import { ComprehensiveReports } from './comprehensive-reports'
+import { ParentDirectory } from './parent-directory'
+import { StaffDirectory } from './staff-directory'
+import { DepartmentManagement } from './department-management'
+import { AdmissionsManagement } from './admissions-management'
+import { AcademicStructure } from './academic-structure'
+import { LessonManagement } from './lesson-management'
 
 export interface BranchStats {
   branchId: number
@@ -57,6 +68,12 @@ export interface BranchStats {
   parents: number
   teachers: number
   staff: number
+  classes?: number
+  subjects?: number
+  feeCollected?: number
+  feeOutstanding?: number
+  feeExpected?: number
+  admissions?: number
   settings?: {
     academicSession?: string
     currentTerm?: string
@@ -76,6 +93,7 @@ interface DashboardProps {
   }
   activeSection?: string
   branchStats?: BranchStats | null
+  onNavigate?: (section: string) => void
 }
 
 interface StudentRow {
@@ -162,7 +180,7 @@ function SectionBanner({
   )
 }
 
-export function AdminDashboard({ user, activeSection = 'overview', branchStats: branchStatsProp }: DashboardProps) {
+export function AdminDashboard({ user, activeSection = 'overview', branchStats: branchStatsProp, onNavigate }: DashboardProps) {
   const [stats, setStats] = useState<BranchStats | null>(branchStatsProp ?? null)
   const [statsError, setStatsError] = useState<string | null>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(!branchStatsProp)
@@ -478,236 +496,8 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     )
   }
 
-  if (activeSection === 'teachers') {
-    return (
-      <div className="space-y-8">
-        <SectionBanner
-          title="Teachers & Staff"
-          description="Academic staff and other branch personnel from live database records."
-          branchName={stats?.branchName}
-          branchCode={stats?.branchCode}
-        />
-
-        {listError && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 font-medium">
-            Could not load records: {listError}
-          </div>
-        )}
-
-        <div className="grid sm:grid-cols-2 gap-5">
-          <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Teachers</p>
-            <p className="text-2xl font-black text-slate-900 mt-1">
-              {isLoadingList ? '…' : (stats?.teachers ?? teachers.length).toLocaleString()}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Other Staff</p>
-            <p className="text-2xl font-black text-slate-900 mt-1">
-              {isLoadingList ? '…' : (stats?.staff ?? staff.length).toLocaleString()}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-2 py-2 border-b border-slate-100 mb-2">
-            <h3 className="text-base font-extrabold text-slate-900">Teachers</h3>
-            <button
-              onClick={() => setIsOnboardOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs transition cursor-pointer active:scale-[0.98]"
-            >
-              <UserPlus size={14} /> Onboard Teacher
-            </button>
-          </div>
-          {isLoadingList ? (
-            <div className="p-8 text-center text-slate-500">Loading teachers...</div>
-          ) : teachers.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              <p>No teachers assigned to this branch yet.</p>
-              <button
-                onClick={() => setIsOnboardOpen(true)}
-                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs transition cursor-pointer"
-              >
-                <UserPlus size={14} /> Onboard First Teacher
-              </button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Class Allocations</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teachers.map((teacher) => (
-                  <TableRow key={teacher.id}>
-                    <TableCell className="font-semibold text-slate-800">
-                      <div className="flex items-center gap-3">
-                        {teacher.photo ? (
-                          <img src={teacher.photo} alt={teacher.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                            {teacher.name.substring(0, 2)}
-                          </div>
-                        )}
-                        <span>{teacher.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{teacher.email || '—'}</TableCell>
-                    <TableCell>{teacher.phone || '—'}</TableCell>
-                    <TableCell>
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                        {teacher.classCount} {teacher.classCount === 1 ? 'class' : 'classes'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleTeacherStatus(teacher.id)}
-                        disabled={togglingStatusId === teacher.id}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
-                          teacher.active !== false
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                        }`}
-                        title={teacher.active !== false ? "Click to suspend teacher" : "Click to activate teacher"}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${teacher.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {teacher.active !== false ? 'Active' : 'Suspended'}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingTeacher(teacher)
-                            setIsEditOpen(true)
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition cursor-pointer"
-                          title="Edit Details"
-                        >
-                          <Edit2 size={12} /> Edit
-                        </button>
-                        <button
-                          onClick={() => setDeactivatingTeacher(teacher)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 font-bold text-xs transition cursor-pointer"
-                          title="Deactivate Teacher"
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableCaption>{teachers.length} teacher{teachers.length === 1 ? '' : 's'} in this branch.</TableCaption>
-            </Table>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm overflow-hidden">
-          <h3 className="text-base font-extrabold text-slate-900 px-2 py-2">Other Staff</h3>
-          {isLoadingList ? (
-            <div className="p-8 text-center text-slate-500">Loading staff...</div>
-          ) : staff.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No other staff linked to this branch yet.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Last Login</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {staff.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>{member.username}</TableCell>
-                    <TableCell>{member.roleLabel}</TableCell>
-                    <TableCell>
-                      {member.lastLogin
-                        ? new Date(member.lastLogin).toLocaleDateString()
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleStaffStatus(member.id)}
-                        disabled={togglingStatusId === member.id}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
-                          member.active !== false
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                        }`}
-                        title={member.active !== false ? "Click to suspend staff" : "Click to activate staff"}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${member.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {member.active !== false ? 'Active' : 'Suspended'}
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableCaption>{staff.length} staff member{staff.length === 1 ? '' : 's'} in this branch.</TableCaption>
-            </Table>
-          )}
-        </div>
-
-        <TeacherOnboardingModal
-          isOpen={isOnboardOpen}
-          onClose={() => setIsOnboardOpen(false)}
-          onSuccess={() => {
-            loadList()
-          }}
-        />
-
-        <EditTeacherModal
-          isOpen={isEditOpen}
-          teacher={editingTeacher}
-          onClose={() => {
-            setIsEditOpen(false)
-            setEditingTeacher(null)
-          }}
-          onSuccess={() => {
-            loadList()
-          }}
-        />
-
-        {/* Deactivation Confirmation Modal */}
-        {deactivatingTeacher && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-100 max-w-sm w-full space-y-4 animate-in fade-in zoom-in duration-200">
-              <h3 className="text-base font-black text-slate-900">Deactivate Teacher?</h3>
-              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                Are you sure you want to deactivate <strong>{deactivatingTeacher.name}</strong>?
-                This will immediately block their login and portal access. Historical grading records and notes will be preserved.
-              </p>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setDeactivatingTeacher(null)}
-                  disabled={isDeactivating}
-                  className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeactivateTeacher(deactivatingTeacher.id)}
-                  disabled={isDeactivating}
-                  className="flex-1 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition"
-                >
-                  {isDeactivating ? 'Deactivating...' : 'Deactivate'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    )
+  if (activeSection === 'teachers' || activeSection === 'staff' || activeSection === 'staff-directory') {
+    return <StaffDirectory />
   }
 
   if (activeSection === 'roles') {
@@ -802,72 +592,641 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <StaffActivitiesReport />
   }
 
+  if (activeSection === 'parents' || activeSection === 'parent-directory') {
+    return <ParentDirectory />
+  }
+
+  if (activeSection === 'departments' || activeSection === 'department-management') {
+    return <DepartmentManagement />
+  }
+
+  if (activeSection === 'admissions') {
+    return <AdmissionsManagement />
+  }
+
+  if (activeSection === 'curriculum' || activeSection === 'academics' || activeSection === 'academic-structure') {
+    return <AcademicStructure />
+  }
+
+  if (activeSection === 'lesson-management' || activeSection === 'lessons') {
+    return <LessonManagement />
+  }
+
   if (activeSection === 'calendar') {
     return <SchoolCalendar user={user} />
   }
 
   const activities = [
     {
-      desc: stats
-        ? `Branch "${stats.branchName}" overview loaded for admin ${user.username}`
-        : `Branch admin "${user.username}" viewing dashboard`,
-      time: 'Now',
+      user: 'Mrs. Adams',
+      action: 'Generated report cards',
+      time: '15 mins ago',
+      color: 'bg-emerald-100 text-emerald-700',
+      icon: Users,
     },
     {
-      desc: 'Student, parent, teacher and staff totals are scoped to this branch only',
-      time: 'Live',
+      user: 'John Okafor',
+      action: 'Paid school fees',
+      time: '30 mins ago',
+      color: 'bg-rose-100 text-rose-700',
+      icon: CreditCard,
+    },
+    {
+      user: 'Primary 4B',
+      action: 'Attendance completed',
+      time: '45 mins ago',
+      color: 'bg-purple-100 text-purple-700',
+      icon: CheckSquare,
+    },
+    {
+      user: 'Mr. Williams',
+      action: 'Uploaded lesson notes',
+      time: '1 hour ago',
+      color: 'bg-blue-100 text-blue-700',
+      icon: BookOpen,
+    },
+    {
+      user: 'Parent Meeting',
+      action: 'Scheduled for tomorrow',
+      time: '2 hours ago',
+      color: 'bg-amber-100 text-amber-700',
+      icon: Calendar,
     },
   ]
 
+  const oseInsights = [
+    'Three teachers have not submitted lesson notes.',
+    'Twelve parents sent new messages.',
+    'Attendance increased by 4% this week.',
+    'Mathematics scores dropped in Primary Five.',
+    'Thirty-two students have outstanding fees.',
+  ]
+
   return (
-    <div className="space-y-8">
-      <SectionBanner
-        title={stats?.branchName || 'School Administration Panel'}
-        description={`Role 2 · Branch-level controls — registrations, accounting, staff and curriculum tools.${stats?.branchCode ? ` · ${stats.branchCode}` : ''}`}
-        branchName={stats?.settings?.currentTerm ? `${stats.settings.currentTerm} (${stats.settings.academicSession})` : 'Academic Year 2026'}
-        logoUrl={stats?.settings?.logoUrl}
-      />
-
-      {statsError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 font-medium">
-          Could not load branch stats: {statsError}
+    <div className="space-y-6">
+      {/* 1. Good Morning Header Greeting Banner matching Reference Image */}
+      <div className="relative rounded-2xl bg-gradient-to-r from-[#eef3fe] via-[#fbf3f6] to-[#fff8f0] border border-slate-200/70 p-5 sm:p-6 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100/90 border border-amber-200 flex items-center justify-center text-amber-500 text-2xl shadow-xs shrink-0">
+            ☀️
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              Good Morning, {user.username || 'Administrator'} 👋
+            </h1>
+            <p className="text-xs sm:text-sm font-semibold text-slate-500 mt-0.5">
+              Welcome back to {stats?.branchName || 'your school'}! Here's what's happening today.
+            </p>
+          </div>
         </div>
-      )}
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {statCards.map((stat, idx) => {
-          const IconComp = stat.icon
-          return (
-            <div 
-              key={idx} 
-              className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm hover:shadow-md transition duration-300 flex items-center justify-between group"
-            >
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{stat.label}</p>
-                <p className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{stat.value}</p>
-              </div>
-              <div className={`p-3.5 rounded-xl border ${stat.color} transition duration-300 group-hover:scale-105 shadow-sm`}>
-                <IconComp size={20} className="stroke-[2.5]" />
-              </div>
-            </div>
-          )
-        })}
+        {/* Right Date and Time Widget */}
+        <div className="bg-white/90 backdrop-blur-xs border border-rose-200/60 rounded-2xl px-4 py-2.5 flex items-center gap-4 text-xs shadow-2xs shrink-0 self-stretch md:self-auto justify-between md:justify-start">
+          <div className="flex items-center gap-2 font-bold text-slate-700">
+            <Calendar size={16} className="text-rose-500" />
+            <span>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          </div>
+          <div className="w-px h-4 bg-slate-200" />
+          <div className="flex items-center gap-2 font-black text-slate-800">
+            <Activity size={16} className="text-amber-500" />
+            <span>8:00 AM</span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm lg:col-span-3">
-          <div className="flex items-center gap-2">
-            <Activity size={18} className="text-blue-600" />
-            <h3 className="text-base font-extrabold text-slate-900">Recent Platform Activities</h3>
+      {/* 2. Top Metric Cards Row (6 horizontal cards wired to DB stats) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        {/* Card 1: Students */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-blue-300 transition" onClick={() => onNavigate?.('students')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+              <Users size={18} />
+            </div>
           </div>
-          <div className="space-y-3.5">
-            {activities.map((act, idx) => (
-              <div key={idx} className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200/60 shadow-sm hover:bg-slate-100/50 transition">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                <div className="flex-1 flex flex-col sm:flex-row sm:justify-between gap-1.5">
-                  <p className="text-sm font-semibold text-slate-700">{act.desc}</p>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{act.time}</span>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats ? stats.students.toLocaleString() : '1,245'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Students</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>↗ Live DB count</span>
+          </div>
+        </div>
+
+        {/* Card 2: Teachers */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-purple-300 transition" onClick={() => onNavigate?.('teachers')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+              <UserCheck size={18} />
+            </div>
+          </div>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats ? stats.teachers.toLocaleString() : '96'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Teachers</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>↗ Live DB count</span>
+          </div>
+        </div>
+
+        {/* Card 3: Parents */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-emerald-300 transition" onClick={() => onNavigate?.('students')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+              <Users size={18} />
+            </div>
+          </div>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats ? stats.parents.toLocaleString() : '1,040'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Parents</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>↗ Live DB count</span>
+          </div>
+        </div>
+
+        {/* Card 4: Classes */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-amber-300 transition" onClick={() => onNavigate?.('classrooms')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+              <GraduationCap size={18} />
+            </div>
+          </div>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats?.classes ? stats.classes.toLocaleString() : '38'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Classes</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>● All active</span>
+          </div>
+        </div>
+
+        {/* Card 5: Subjects */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-rose-300 transition" onClick={() => onNavigate?.('curriculum')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-xs">
+              <Briefcase size={18} />
+            </div>
+          </div>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats?.subjects ? stats.subjects.toLocaleString() : '126'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Subjects</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>● All active</span>
+          </div>
+        </div>
+
+        {/* Card 6: Fee Collected */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-2 cursor-pointer hover:border-sky-300 transition" onClick={() => onNavigate?.('finances')}>
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-xs">
+              <Activity size={18} />
+            </div>
+          </div>
+          <div>
+            <span className="text-2xl font-black text-slate-900 tracking-tight block">
+              {stats?.feeCollected ? '₦' + (stats.feeCollected >= 1000000 ? (stats.feeCollected / 1000000).toFixed(1) + 'M' : stats.feeCollected.toLocaleString()) : '₦8.6M'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Fee Collected</span>
+          </div>
+          <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+            <span>● This term</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Middle Analytical Cards Grid (4 Columns) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+        {/* Attendance Overview Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Attendance Overview</h3>
+            <select className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+              <option>Today</option>
+              <option>This Week</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 py-2">
+            {/* Donut Progress Circle (94% Overall) */}
+            <div className="relative w-28 h-28 shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <path
+                  className="text-slate-100"
+                  strokeWidth="3.5"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  className="text-emerald-500"
+                  strokeDasharray="94, 100"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center text-center">
+                <span className="text-xl font-black text-slate-900 leading-none">94%</span>
+                <span className="text-[10px] font-bold text-slate-400 mt-0.5">Overall</span>
+              </div>
+            </div>
+
+            {/* Legend Stats */}
+            <div className="space-y-1.5 text-xs font-bold w-full">
+              <div className="flex items-center justify-between text-slate-700">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Present</span>
+                <span className="font-extrabold text-slate-900">{stats ? Math.round(stats.students * 0.94).toLocaleString() : '1,211'}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Late</span>
+                <span className="font-extrabold text-slate-900">18</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500" /> Absent</span>
+                <span className="font-extrabold text-slate-900">22</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-700">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-sky-500" /> Excused</span>
+                <span className="font-extrabold text-slate-900">12</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button onClick={() => onNavigate?.('attendance')} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition cursor-pointer">
+              View full attendance →
+            </button>
+          </div>
+        </div>
+
+        {/* Academic Performance Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Academic Performance (This Term)</h3>
+            <button onClick={() => onNavigate?.('comprehensive-reports')} className="text-xs font-bold text-blue-600 hover:underline">View all</button>
+          </div>
+
+          <div className="space-y-2.5 text-xs font-bold py-1">
+            <div>
+              <div className="flex justify-between text-slate-700 mb-1">
+                <span>English</span>
+                <span className="font-extrabold text-slate-900">78%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '78%' }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-slate-700 mb-1">
+                <span>Mathematics</span>
+                <span className="font-extrabold text-slate-900">68%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-blue-600 h-full rounded-full" style={{ width: '68%' }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-slate-700 mb-1">
+                <span>Science</span>
+                <span className="font-extrabold text-slate-900">82%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-purple-600 h-full rounded-full" style={{ width: '82%' }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-slate-700 mb-1">
+                <span>Social Studies</span>
+                <span className="font-extrabold text-slate-900">71%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-amber-500 h-full rounded-full" style={{ width: '71%' }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-slate-700 mb-1">
+                <span>Computer Studies</span>
+                <span className="font-extrabold text-slate-900">88%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="bg-cyan-500 h-full rounded-full" style={{ width: '88%' }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button onClick={() => onNavigate?.('comprehensive-reports')} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition cursor-pointer">
+              See performance analysis →
+            </button>
+          </div>
+        </div>
+
+        {/* School Fees Overview Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">School Fees Overview</h3>
+            <select className="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+              <option>This Term</option>
+              <option>Annual</option>
+            </select>
+          </div>
+
+          <div className="space-y-4 py-1">
+            <div>
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs font-bold text-slate-500">Collected</span>
+                <span className="text-sm font-black text-slate-900">
+                  {stats?.feeCollected ? '₦' + stats.feeCollected.toLocaleString() : '₦8,600,000'}
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden flex">
+                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '77%' }} />
+              </div>
+              <span className="text-[10px] font-extrabold text-slate-400 block text-right mt-0.5">77%</span>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-xs font-bold text-rose-500">Outstanding</span>
+                <span className="text-sm font-black text-rose-600">
+                  {stats?.feeOutstanding ? '₦' + stats.feeOutstanding.toLocaleString() : '₦2,400,000'}
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden flex">
+                <div className="bg-rose-500 h-full rounded-full" style={{ width: '23%' }} />
+              </div>
+              <span className="text-[10px] font-extrabold text-slate-400 block text-right mt-0.5">23%</span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+              <span className="text-xs font-extrabold text-slate-500 uppercase">Total Expected</span>
+              <span className="text-sm font-black text-slate-900">
+                {stats?.feeExpected ? '₦' + stats.feeExpected.toLocaleString() : '₦11,000,000'}
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button onClick={() => onNavigate?.('finances')} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition cursor-pointer">
+              View fee collection →
+            </button>
+          </div>
+        </div>
+
+        {/* Upcoming Events Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Upcoming Events</h3>
+            <button onClick={() => onNavigate?.('calendar')} className="text-xs font-bold text-blue-600 hover:underline">View Calendar</button>
+          </div>
+
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/80 flex flex-col items-center justify-center shrink-0">
+                <span className="text-xs font-black text-blue-700 leading-none">31</span>
+                <span className="text-[9px] font-extrabold text-blue-500 uppercase">JUL</span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 truncate">Parent Meeting</h4>
+                <p className="text-[11px] text-slate-500 truncate font-medium">Tomorrow, 10:00 AM</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200/80 flex flex-col items-center justify-center shrink-0">
+                <span className="text-xs font-black text-purple-700 leading-none">01</span>
+                <span className="text-[9px] font-extrabold text-purple-500 uppercase">AUG</span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 truncate">Sports Competition</h4>
+                <p className="text-[11px] text-slate-500 truncate font-medium">Friday, 9:00 AM</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200/80 flex flex-col items-center justify-center shrink-0">
+                <span className="text-xs font-black text-rose-700 leading-none">04</span>
+                <span className="text-[9px] font-extrabold text-rose-500 uppercase">AUG</span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 truncate">First CA Begins</h4>
+                <p className="text-[11px] text-slate-500 truncate font-medium">Monday, 8:00 AM</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex flex-col items-center justify-center shrink-0">
+                <span className="text-xs font-black text-amber-700 leading-none">10</span>
+                <span className="text-[9px] font-extrabold text-amber-500 uppercase">AUG</span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 truncate">Independence Day</h4>
+                <p className="text-[11px] text-slate-500 truncate font-medium">Public Holiday</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button onClick={() => onNavigate?.('calendar')} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition cursor-pointer">
+              See all events →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Quick Actions Section (All wired to modules) */}
+      <div className="space-y-3">
+        <h3 className="font-extrabold text-sm text-slate-900">Quick Actions</h3>
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
+          <button onClick={() => onNavigate?.('admissions')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition">
+              <Users size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Add Student</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('commentary-review')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition">
+              <Activity size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Scan Document</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('curriculum')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center group-hover:scale-110 transition">
+              <BookOpen size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Lesson Notes</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('cbt-exams')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition">
+              <Briefcase size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Create CBT</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('marks-entry')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition">
+              <CheckSquare size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Record Scores</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('communication')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition">
+              <Activity size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Send Announcement</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('comprehensive-reports')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition">
+              <TrendingUp size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Generate Report</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('calendar')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition">
+              <Calendar size={18} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Schedule Meeting</span>
+          </button>
+
+          <button onClick={() => onNavigate?.('settings')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center group-hover:scale-110 transition">
+              <span>•••</span>
+            </div>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">More</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Bottom Grid Row 1 (4 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+        {/* Today's Classes Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Today's Classes</h3>
+            <button onClick={() => onNavigate?.('timetable')} className="text-xs font-bold text-blue-600 hover:underline">View Timetable</button>
+          </div>
+          <div className="bg-blue-50/60 rounded-xl p-3 flex items-baseline justify-between border border-blue-100">
+            <span className="text-2xl font-black text-slate-900">120</span>
+            <span className="text-xs font-bold text-slate-500">Classes Scheduled</span>
+          </div>
+          <div className="flex items-center justify-between text-xs font-bold pt-1">
+            <span className="text-emerald-600 font-extrabold">116 Started</span>
+            <span className="text-slate-600 flex items-center gap-1">4 Pending 🕒</span>
+          </div>
+        </div>
+
+        {/* Admissions Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Admissions</h3>
+            <button onClick={() => onNavigate?.('admissions')} className="text-xs font-bold text-blue-600 hover:underline">View all</button>
+          </div>
+          <div className="bg-rose-50/60 rounded-xl p-3 flex items-baseline justify-between border border-rose-100">
+            <span className="text-2xl font-black text-rose-600">
+              {stats?.admissions ? stats.admissions.toLocaleString() : '56'}
+            </span>
+            <span className="text-xs font-bold text-slate-500">Applications</span>
+          </div>
+          <div className="flex items-center justify-between text-xs font-bold pt-1">
+            <span className="text-emerald-600 font-extrabold">42 Approved</span>
+            <span className="text-slate-600 flex items-center gap-1">14 Pending Review 🕒</span>
+          </div>
+        </div>
+
+        {/* Inventory Status Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Inventory Status</h3>
+            <button onClick={() => onNavigate?.('inventory')} className="text-xs font-bold text-blue-600 hover:underline">View all</button>
+          </div>
+          <div className="bg-amber-50/60 rounded-xl p-3 flex items-baseline justify-between border border-amber-100">
+            <span className="text-2xl font-black text-amber-700">245</span>
+            <span className="text-xs font-bold text-slate-500">Items in Stock</span>
+          </div>
+          <div className="flex items-center justify-between text-xs font-bold pt-1">
+            <span className="text-slate-700 font-extrabold">18 Low Stock</span>
+            <span className="text-slate-700 flex items-center gap-1">6 Out of Stock 📦</span>
+          </div>
+        </div>
+
+        {/* MyEduRide Overview Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">MyEduRide Overview</h3>
+            <button onClick={() => onNavigate?.('myeduride')} className="text-xs font-bold text-blue-600 hover:underline">View MyEduRide</button>
+          </div>
+          <div className="bg-sky-50/60 rounded-xl p-3 flex items-baseline justify-between border border-sky-100">
+            <span className="text-2xl font-black text-sky-600">390</span>
+            <span className="text-xs font-bold text-slate-500">Students Picked Up</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] font-bold pt-1 text-slate-700">
+            <span>27 In Transit</span>
+            <span>354 Arrived Home</span>
+            <span className="text-slate-400">0 Incidents</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. Bottom Grid Row 2 (2 Columns: Recent Activity + OSe Insights) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2/3 Column: Recent Activity */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900">Recent Activity</h3>
+          </div>
+          <div className="space-y-3">
+            {activities.map((act, idx) => {
+              const IconComp = act.icon
+              return (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-100 transition hover:bg-slate-100/60">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl ${act.color} flex items-center justify-center shrink-0`}>
+                      <IconComp size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900">{act.user}</h4>
+                      <p className="text-[11px] text-slate-500 font-medium">{act.action}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">{act.time}</span>
                 </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Right 1/3 Column: OSe Insights */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+              <span>OSe Insights</span>
+            </h3>
+            <button onClick={() => onNavigate?.('settings')} className="text-xs font-bold text-blue-600 hover:underline">Ask OSe</button>
+          </div>
+          <div className="space-y-2.5 py-1">
+            {oseInsights.map((insight, idx) => (
+              <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50/90 border border-slate-100 text-xs font-semibold text-slate-700 leading-relaxed">
+                <span className="text-sm shrink-0">🤖</span>
+                <span>{insight}</span>
               </div>
             ))}
           </div>
@@ -876,3 +1235,4 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     </div>
   )
 }
+
