@@ -74,26 +74,29 @@ export function LoginForm() {
         console.warn('[Login] Token write-back verification failed. Storage backend:', safeStorage.getActiveBackend())
       }
 
-      // Navigation for universal mobile & desktop browser compatibility
-      try {
-        router.replace('/dashboard')
-      } catch (e) {
-        // fallback for older routers
+      // Navigation for universal mobile & desktop browser compatibility.
+      // The cookie-backed fallback ensures the session survives even if storage APIs
+      // are restricted or the router transition is skipped on older devices.
+      const redirectToDashboard = () => {
+        if (typeof window === 'undefined') return
+        if (window.location.pathname.includes('/dashboard')) return
+
+        try {
+          router.replace('/dashboard')
+        } catch (e) {
+          // fallback for older routers
+        }
+
+        window.setTimeout(() => {
+          try {
+            window.location.assign('/dashboard')
+          } catch (e) {
+            window.location.href = '/dashboard'
+          }
+        }, 250)
       }
 
-      // Delayed fallback for older WebKit engines (iOS 14-15, Samsung Internet, in-app browsers)
-      setTimeout(() => {
-        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
-          window.location.href = '/dashboard'
-        }
-      }, 600)
-
-      // Second hard-navigate fallback for extremely slow mobile JS engines
-      setTimeout(() => {
-        if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
-          window.location.replace('/dashboard')
-        }
-      }, 1200)
+      redirectToDashboard()
     } catch (err: any) {
       console.error('Login error:', err)
       

@@ -8,6 +8,40 @@
 
 // In-memory fallback — always available for the current page session
 const memoryStore = new Map<string, string>();
+const AUTH_COOKIE_KEYS = new Set(['ugbekun_token', 'ugbekun_user']);
+
+const getCookie = (key: string): string | null => {
+  if (typeof document === 'undefined') return null;
+
+  try {
+    const escapedKey = key.replace(/([.*+?^${}()|[\]\\])/g, '\\$1');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escapedKey}=([^;]*)`));
+    if (!match) return null;
+    return decodeURIComponent(match[1]);
+  } catch (e) {
+    return null;
+  }
+};
+
+const setCookie = (key: string, value: string, maxAgeSeconds = 60 * 60 * 8): void => {
+  if (typeof document === 'undefined') return;
+
+  try {
+    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+  } catch (e) {
+    // ignore cookie write issues
+  }
+};
+
+const clearCookie = (key: string): void => {
+  if (typeof document === 'undefined') return;
+
+  try {
+    document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  } catch (e) {
+    // ignore cookie clearing issues
+  }
+};
 
 export const safeStorage = {
   getItem(key: string): string | null {
@@ -33,7 +67,13 @@ export const safeStorage = {
       // sessionStorage blocked
     }
 
-    // 3. In-memory fallback (guaranteed for current page session)
+    // 3. Cookie fallback for auth tokens (more reliable on older mobile browsers)
+    if (AUTH_COOKIE_KEYS.has(key)) {
+      const cookieValue = getCookie(key);
+      if (cookieValue !== null && cookieValue !== '') return cookieValue;
+    }
+
+    // 4. In-memory fallback (guaranteed for current page session)
     return memoryStore.get(key) ?? null;
   },
 
@@ -87,7 +127,20 @@ export const safeStorage = {
       // sessionStorage full or blocked
     }
 
-    // 3. Always write to in-memory store as guaranteed fallback
+    // 3. Cookie fallback for auth values (older mobile browsers)
+    if (AUTH_COOKIE_KEYS.has(key)) {
+      try {
+        setCookie(key, sanitizedValue);
+        const cookieValue = getCookie(key);
+        if (cookieValue === sanitizedValue) {
+          persisted = true;
+        }
+      } catch (e) {
+        // ignore cookie write issues
+      }
+    }
+
+    // 4. Always write to in-memory store as guaranteed fallback
     memoryStore.set(key, sanitizedValue);
     persisted = true;
 
@@ -114,6 +167,10 @@ export const safeStorage = {
       }
     } catch (e) {
       // ignore
+    }
+
+    if (AUTH_COOKIE_KEYS.has(key)) {
+      clearCookie(key);
     }
 
     memoryStore.delete(key);
