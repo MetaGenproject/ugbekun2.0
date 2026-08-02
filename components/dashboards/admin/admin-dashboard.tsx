@@ -59,6 +59,15 @@ import { DepartmentManagement } from './department-management'
 import { AdmissionsManagement } from './admissions-management'
 import { AcademicStructure } from './academic-structure'
 import { LessonManagement } from './lesson-management'
+import { HomeworkManagement } from './homework-management'
+import { ExamCbtManagement } from './exam-cbt-management'
+import { ReportCardManagement } from './report-card-management'
+import { CompetitionsManagement } from './competitions-management'
+import { HrManagement } from './hr-management'
+import { CommunicationCenter } from './communication-center'
+import { CampusLiveManagement } from './campus-live-management'
+import { MyEduRideIntegration } from './myeduride-integration'
+import { SchoolWebsiteManagement } from './school-website-management'
 
 export interface BranchStats {
   branchId: number
@@ -610,6 +619,46 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'lesson-management' || activeSection === 'lessons') {
     return <LessonManagement />
+  }
+
+  if (activeSection === 'homework' || activeSection === 'homework-management') {
+    return <HomeworkManagement />
+  }
+
+  if (activeSection === 'examinations-cbt' || activeSection === 'cbt' || activeSection === 'exams') {
+    return <ExamCbtManagement />
+  }
+
+  if (activeSection === 'report-cards' || activeSection === 'reports-cards') {
+    return <ReportCardManagement />
+  }
+
+  if (activeSection === 'timetable' || activeSection === 'timetable-manager') {
+    return <TimetableManager />
+  }
+
+  if (activeSection === 'competitions' || activeSection === 'quizzes') {
+    return <CompetitionsManagement />
+  }
+
+  if (activeSection === 'hr' || activeSection === 'human-resources' || activeSection === 'hr-management') {
+    return <HrManagement />
+  }
+
+  if (activeSection === 'communication' || activeSection === 'educhat' || activeSection === 'communication-center') {
+    return <CommunicationCenter />
+  }
+
+  if (activeSection === 'campus-live' || activeSection === 'live-classes' || activeSection === 'live') {
+    return <CampusLiveManagement />
+  }
+
+  if (activeSection === 'myeduride' || activeSection === 'gate-manager' || activeSection === 'myeduride-integration') {
+    return <MyEduRideIntegration />
+  }
+
+  if (activeSection === 'website' || activeSection === 'school-website' || activeSection === 'website-builder') {
+    return <SchoolWebsiteManagement />
   }
 
   if (activeSection === 'calendar') {

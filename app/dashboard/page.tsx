@@ -39,12 +39,15 @@ import {
   ArrowRight,
   Sparkles,
   Bot,
-  UserCheck
+  UserCheck,
+  Trophy,
+  Briefcase
 } from 'lucide-react'
 
 // Import decoupled role-specific dashboards from their own folders
 import { SuperAdminDashboard } from '@/components/dashboards/superadmin/superadmin-dashboard'
 import { AdminDashboard, type BranchStats } from '@/components/dashboards/admin/admin-dashboard'
+import { OSeAiAssistant } from '@/components/ai/ose-ai-assistant'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashboard'
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
@@ -106,11 +109,19 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'parents', label: 'Parents & Guardians', icon: Users, hasSub: true },
         { id: 'curriculum', label: 'Academics', icon: GraduationCap, hasSub: true },
         { id: 'lesson-management', label: 'Lesson Management', icon: BookOpen, hasSub: true },
+        { id: 'homework', label: 'Homework', icon: FileText, hasSub: true },
+        { id: 'examinations-cbt', label: 'Examinations & CBT', icon: Award, hasSub: true },
+        { id: 'report-cards', label: 'Report Cards', icon: FileText, hasSub: true },
+        { id: 'timetable', label: 'Timetable', icon: Calendar, hasSub: true },
+        { id: 'attendance', label: 'Attendance', icon: CheckSquare, hasSub: true },
+        { id: 'competitions', label: 'Competitions', icon: Trophy, hasSub: true },
+        { id: 'hr', label: 'Human Resources (HR)', icon: Briefcase, hasSub: true },
         { id: 'admissions', label: 'Admissions', icon: UserPlus, hasSub: true },
         { id: 'finances', label: 'School Fees', icon: CreditCard, hasSub: true },
         { id: 'financial-records', label: 'Financial Records', icon: CreditCard, hasSub: true },
         { id: 'inventory', label: 'Inventory', icon: Boxes, hasSub: true },
         { id: 'communication', label: 'Communication', icon: MessageSquare, hasSub: true },
+        { id: 'campus-live', label: 'Campus Live', icon: Video, hasSub: true },
         { id: 'comprehensive-reports', label: 'Reports', icon: FileText, hasSub: true },
         { id: 'myeduride', label: 'MyEduRide', icon: Bus, hasSub: true },
         { id: 'website', label: 'Website', icon: Globe, hasSub: true },
@@ -702,6 +713,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Global OSe AI Floating Assistant */}
+      <OSeAiAssistant />
     </div>
   )
 }
