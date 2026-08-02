@@ -225,53 +225,12 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    // Check authentication token and user context
-    let token = safeStorage.getItem('ugbekun_token')
-    let userDataStr = safeStorage.getItem('ugbekun_user')
+    const token = safeStorage.getItem('ugbekun_token')
+    const userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (!token || !userDataStr) {
-      const timer1 = setTimeout(() => {
-        token = safeStorage.getItem('ugbekun_token')
-        userDataStr = safeStorage.getItem('ugbekun_user')
-        if (token && userDataStr) {
-          try {
-            const parsedUser = JSON.parse(userDataStr)
-            if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
-              setUser(parsedUser)
-              setIsLoading(false)
-              return
-            }
-          } catch (e) {
-            // fall through
-          }
-        }
-
-        const timer2 = setTimeout(() => {
-          token = safeStorage.getItem('ugbekun_token')
-          userDataStr = safeStorage.getItem('ugbekun_user')
-          if (!token || !userDataStr) {
-            router.replace('/login')
-            setIsLoading(false)
-            return
-          }
-          try {
-            const parsedUser = JSON.parse(userDataStr)
-            if (!parsedUser || typeof parsedUser !== 'object' || !parsedUser.id || !parsedUser.role) {
-              throw new Error('Invalid session payload')
-            }
-            setUser(parsedUser)
-          } catch (e) {
-            safeStorage.removeItem('ugbekun_token')
-            safeStorage.removeItem('ugbekun_user')
-            router.replace('/login')
-          } finally {
-            setIsLoading(false)
-          }
-        }, 700)
-
-        return () => clearTimeout(timer2)
-      }, 800)
-      return () => clearTimeout(timer1)
+      setIsLoading(false)
+      return
     }
 
     try {
@@ -283,11 +242,11 @@ export default function DashboardPage() {
     } catch (e) {
       safeStorage.removeItem('ugbekun_token')
       safeStorage.removeItem('ugbekun_user')
-      router.replace('/login')
+      setUser(null)
     } finally {
       setIsLoading(false)
     }
-  }, [router])
+  }, [])
 
   useEffect(() => {
     if (!user) return
