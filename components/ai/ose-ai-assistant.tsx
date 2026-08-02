@@ -175,13 +175,23 @@ export function OSeAiAssistant({ isOpen: externalIsOpen, onClose }: { isOpen?: b
     if (onClose) onClose()
   }
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
+
   return (
     <>
       {/* Floating Trigger Launcher Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 p-4 rounded-full bg-slate-900 text-white font-bold shadow-2xl hover:scale-105 transition-all flex items-center gap-2 border-2 border-amber-400/80 cursor-pointer group"
+          className="fixed bottom-6 right-6 z-[9999] p-4 rounded-full bg-slate-900 text-white font-bold shadow-2xl hover:scale-105 transition-all flex items-center gap-2 border-2 border-amber-400/80 cursor-pointer group"
         >
           <div className="relative">
             <Bot size={24} className="text-amber-400 group-hover:rotate-12 transition-transform" />
@@ -193,9 +203,9 @@ export function OSeAiAssistant({ isOpen: externalIsOpen, onClose }: { isOpen?: b
 
       {/* Floating Chat Modal Box */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-96 sm:w-[420px] h-[580px] bg-white border border-slate-200/90 rounded-3xl shadow-2xl flex flex-col justify-between overflow-hidden">
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] w-[calc(100vw-2rem)] sm:w-[420px] max-h-[calc(100vh-5rem)] h-[520px] bg-white border border-slate-200/90 rounded-3xl shadow-2xl flex flex-col justify-between overflow-hidden animate-in zoom-in-95 duration-200">
           {/* Header Bar */}
-          <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-2xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
                 <Bot size={20} />
@@ -208,8 +218,13 @@ export function OSeAiAssistant({ isOpen: externalIsOpen, onClose }: { isOpen?: b
               </div>
             </div>
 
-            <button onClick={handleClose} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">
-              <X size={18} />
+            <button 
+              onClick={handleClose} 
+              title="Close OSe AI (Esc)"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1 shadow-sm"
+            >
+              <span>Close</span>
+              <X size={16} />
             </button>
           </div>
 
