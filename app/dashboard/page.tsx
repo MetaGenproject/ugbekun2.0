@@ -227,60 +227,37 @@ export default function DashboardPage() {
   useEffect(() => {
     const authSession = getAuthSession()
 
-    if (!authSession.token || !authSession.user) {
-      const token = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_token') : null
-      const userDataStr = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_user') : null
-
-      if (token && userDataStr) {
-        try {
-          const parsedUser = JSON.parse(userDataStr)
-          if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
-            setUser(parsedUser)
-            setIsLoading(false)
-            return
-          }
-        } catch (e) {
-          // ignore invalid payload
-        }
+    if (authSession.token && authSession.user) {
+      const normalizedUser: User = {
+        id: authSession.user.id,
+        username: authSession.user.username,
+        role: authSession.user.role,
+        roleName: authSession.user.roleName,
+        legacyUserId: authSession.user.legacyUserId ?? null,
+        lastLogin: authSession.user.lastLogin ?? undefined,
       }
 
-      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
-      const authParam = params?.get('auth')
-      if (authParam) {
-        try {
-          const parsedFallback = JSON.parse(decodeURIComponent(authParam))
-          if (parsedFallback?.token && parsedFallback?.user) {
-            const normalizedUser: User = {
-              id: parsedFallback.user.id,
-              username: parsedFallback.user.username,
-              role: parsedFallback.user.role,
-              roleName: parsedFallback.user.roleName,
-              legacyUserId: parsedFallback.user.legacyUserId ?? null,
-              lastLogin: parsedFallback.user.lastLogin ?? undefined,
-            }
-            setUser(normalizedUser)
-            setIsLoading(false)
-            return
-          }
-        } catch (e) {
-          // ignore invalid fallback payload
-        }
-      }
-
+      setUser(normalizedUser)
       setIsLoading(false)
       return
     }
 
-    const normalizedUser: User = {
-      id: authSession.user.id,
-      username: authSession.user.username,
-      role: authSession.user.role,
-      roleName: authSession.user.roleName,
-      legacyUserId: authSession.user.legacyUserId ?? null,
-      lastLogin: authSession.user.lastLogin ?? undefined,
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_token') : null
+    const userDataStr = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_user') : null
+
+    if (token && userDataStr) {
+      try {
+        const parsedUser = JSON.parse(userDataStr)
+        if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
+          setUser(parsedUser)
+          setIsLoading(false)
+          return
+        }
+      } catch (e) {
+        // ignore invalid payload
+      }
     }
 
-    setUser(normalizedUser)
     setIsLoading(false)
   }, [])
 
