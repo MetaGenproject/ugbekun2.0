@@ -300,6 +300,7 @@ export const apiSlice = {
       const fetchOpts: RequestInit = {
         method: 'GET',
         headers,
+        credentials: 'include',
         ...options,
       };
 
@@ -340,6 +341,7 @@ export const apiSlice = {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        credentials: 'include',
         ...options,
       };
 
@@ -371,6 +373,7 @@ export const apiSlice = {
         ...(options?.headers || {}),
       },
       body: JSON.stringify(body),
+      credentials: 'include',
       ...options,
     });
     return handleResponse<T>(response);
@@ -387,6 +390,7 @@ export const apiSlice = {
         ...getAuthHeaders(),
         ...(options?.headers || {}),
       },
+      credentials: 'include',
       ...options,
     });
     return handleResponse<T>(response);
@@ -403,6 +407,7 @@ export const apiSlice = {
         ...getAuthHeaders(),
         ...getCacheBustingHeaders(),
       },
+      credentials: 'include',
     });
 
     if (!response.ok) {
