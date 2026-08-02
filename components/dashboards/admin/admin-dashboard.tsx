@@ -68,6 +68,7 @@ import { CommunicationCenter } from './communication-center'
 import { CampusLiveManagement } from './campus-live-management'
 import { MyEduRideIntegration } from './myeduride-integration'
 import { SchoolWebsiteManagement } from './school-website-management'
+import { FinancialRecordsManagement } from './financial-records-management'
 
 export interface BranchStats {
   branchId: number
@@ -659,6 +660,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'website' || activeSection === 'school-website' || activeSection === 'website-builder') {
     return <SchoolWebsiteManagement />
+  }
+
+  if (activeSection === 'financial-records' || activeSection === 'financial-ledger') {
+    return <FinancialRecordsManagement />
   }
 
   if (activeSection === 'calendar') {
