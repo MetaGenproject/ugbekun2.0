@@ -51,7 +51,7 @@ const setCookie = (key: string, value: string, maxAgeSeconds = 60 * 60 * 8): voi
   if (typeof document === 'undefined') return;
 
   try {
-    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+    document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=None`;
   } catch (e) {
     // ignore cookie write issues
   }
@@ -61,7 +61,7 @@ const clearCookie = (key: string): void => {
   if (typeof document === 'undefined') return;
 
   try {
-    document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+    document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None`;
   } catch (e) {
     // ignore cookie clearing issues
   }

@@ -244,6 +244,29 @@ export default function DashboardPage() {
         }
       }
 
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      const authParam = params?.get('auth')
+      if (authParam) {
+        try {
+          const parsedFallback = JSON.parse(decodeURIComponent(authParam))
+          if (parsedFallback?.token && parsedFallback?.user) {
+            const normalizedUser: User = {
+              id: parsedFallback.user.id,
+              username: parsedFallback.user.username,
+              role: parsedFallback.user.role,
+              roleName: parsedFallback.user.roleName,
+              legacyUserId: parsedFallback.user.legacyUserId ?? null,
+              lastLogin: parsedFallback.user.lastLogin ?? undefined,
+            }
+            setUser(normalizedUser)
+            setIsLoading(false)
+            return
+          }
+        } catch (e) {
+          // ignore invalid fallback payload
+        }
+      }
+
       setIsLoading(false)
       return
     }

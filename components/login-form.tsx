@@ -67,9 +67,10 @@ export function LoginForm() {
       // Persist auth session in storage and in-memory state for browser compatibility.
       setAuthSession(data.token, userToStore)
 
-      // Navigate using a full page change, but preserve the auth state via cookie/storage fallback.
+      // Older iOS Safari can drop auth state during a redirect, so pass the session through the URL as a fallback.
+      const fallbackSession = encodeURIComponent(JSON.stringify({ token: data.token, user: userToStore }))
       if (typeof window !== 'undefined') {
-        window.location.assign('/dashboard')
+        window.location.assign(`/dashboard?auth=${fallbackSession}`)
       }
     } catch (err: any) {
       console.error('Login error:', err)
