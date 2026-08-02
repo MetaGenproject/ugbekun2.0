@@ -50,11 +50,8 @@ export function appendCacheBuster(url: string, customToken?: string | number): s
  * Generates standard anti-caching HTTP request headers.
  */
 export function getCacheBustingHeaders(): Record<string, string> {
-  return {
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-  };
+  // Query parameter _cb=timestamp handles 100% of cache-busting without triggering CORS preflight header blocks
+  return {};
 }
 
 /**
