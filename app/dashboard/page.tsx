@@ -228,11 +228,36 @@ export default function DashboardPage() {
     const authSession = getAuthSession()
 
     if (!authSession.token || !authSession.user) {
+      const token = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_token') : null
+      const userDataStr = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_user') : null
+
+      if (token && userDataStr) {
+        try {
+          const parsedUser = JSON.parse(userDataStr)
+          if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
+            setUser(parsedUser)
+            setIsLoading(false)
+            return
+          }
+        } catch (e) {
+          // ignore invalid payload
+        }
+      }
+
       setIsLoading(false)
       return
     }
 
-    setUser(authSession.user)
+    const normalizedUser: User = {
+      id: authSession.user.id,
+      username: authSession.user.username,
+      role: authSession.user.role,
+      roleName: authSession.user.roleName,
+      legacyUserId: authSession.user.legacyUserId ?? null,
+      lastLogin: authSession.user.lastLogin ?? undefined,
+    }
+
+    setUser(normalizedUser)
     setIsLoading(false)
   }, [])
 

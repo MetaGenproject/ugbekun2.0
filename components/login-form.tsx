@@ -64,12 +64,12 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist auth session in both storage and cookies for browser compatibility.
+      // Persist auth session in storage and in-memory state for browser compatibility.
       setAuthSession(data.token, userToStore)
 
-      // Direct hard page navigation (matching myeduride pattern) for 100% reliability on older mobile browsers
+      // Navigate using a full page change, but preserve the auth state via cookie/storage fallback.
       if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard'
+        window.location.assign('/dashboard')
       }
     } catch (err: any) {
       console.error('Login error:', err)
