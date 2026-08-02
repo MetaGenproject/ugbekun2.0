@@ -4,18 +4,18 @@
  */
 
 const getBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Local development loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(hostname) || /^10\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return `${window.location.protocol}//${hostname}:5001/api`;
+    }
+    // Mobile & Production deployments: Use same-origin proxy to eliminate CORS preflight blocks
+    return '/api/proxy';
   }
 
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    
-    // Local development loopback or local Wi-Fi LAN IP (e.g. 192.168.x.x or 10.x.x.x)
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(hostname) || /^10\.\d+\.\d+\.\d+$/.test(hostname)) {
-      return `${protocol}//${hostname}:5001/api`;
-    }
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
 
   return 'https://ugbekunsmp-backend.onrender.com/api';
@@ -23,11 +23,10 @@ const getBaseUrl = (): string => {
 
 export const BASE_URL = getBaseUrl();
 
-
 // 2. Centralized Endpoints Catalog
 export const endpoints = {
   auth: {
-    login: `${BASE_URL}/auth/login`,
+    login: typeof window !== 'undefined' ? '/api/auth/login' : `${BASE_URL}/auth/login`,
     register: `${BASE_URL}/auth/register`,
     me: `${BASE_URL}/auth/me`,
   },

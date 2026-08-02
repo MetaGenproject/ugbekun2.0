@@ -64,32 +64,13 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist auth session in both storage and in-memory state for browser compatibility.
+      // Persist auth session in both storage and cookies for browser compatibility.
       setAuthSession(data.token, userToStore)
 
-      // Navigation for universal mobile & desktop browser compatibility.
-      // The cookie-backed fallback ensures the session survives even if storage APIs
-      // are restricted or the router transition is skipped on older devices.
-      const redirectToDashboard = () => {
-        if (typeof window === 'undefined') return
-        if (window.location.pathname.includes('/dashboard')) return
-
-        try {
-          router.replace('/dashboard')
-        } catch (e) {
-          // fallback for older routers
-        }
-
-        window.setTimeout(() => {
-          try {
-            window.location.assign('/dashboard')
-          } catch (e) {
-            window.location.href = '/dashboard'
-          }
-        }, 250)
+      // Direct hard page navigation (matching myeduride pattern) for 100% reliability on older mobile browsers
+      if (typeof window !== 'undefined') {
+        window.location.href = '/dashboard'
       }
-
-      redirectToDashboard()
     } catch (err: any) {
       console.error('Login error:', err)
       

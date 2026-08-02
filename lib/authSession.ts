@@ -48,8 +48,21 @@ export function getAuthSession(): AuthSession {
     }
   }
 
-  const token = safeStorage.getItem('ugbekun_token')
-  const userDataStr = safeStorage.getItem('ugbekun_user')
+  let token = safeStorage.getItem('ugbekun_token')
+  let userDataStr = safeStorage.getItem('ugbekun_user')
+
+  // Cookie fallback (matching myeduride pattern for legacy mobile browsers)
+  if (typeof document !== 'undefined') {
+    if (!token) {
+      const match = document.cookie.match(/(?:^|; )ugbekun_token=([^;]*)/)
+      if (match) token = decodeURIComponent(match[1])
+    }
+    if (!userDataStr) {
+      const match = document.cookie.match(/(?:^|; )ugbekun_user=([^;]*)/)
+      if (match) userDataStr = decodeURIComponent(match[1])
+    }
+  }
+
   const user = parseStoredUser(userDataStr)
 
   if (token || user) {

@@ -315,3 +315,14 @@
   .text-foreground\/70 { color: rgba(15, 23, 42, 0.7) !important; }
   .text-foreground\/80 { color: rgba(15, 23, 42, 0.8) !important; }
 }
+
+/* Mobile GPU & Older Phone Browser Compatibility Optimizations */
+@media (max-width: 640px) {
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
