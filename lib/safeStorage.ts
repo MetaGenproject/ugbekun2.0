@@ -9,6 +9,30 @@
 // In-memory fallback — always available for the current page session
 const memoryStore = new Map<string, string>();
 const AUTH_COOKIE_KEYS = new Set(['ugbekun_token', 'ugbekun_user']);
+const WINDOW_NAME_SESSION_KEY = '__ugbekun_window_name_session__';
+
+const getWindowNameStore = (): Record<string, string> => {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const raw = window.name;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+};
+
+const setWindowNameStore = (store: Record<string, string>): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.name = JSON.stringify(store);
+  } catch (e) {
+    // ignore window.name write issues
+  }
+};
 
 const getCookie = (key: string): string | null => {
   if (typeof document === 'undefined') return null;
@@ -73,7 +97,11 @@ export const safeStorage = {
       if (cookieValue !== null && cookieValue !== '') return cookieValue;
     }
 
-    // 4. In-memory fallback (guaranteed for current page session)
+    // 4. Window-name fallback (survives full navigation in same tab)
+    const windowNameValue = getWindowNameStore()[key];
+    if (windowNameValue !== undefined && windowNameValue !== '') return windowNameValue;
+
+    // 5. In-memory fallback (guaranteed for current page session)
     return memoryStore.get(key) ?? null;
   },
 
@@ -140,7 +168,15 @@ export const safeStorage = {
       }
     }
 
-    // 4. Always write to in-memory store as guaranteed fallback
+    // 4. Persist to window.name so a full redirect to /dashboard keeps the session
+    if (AUTH_COOKIE_KEYS.has(key)) {
+      const store = getWindowNameStore();
+      store[key] = sanitizedValue;
+      setWindowNameStore(store);
+      persisted = true;
+    }
+
+    // 5. Always write to in-memory store as guaranteed fallback
     memoryStore.set(key, sanitizedValue);
     persisted = true;
 
@@ -171,6 +207,9 @@ export const safeStorage = {
 
     if (AUTH_COOKIE_KEYS.has(key)) {
       clearCookie(key);
+      const store = getWindowNameStore();
+      delete store[key];
+      setWindowNameStore(store);
     }
 
     memoryStore.delete(key);
@@ -197,6 +236,11 @@ export const safeStorage = {
       const ok = window.sessionStorage.getItem(testKey) === '1';
       window.sessionStorage.removeItem(testKey);
       if (ok) return 'sessionStorage';
+    } catch (e) {}
+
+    try {
+      const store = getWindowNameStore();
+      if (store && Object.keys(store).length > 0) return 'window-name';
     } catch (e) {}
 
     return 'memory';
