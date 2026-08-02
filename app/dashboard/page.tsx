@@ -53,7 +53,7 @@ import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashbo
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
-import { safeStorage } from '@/lib/safeStorage'
+import { clearAuthSession, getAuthSession } from '@/lib/authSession'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
 // Role 1 = 1 global user  → Superadmin / Master
@@ -225,27 +225,15 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    const token = safeStorage.getItem('ugbekun_token')
-    const userDataStr = safeStorage.getItem('ugbekun_user')
+    const authSession = getAuthSession()
 
-    if (!token || !userDataStr) {
+    if (!authSession.token || !authSession.user) {
       setIsLoading(false)
       return
     }
 
-    try {
-      const parsedUser = JSON.parse(userDataStr)
-      if (!parsedUser || typeof parsedUser !== 'object' || !parsedUser.id || !parsedUser.role) {
-        throw new Error('Invalid session payload')
-      }
-      setUser(parsedUser)
-    } catch (e) {
-      safeStorage.removeItem('ugbekun_token')
-      safeStorage.removeItem('ugbekun_user')
-      setUser(null)
-    } finally {
-      setIsLoading(false)
-    }
+    setUser(authSession.user)
+    setIsLoading(false)
   }, [])
 
   useEffect(() => {
@@ -291,8 +279,7 @@ export default function DashboardPage() {
   }, [user])
 
   const handleLogout = () => {
-    safeStorage.removeItem('ugbekun_token')
-    safeStorage.removeItem('ugbekun_user')
+    clearAuthSession()
     router.push('/login')
   }
 

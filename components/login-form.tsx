@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { safeStorage } from '@/lib/safeStorage'
+import { clearAuthSession, setAuthSession } from '@/lib/authSession'
 
 export function LoginForm() {
   const router = useRouter()
@@ -64,15 +64,8 @@ export function LoginForm() {
         } : null,
       }
 
-      // Save token and user details to safeStorage (with write verification)
-      const tokenSaved = safeStorage.setItem('ugbekun_token', data.token)
-      const userSaved = safeStorage.setItem('ugbekun_user', JSON.stringify(userToStore))
-
-      // Verify the token can be read back before navigating
-      const readBack = safeStorage.getItem('ugbekun_token')
-      if (!readBack) {
-        console.warn('[Login] Token write-back verification failed. Storage backend:', safeStorage.getActiveBackend())
-      }
+      // Persist auth session in both storage and in-memory state for browser compatibility.
+      setAuthSession(data.token, userToStore)
 
       // Navigation for universal mobile & desktop browser compatibility.
       // The cookie-backed fallback ensures the session survives even if storage APIs
