@@ -53,7 +53,8 @@ import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashbo
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
-import { clearAuthSession, getAuthSession } from '@/lib/authSession'
+import { clearAuthSession, getAuthSession, setAuthSession } from '@/lib/authSession'
+import { safeStorage } from '@/lib/safeStorage'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
 // Role 1 = 1 global user  → Superadmin / Master
@@ -168,6 +169,25 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
   }
 }
 
+const recoverAuthFromUrl = (): { token: string; user: User } | null => {
+  if (typeof window === 'undefined') return null
+
+  const params = new URLSearchParams(window.location.search)
+  const authParam = params.get('auth')
+  if (!authParam) return null
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(authParam))
+    if (parsed?.token && parsed?.user) {
+      return { token: parsed.token, user: parsed.user }
+    }
+  } catch (e) {
+    // ignore invalid fallback payload
+  }
+
+  return null
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -242,8 +262,25 @@ export default function DashboardPage() {
       return
     }
 
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_token') : null
-    const userDataStr = typeof window !== 'undefined' ? window.localStorage.getItem('ugbekun_user') : null
+    const fallbackAuth = recoverAuthFromUrl()
+    if (fallbackAuth?.token && fallbackAuth?.user) {
+      const normalizedUser: User = {
+        id: fallbackAuth.user.id,
+        username: fallbackAuth.user.username,
+        role: fallbackAuth.user.role,
+        roleName: fallbackAuth.user.roleName,
+        legacyUserId: fallbackAuth.user.legacyUserId ?? null,
+        lastLogin: fallbackAuth.user.lastLogin ?? undefined,
+      }
+
+      setAuthSession(fallbackAuth.token, fallbackAuth.user)
+      setUser(normalizedUser)
+      setIsLoading(false)
+      return
+    }
+
+    const token = safeStorage.getItem('ugbekun_token')
+    const userDataStr = safeStorage.getItem('ugbekun_user')
 
     if (token && userDataStr) {
       try {

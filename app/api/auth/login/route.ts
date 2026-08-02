@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     if (token) {
       res.cookies.set('ugbekun_token', token, {
         httpOnly: false,
-        secure: false,
-        sameSite: 'none',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 30, // 30 Days
         path: '/',
       })
@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
     if (userJson) {
       res.cookies.set('ugbekun_user', encodeURIComponent(userJson), {
         httpOnly: false,
-        secure: false,
-        sameSite: 'none',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 30, // 30 Days
         path: '/',
       })
