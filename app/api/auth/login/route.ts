@@ -11,11 +11,15 @@ const getBackendUrl = (): string => {
   return 'https://ugbekunsmp-backend.onrender.com'
 }
 
+const getLoginTargetUrl = (): string => {
+  const backendHost = getBackendUrl()
+  return `${backendHost}/api/auth/login`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const backendHost = getBackendUrl()
-    const targetUrl = `${backendHost}/api/auth/login`
+    const targetUrl = getLoginTargetUrl()
 
     const response = await fetch(targetUrl, {
       method: 'POST',
