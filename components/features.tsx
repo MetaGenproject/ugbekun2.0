@@ -1,83 +1,99 @@
-import { BarChart3, Users, CreditCard, BookOpen, Lock, MessageSquare, Smartphone, Zap } from 'lucide-react'
+'use client'
 
-const features = [
-  {
-    icon: Zap,
-    title: 'QR Attendance',
-    description: 'Quick and accurate attendance tracking with QR codes. Eliminate manual processes and human errors.'
-  },
-  {
-    icon: Users,
-    title: 'Online Classes',
-    description: 'Live video classes with interactive tools. Screen sharing, chat, and attendance tracking built-in.'
-  },
-  {
-    icon: CreditCard,
-    title: 'Fees Management',
-    description: 'Automated fee collection, invoicing, and payment tracking. Multiple payment gateway support.'
-  },
+import Link from 'next/link'
+import { BookOpen, UserCheck, DollarSign, MessageSquare, Bus, Landmark } from 'lucide-react'
+
+const featuresList = [
   {
     icon: BookOpen,
-    title: 'Online Exams',
-    description: 'Create and conduct secure online exams. Real-time results with detailed analytics and insights.'
+    title: 'Academic Management',
+    description: 'Manage classes, subjects, exams, results, grading and platform.',
+    iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
   },
   {
-    icon: Users,
-    title: 'Parent Portal',
-    description: 'Keep parents engaged with real-time updates on attendance, grades, fees, and announcements.'
+    icon: UserCheck,
+    title: 'Student Information',
+    description: 'Centralize student data, attendance, behaviour, medical & records.',
+    iconBg: 'bg-pink-50 text-pink-600 border-pink-100',
   },
   {
-    icon: Smartphone,
-    title: 'Student Portal',
-    description: 'Students can access classes, submit assignments, check grades, and communicate with teachers.'
+    icon: DollarSign,
+    title: 'Finance & Fees',
+    description: 'Automate invoicing, payments, expenses and financial reports.',
+    iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
   },
   {
-    icon: Users,
-    title: 'Teacher Portal',
-    description: 'Complete classroom management with class routines, grade books, and student performance tracking.'
+    icon: MessageSquare,
+    title: 'Communication',
+    description: 'Engage parents & staff with SMS, emails, announcements & chat.',
+    iconBg: 'bg-pink-50 text-pink-600 border-pink-100',
   },
   {
-    icon: Zap,
-    title: 'Bulk SMS/Email',
-    description: 'Send announcements to students and parents instantly. Automatic notifications for important events.'
+    icon: Bus,
+    title: 'Transport Management',
+    description: 'Track buses, drivers, routes and ensure student safety.',
+    iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
   },
   {
-    icon: Lock,
-    title: 'ID Card Generator',
-    description: 'Create professional school ID cards with photos, QR codes, and custom design options.'
-  }
+    icon: Landmark,
+    title: 'Library Management',
+    description: 'Manage books, borrowing, returns and digital resources.',
+    iconBg: 'bg-pink-50 text-pink-600 border-pink-100',
+  },
 ]
 
 export function Features() {
   return (
-    <section id="features" className="py-20 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Complete School Management Suite
+    <section id="features" className="py-24 bg-[#F8FAFC]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Section Header */}
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 inline-block mb-3">
+            WHAT WE DO
+          </span>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight mb-4">
+            Powering{' '}
+            <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 bg-clip-text text-transparent">
+              Every Aspect
+            </span>{' '}
+            of School Operations
           </h2>
-          <p className="text-lg text-foreground/60 max-w-2xl mx-auto">
-            All the tools you need to streamline operations and enhance learning outcomes.
-          </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {features.map((feature, idx) => {
+        {/* 6 Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+          {featuresList.map((feature) => {
             const Icon = feature.icon
             return (
               <div 
-                key={idx}
-                className="group p-6 rounded-xl bg-card border border-border/50 hover:border-primary/30 hover:shadow-sm transition-all duration-300"
+                key={feature.title}
+                className="bg-white border border-gray-100 rounded-2xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group"
               >
-                <div className="w-10 h-10 rounded-lg bg-primary/8 group-hover:bg-primary/12 flex items-center justify-center mb-4 transition-colors">
-                  <Icon className="w-5 h-5 text-primary" />
+                <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center mb-6 group-hover:scale-110 transition-transform ${feature.iconBg}`}>
+                  <Icon size={26} />
                 </div>
-                <h3 className="text-base font-semibold text-foreground mb-2">{feature.title}</h3>
-                <p className="text-foreground/60 text-sm leading-relaxed">{feature.description}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {feature.description}
+                </p>
               </div>
             )
           })}
         </div>
+
+        {/* Explore All Features Button */}
+        <div className="text-center">
+          <Link
+            href="#why-us"
+            className="inline-flex items-center justify-center px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-full shadow-lg shadow-blue-600/25 transition-all transform hover:-translate-y-0.5"
+          >
+            Explore All Features
+          </Link>
+        </div>
+
       </div>
     </section>
   )

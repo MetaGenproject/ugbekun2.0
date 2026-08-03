@@ -1,25 +1,23 @@
 import { Navigation } from '@/components/nav'
 import { Hero } from '@/components/hero'
 import { Features } from '@/components/features'
-import { DashboardPreview } from '@/components/dashboard-preview'
+import { WhyUs } from '@/components/why-us'
+import { ImpactSection } from '@/components/impact'
 import { Pricing } from '@/components/pricing'
-import { Testimonials } from '@/components/testimonials'
-import { FAQ } from '@/components/faq'
-import { Contact } from '@/components/contact'
+import { TrustedBySection } from '@/components/trusted-by'
 import { Footer } from '@/components/footer'
 
 export default function Home() {
   return (
-    <>
+    <main className="min-h-screen bg-[#060B18]">
       <Navigation />
       <Hero />
       <Features />
-      <DashboardPreview />
+      <WhyUs />
+      <ImpactSection />
       <Pricing />
-      <Testimonials />
-      <FAQ />
-      <Contact />
+      <TrustedBySection />
       <Footer />
-    </>
+    </main>
   )
 }

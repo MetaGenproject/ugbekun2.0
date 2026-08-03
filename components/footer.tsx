@@ -1,94 +1,116 @@
-import { Mail, Phone } from 'lucide-react'
+'use client'
+
 import Link from 'next/link'
 import Image from 'next/image'
+import { Facebook, Twitter, Linkedin, Instagram, Phone, Mail, MapPin } from 'lucide-react'
+import { UgbekunLogo } from '@/components/logo'
 
 export function Footer() {
   return (
-    <footer className="border-t border-border/50 bg-card/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid md:grid-cols-4 gap-8 mb-12">
-          {/* Brand */}
-          <div>
-            <Image 
-              src="/ugbekun-logo.png" 
-              alt="Ugbekun" 
-              width={120} 
-              height={40}
-              className="h-10 w-auto mb-4"
-            />
-            <p className="text-foreground/60 text-sm leading-relaxed">
-              Modernizing school management with innovative technology solutions for educational institutions across Nigeria.
+    <footer id="contact" className="bg-[#050914] text-white pt-16 pb-8 border-t border-white/10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Top Footer Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 pb-12 border-b border-white/10">
+          
+          {/* Brand Bio */}
+          <div className="lg:col-span-4 space-y-4">
+            <UgbekunLogo size="md" />
+
+            <p className="text-xs text-gray-400 max-w-sm leading-relaxed">
+              Empowering schools with innovative technology to manage operations efficiently and deliver quality education.
             </p>
+
+            {/* Social Icons */}
+            <div className="flex items-center space-x-3 pt-2">
+              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
+                <Facebook size={16} />
+              </a>
+              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
+                <Twitter size={16} />
+              </a>
+              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
+                <Linkedin size={16} />
+              </a>
+              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">
+                <Instagram size={16} />
+              </a>
+            </div>
           </div>
 
-          {/* Product */}
-          <div>
-            <h4 className="font-semibold text-foreground mb-4">Product</h4>
-            <ul className="space-y-2 text-sm text-foreground/60">
-              <li><Link href="#features" className="hover:text-primary transition">Features</Link></li>
-              <li><Link href="#pricing" className="hover:text-primary transition">Pricing</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Security</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Roadmap</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Updates</Link></li>
+          {/* Product Links */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200">Product</h4>
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li><Link href="#features" className="hover:text-white transition">Features</Link></li>
+              <li><Link href="#pricing" className="hover:text-white transition">Pricing</Link></li>
+              <li><Link href="#features" className="hover:text-white transition">Integrations</Link></li>
+              <li><Link href="#features" className="hover:text-white transition">Updates</Link></li>
             </ul>
           </div>
 
-          {/* Company */}
-          <div>
-            <h4 className="font-semibold text-foreground mb-4">Company</h4>
-            <ul className="space-y-2 text-sm text-foreground/60">
-              <li><Link href="#" className="hover:text-primary transition">About Us</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Blog</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Careers</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Contact</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Press</Link></li>
+          {/* Solutions Links */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200">Solutions</h4>
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li><Link href="#features" className="hover:text-white transition">For Primary Schools</Link></li>
+              <li><Link href="#features" className="hover:text-white transition">For Secondary Schools</Link></li>
+              <li><Link href="#features" className="hover:text-white transition">For Colleges</Link></li>
+              <li><Link href="#features" className="hover:text-white transition">For School Groups</Link></li>
             </ul>
           </div>
 
-          {/* Legal */}
-          <div>
-            <h4 className="font-semibold text-foreground mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-foreground/60">
-              <li><Link href="#" className="hover:text-primary transition">Privacy Policy</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Terms of Service</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Cookie Policy</Link></li>
-              <li><Link href="#" className="hover:text-primary transition">Compliance</Link></li>
+          {/* Resources Links */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200">Resources</h4>
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li><Link href="#" className="hover:text-white transition">Blog</Link></li>
+              <li><Link href="#" className="hover:text-white transition">Help Center</Link></li>
+              <li><Link href="#" className="hover:text-white transition">User Guide</Link></li>
+              <li><Link href="#" className="hover:text-white transition">Video Tutorials</Link></li>
             </ul>
+          </div>
+
+          {/* Company Links & Contact */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200">Company</h4>
+            <ul className="space-y-2 text-xs text-gray-400 mb-4">
+              <li><Link href="#about" className="hover:text-white transition">About Us</Link></li>
+              <li><Link href="#" className="hover:text-white transition">Careers</Link></li>
+              <li><Link href="#contact" className="hover:text-white transition">Contact Us</Link></li>
+              <li><Link href="#" className="hover:text-white transition">Privacy Policy</Link></li>
+            </ul>
+
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-200 pt-2">Contact</h4>
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li className="flex items-center gap-2">
+                <Phone size={14} className="text-sky-400 shrink-0" />
+                <span>0812 345 6789</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Mail size={14} className="text-sky-400 shrink-0" />
+                <span>info@ugbekun.com</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <MapPin size={14} className="text-sky-400 shrink-0 mt-0.5" />
+                <span>123 Education Drive, Lagos, Nigeria</span>
+              </li>
+            </ul>
+          </div>
+
+        </div>
+
+        {/* Bottom Copyright Bar */}
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+          <p>© 2026 Ugbekun School Management System. All rights reserved.</p>
+          <div className="flex items-center gap-2">
+            <span>Powered by Metagen Project</span>
+            <div className="w-5 h-5 rounded bg-gradient-to-r from-blue-600 to-pink-600 flex items-center justify-center text-white font-bold text-[10px]">
+              M
+            </div>
           </div>
         </div>
 
-        <div className="py-8 border-t border-border/50 space-y-6">
-          {/* Newsletter */}
-          <div className="max-w-md">
-            <h4 className="font-semibold text-foreground mb-3">Subscribe to our newsletter</h4>
-            <p className="text-sm text-foreground/60 mb-4">Get the latest updates and tips for school management.</p>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-foreground/40 focus:outline-none focus:border-primary text-sm"
-              />
-              <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition font-medium text-sm">
-                Subscribe
-              </button>
-            </div>
-          </div>
-
-          {/* Bottom */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-            <div className="text-sm text-foreground/60">
-              <p>&copy; 2024 Ugbekun. All rights reserved.</p>
-            </div>
-            <div className="flex gap-6">
-              <Link href="#" className="text-foreground/60 hover:text-primary transition">
-                <Mail size={18} />
-              </Link>
-              <Link href="#" className="text-foreground/60 hover:text-primary transition">
-                <Phone size={18} />
-              </Link>
-            </div>
-          </div>
-        </div>
       </div>
     </footer>
   )

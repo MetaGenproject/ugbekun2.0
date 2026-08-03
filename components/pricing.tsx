@@ -2,148 +2,151 @@
 
 import Link from 'next/link'
 import { Check } from 'lucide-react'
-import { PLAN_SLUG_BY_NAME } from '@/lib/plans'
 
-const plans = [
+const pricingPlans = [
   {
     name: 'Starter',
-    price: '₦50,000',
-    period: '/month',
-    description: 'Perfect for small schools',
+    subtitle: 'Perfect for small schools',
+    price: '₦25,000',
+    period: '/term',
     features: [
-      'Up to 500 students',
-      'QR attendance',
-      'Basic online classes',
-      'Parent portal',
-      'Student portal',
-      'Email support'
+      'Up to 150 Students',
+      'Basic Academic Management',
+      'Attendance Tracking',
+      'SMS Notifications',
+      'Email Support',
     ],
-    cta: 'Get Started',
-    popular: false
+    buttonText: 'Get Started',
+    buttonHref: '/subscribe?plan=starter',
+    buttonVariant: 'outline',
+    highlight: false,
   },
   {
-    name: 'Professional',
-    price: '₦150,000',
-    period: '/month',
-    description: 'Most popular for medium schools',
+    name: 'Standard',
+    subtitle: 'Best for growing schools',
+    price: '₦60,000',
+    period: '/term',
     features: [
-      'Up to 2,000 students',
-      'QR attendance',
-      'Advanced online classes',
-      'Fees management',
-      'Online exams',
-      'Parent portal',
-      'Student portal',
-      'Teacher portal',
-      'Priority support'
+      'Up to 500 Students',
+      'All Starter Features',
+      'Examinations & Report Cards',
+      'Finance Management',
+      'Priority Support',
     ],
-    cta: 'Start Free Trial',
-    popular: true
+    buttonText: 'Get Started',
+    buttonHref: '/subscribe?plan=basic-plus',
+    buttonVariant: 'blue',
+    highlight: false,
+  },
+  {
+    name: 'Premium',
+    subtitle: 'For large & established schools',
+    price: '₦120,000',
+    period: '/term',
+    features: [
+      'Unlimited Students',
+      'All Standard Features',
+      'Transport Management',
+      'Library Management',
+      'Advanced Reports',
+    ],
+    buttonText: 'Get Started',
+    buttonHref: '/subscribe?plan=premium',
+    buttonVariant: 'pink',
+    highlight: true,
+    badgeText: 'Most Popular',
   },
   {
     name: 'Enterprise',
-    price: 'Custom',
-    period: 'pricing',
-    description: 'For large school networks',
+    subtitle: 'Custom solution for institutions',
+    price: 'Custom Pricing',
+    period: '',
     features: [
-      'Unlimited students',
-      'All features included',
-      'Multi-branch support',
-      'Custom integrations',
-      'ID card generator',
-      'Bulk SMS/Email',
-      'School website builder',
-      'Payment gateway integration',
-      'Dedicated account manager'
+      'Unlimited Everything',
+      'Custom Integrations',
+      'Dedicated Support',
+      'Training & Onboarding',
+      'SLA & Security',
     ],
-    cta: 'Contact Sales',
-    popular: false
-  }
+    buttonText: 'Contact Us',
+    buttonHref: '#contact',
+    buttonVariant: 'outline',
+    highlight: false,
+  },
 ]
 
 export function Pricing() {
   return (
-    <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-      </div>
-
-      <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 animate-fade-in-up">
-            Transparent Pricing
+    <section id="pricing" className="py-24 bg-[#F8FAFC]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Section Header */}
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 inline-block mb-3">
+            SIMPLE, TRANSPARENT PRICING
+          </span>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight">
+            Choose the Perfect Plan for{' '}
+            <span className="bg-gradient-to-r from-pink-500 to-rose-600 bg-clip-text text-transparent">
+              Your School
+            </span>
           </h2>
-          <p className="text-lg text-foreground/60 max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            All plans include 30-day free trial. No credit card required.
-          </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((plan, idx) => (
+        {/* 4 Pricing Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+          {pricingPlans.map((plan) => (
             <div
-              key={idx}
-              className={`rounded-2xl border transition-all duration-500 animate-scale-in ${
-                plan.popular
-                  ? 'border-primary bg-card/70 backdrop-blur-xl shadow-lg hover:shadow-xl ring-1 ring-primary/20'
-                  : 'border-border/30 bg-card/50 backdrop-blur-md hover:border-primary/40 hover:shadow-lg hover:bg-card/70'
-              } group`}
-              style={{ animationDelay: `${idx * 0.12}s` }}
+              key={plan.name}
+              className={`relative bg-white rounded-2xl p-7 flex flex-col justify-between transition-all duration-300 ${
+                plan.highlight
+                  ? 'border-2 border-rose-500 shadow-2xl scale-[1.02] z-10'
+                  : 'border border-gray-200 shadow-sm hover:shadow-lg'
+              }`}
             >
-              {plan.popular && (
-                <div className="px-6 pt-6">
-                  <span className="inline-block px-3 py-1 rounded-lg bg-primary/10 text-xs font-semibold text-primary border border-primary/20">
-                    Most Popular
-                  </span>
+              {plan.badgeText && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[11px] font-extrabold px-4 py-1 rounded-full uppercase tracking-wider shadow-md">
+                  {plan.badgeText}
                 </div>
               )}
 
-              <div className="p-8">
-                <h3 className="text-xl font-bold text-foreground mb-1">{plan.name}</h3>
-                <p className="text-foreground/60 text-sm mb-6">{plan.description}</p>
-                
-                <div className="mb-8">
-                  <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                  <span className="text-foreground/60 text-xs ml-2">{plan.period}</span>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
+                <p className="text-xs text-gray-500 mb-6">{plan.subtitle}</p>
+
+                <div className="mb-6">
+                  <span className="text-3xl font-extrabold text-gray-900">{plan.price}</span>
+                  {plan.period && <span className="text-xs text-gray-500 font-medium ml-1">{plan.period}</span>}
                 </div>
 
-                {plan.cta === 'Contact Sales' ? (
-                  <Link
-                    href="#contact"
-                    className={`block w-full py-2.5 rounded-lg font-semibold mb-8 transition duration-300 transform text-center ${
-                      plan.popular
-                        ? 'bg-primary text-primary-foreground hover:shadow-lg hover:scale-105 active:scale-95'
-                        : 'border border-border/50 text-foreground hover:bg-muted/70 hover:scale-105 active:scale-95'
-                    }`}
-                  >
-                    {plan.cta}
-                  </Link>
-                ) : (
-                  <Link
-                    href={`/subscribe?plan=${PLAN_SLUG_BY_NAME[plan.name] || 'professional'}`}
-                    className={`block w-full py-2.5 rounded-lg font-semibold mb-8 transition duration-300 transform text-center ${
-                      plan.popular
-                        ? 'bg-primary text-primary-foreground hover:shadow-lg hover:scale-105 active:scale-95'
-                        : 'border border-border/50 text-foreground hover:bg-muted/70 hover:scale-105 active:scale-95'
-                    }`}
-                  >
-                    {plan.cta}
-                  </Link>
-                )}
-
-                <div className="space-y-3">
-                  {plan.features.map((feature, fidx) => (
-                    <div key={fidx} className="flex items-start gap-2">
-                      <Check size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-foreground/70 text-sm">{feature}</span>
+                <div className="space-y-3.5 mb-8">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-center gap-2.5 text-xs text-gray-700">
+                      <Check size={16} className="text-blue-600 shrink-0" />
+                      <span>{feature}</span>
                     </div>
                   ))}
                 </div>
               </div>
+
+              <div>
+                <Link
+                  href={plan.buttonHref}
+                  className={`w-full py-3 px-4 rounded-xl font-bold text-xs text-center transition-all block shadow-sm ${
+                    plan.buttonVariant === 'pink'
+                      ? 'bg-gradient-to-r from-red-500 via-rose-500 to-pink-600 text-white hover:opacity-95 shadow-red-500/25'
+                      : plan.buttonVariant === 'blue'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/25'
+                      : 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-300'
+                  }`}
+                >
+                  {plan.buttonText}
+                </Link>
+              </div>
             </div>
           ))}
         </div>
+
       </div>
     </section>
   )

@@ -1,122 +1,184 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
-import { useEffect, useState } from 'react'
-
-const rotatingWords = ['Schools', 'Teachers', 'Parents', 'Students']
+import Image from 'next/image'
+import { ArrowRight, Play, ShieldCheck, Zap, Headphones, Layout, TrendingUp, Clock, Globe, Users } from 'lucide-react'
 
 export function Hero() {
-  const [currentWord, setCurrentWord] = useState(0)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentWord((prev) => (prev + 1) % rotatingWords.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [])
-
   return (
-    <section className="pt-28 pb-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Trust Badge */}
-        <div className="flex justify-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/10 hover:border-primary/20 transition">
-            <span className="text-sm font-medium text-primary">Trusted by 500+ schools nationwide</span>
-          </div>
-        </div>
+    <section className="relative pt-32 pb-20 overflow-hidden bg-[#060B18] text-white">
+      {/* Subtle Background Glows */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-pink-600/15 rounded-full blur-3xl pointer-events-none" />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-16">
+          
+          {/* Left Hero Content */}
+          <div className="lg:col-span-7 space-y-8">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]">
+              Smarter Schools. <br />
+              <span className="bg-gradient-to-r from-sky-400 via-blue-400 to-sky-300 bg-clip-text text-transparent">
+                Stronger
+              </span>{' '}
+              <span className="bg-gradient-to-r from-pink-500 via-rose-400 to-purple-400 bg-clip-text text-transparent">
+                Futures.
+              </span>
+            </h1>
 
-        {/* Main Headline */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-foreground mb-6 leading-tight">
-            School Excellence
-            <br />
-            for Every{' '}
-            <span className="relative inline-block text-primary">
-              {rotatingWords.map((word, idx) => (
-                <span
-                  key={word}
-                  className={`inline-block transition-all duration-500 ease-in-out ${
-                    currentWord === idx
-                      ? 'opacity-100 scale-100'
-                      : 'opacity-0 scale-95 absolute left-0'
-                  }`}
-                >
-                  {word}
+            <p className="text-base sm:text-lg text-gray-300 max-w-xl leading-relaxed">
+              Ugbekun is an all-in-one school management system that simplifies school operations, enhances learning, and connects schools, teachers, parents and students.
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <Link
+                href="/subscribe?plan=starter"
+                className="px-7 py-3.5 bg-gradient-to-r from-red-500 via-rose-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold rounded-full shadow-lg shadow-red-500/30 hover:shadow-red-500/50 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 text-sm sm:text-base"
+              >
+                Get Started Free
+                <ArrowRight size={18} />
+              </Link>
+              <button 
+                onClick={() => {
+                  const demoSection = document.getElementById('why-us')
+                  demoSection?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="px-6 py-3.5 bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold rounded-full transition-all flex items-center gap-2 text-sm sm:text-base"
+              >
+                <span className="w-6 h-6 rounded-full border border-white/40 inline-flex items-center justify-center">
+                  <Play size={12} className="fill-white translate-x-[0.5px]" />
                 </span>
-              ))}
-            </span>
-          </h1>
-          <p className="text-lg text-foreground/60 max-w-2xl mx-auto leading-relaxed">
-            Comprehensive school management platform designed for modern educational institutions. Streamline operations and enhance learning experiences.
-          </p>
-        </div>
-
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-          <Link
-            href="/subscribe?plan=basic-plus"
-            className="px-8 py-3.5 bg-primary text-primary-foreground rounded-lg font-semibold hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2"
-          >
-            Start Free Trial
-            <ArrowRight size={18} />
-          </Link>
-          <button className="px-8 py-3.5 border border-border bg-card text-foreground rounded-lg font-semibold hover:bg-muted/50 transition-all duration-200">
-            View Demo
-          </button>
-        </div>
-
-        {/* Dashboard Preview */}
-        <div className="relative group">
-          {/* Soft gradient background */}
-          <div className="absolute -inset-0.5 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition duration-500" />
-
-          <div className="relative rounded-2xl border border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-300 p-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {/* KPI 1 */}
-              <div className="rounded-xl bg-muted/30 p-4 border border-border/30">
-                <p className="text-xs font-medium text-foreground/60 uppercase tracking-wide mb-2">Total Students</p>
-                <p className="text-3xl font-bold text-foreground mb-1">2,450</p>
-                <p className="text-xs text-primary font-medium">↑ 12% this month</p>
-              </div>
-
-              {/* KPI 2 */}
-              <div className="rounded-xl bg-muted/30 p-4 border border-border/30">
-                <p className="text-xs font-medium text-foreground/60 uppercase tracking-wide mb-2">Attendance Rate</p>
-                <p className="text-3xl font-bold text-foreground mb-1">94.2%</p>
-                <p className="text-xs text-primary font-medium">↑ 2.3% improvement</p>
-              </div>
-
-              {/* KPI 3 */}
-              <div className="rounded-xl bg-muted/30 p-4 border border-border/30">
-                <p className="text-xs font-medium text-foreground/60 uppercase tracking-wide mb-2">Active Classes</p>
-                <p className="text-3xl font-bold text-foreground mb-1">48</p>
-                <p className="text-xs text-primary font-medium">All running smoothly</p>
-              </div>
+                Watch Demo
+              </button>
             </div>
 
-            {/* Progress Section */}
-            <div className="border-t border-border/30 pt-6 space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-foreground/70">Fees Collected</span>
-                  <span className="text-sm font-bold text-foreground">87%</span>
-                </div>
-                <div className="h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: '87%' }} />
-                </div>
+            {/* Feature Badges */}
+            <div className="flex flex-wrap items-center gap-6 pt-4 text-xs sm:text-sm font-medium text-gray-300">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-sky-400" />
+                <span>Secure & Reliable</span>
               </div>
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-foreground/70">Parent Engagement</span>
-                  <span className="text-sm font-bold text-foreground">76%</span>
+              <div className="flex items-center gap-2">
+                <Zap size={18} className="text-pink-400" />
+                <span>Easy to Use</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Headphones size={18} className="text-purple-400" />
+                <span>24/7 Support</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Hero Image + Card */}
+          <div className="lg:col-span-5 relative">
+            <div className="relative mx-auto max-w-md lg:max-w-none">
+              {/* Outer decorative ring */}
+              <div className="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-blue-500 to-pink-500 opacity-30 blur-lg" />
+              
+              <div className="relative rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-[#0F172A]">
+                <Image
+                  src="/hero-students.png"
+                  alt="African students using tablet"
+                  width={600}
+                  height={600}
+                  className="w-full h-[420px] sm:h-[480px] object-cover object-center"
+                  priority
+                />
+              </div>
+
+              {/* Floating Stat Overlay Card */}
+              <div className="absolute -bottom-6 -left-4 sm:-left-8 bg-white/95 backdrop-blur-md border border-white/50 text-gray-900 rounded-2xl p-4 sm:p-5 shadow-2xl max-w-[280px] sm:max-w-[310px] animate-in fade-in slide-in-from-bottom-5 duration-700">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                    <Users size={20} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
+                      Trusted by
+                    </span>
+                    <div className="text-sm font-extrabold text-gray-900 leading-tight">
+                      500+ Schools <span className="font-semibold text-gray-600 block text-xs">Across Nigeria and Growing</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="h-2 bg-border rounded-full overflow-hidden">
-                  <div className="h-full bg-accent rounded-full transition-all duration-1000" style={{ width: '76%' }} />
+                {/* Sparkline chart SVG */}
+                <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+                  <svg className="w-full h-9 text-rose-500 overflow-visible" viewBox="0 0 200 40">
+                    <path
+                      d="M0 32 Q 30 25, 60 28 T 120 15 T 180 5 L 200 2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M0 32 Q 30 25, 60 28 T 120 15 T 180 5 L 200 2 L 200 40 L 0 40 Z"
+                      fill="url(#gradient-chart)"
+                      opacity="0.2"
+                    />
+                    <defs>
+                      <linearGradient id="gradient-chart" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#EF4444" />
+                        <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <circle cx="200" cy="2" r="4" fill="#EF4444" className="animate-ping" />
+                    <circle cx="200" cy="2" r="4" fill="#EF4444" />
+                  </svg>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 4 Bottom Feature Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 pt-8 border-t border-white/10">
+          
+          {/* Card 1 */}
+          <div className="bg-[#0B132B]/80 border border-white/10 hover:border-blue-500/40 rounded-2xl p-6 transition-all hover:bg-[#0B132B] group">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Layout size={22} className="text-blue-400" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">All-in-One Platform</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Manage academics, communication, finance, students & more in one secure platform.
+            </p>
+          </div>
+
+          {/* Card 2 */}
+          <div className="bg-[#0B132B]/80 border border-white/10 hover:border-pink-500/40 rounded-2xl p-6 transition-all hover:bg-[#0B132B] group">
+            <div className="w-12 h-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <TrendingUp size={22} className="text-pink-400" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">Improve Performance</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Real-time insights that help schools make smarter, data-driven decisions.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div className="bg-[#0B132B]/80 border border-white/10 hover:border-purple-500/40 rounded-2xl p-6 transition-all hover:bg-[#0B132B] group">
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Clock size={22} className="text-purple-400" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">Save Time & Money</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Automate tasks, reduce paperwork and focus on what matters most—student success.
+            </p>
+          </div>
+
+          {/* Card 4 */}
+          <div className="bg-[#0B132B]/80 border border-white/10 hover:border-cyan-500/40 rounded-2xl p-6 transition-all hover:bg-[#0B132B] group">
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Globe size={22} className="text-cyan-400" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-2">Accessible Anywhere</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Cloud-based system accessible on any device, anytime, anywhere.
+            </p>
+          </div>
+
         </div>
       </div>
     </section>
