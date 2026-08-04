@@ -11,23 +11,23 @@ interface LogoProps {
 
 export function UgbekunLogo({ className = '', size = 'md', href = '/' }: LogoProps) {
   const sizeClasses = {
-    sm: { icon: 'w-7 h-8', title: 'text-xs', subtitle: 'text-[7.5px]' },
-    md: { icon: 'w-10 h-11', title: 'text-xl', subtitle: 'text-[11px]' },
-    lg: { icon: 'w-13 h-14', title: 'text-2xl', subtitle: 'text-xs' },
+    sm: { icon: 'w-8 h-9', title: 'text-xs', subtitle: 'text-[8px]' },
+    md: { icon: 'w-11 h-12', title: 'text-xl', subtitle: 'text-[11px]' },
+    lg: { icon: 'w-14 h-16', title: 'text-2xl', subtitle: 'text-xs' },
   }
 
   const currentSize = sizeClasses[size]
 
   const LogoContent = (
-    <div className={`flex items-center gap-2.5 group ${className}`}>
-      {/* Standalone Gradient Benin Mask Icon (with graduation cap) sitting directly on page */}
+    <div className={`flex items-center gap-3 group ${className}`}>
+      {/* Bold Vibrant Standalone Gradient Benin Mask Icon */}
       <div className={`relative ${currentSize.icon} shrink-0 flex items-center justify-center`}>
         <Image
           src="/ugbekun-full-gradient-mask.png"
           alt="Ugbekun Benin Mask Icon"
-          width={64}
-          height={69}
-          className="w-full h-full object-contain filter drop-shadow-sm group-hover:brightness-110 transition-all"
+          width={80}
+          height={90}
+          className="w-full h-full object-contain filter brightness-125 contrast-125 drop-shadow-[0_2px_10px_rgba(56,189,248,0.45)] group-hover:brightness-140 transition-all"
         />
       </div>
 

@@ -1,26 +1,22 @@
+import { Suspense } from 'react'
 import { Metadata } from 'next'
-import { SignupForm } from '@/components/signup-form'
-import { LoginIllustration } from '@/components/login-illustration'
+import { SchoolSubscriptionForm } from '@/components/school-subscription-form'
 
 export const metadata: Metadata = {
-  title: 'Sign Up - Ugbekun',
+  title: 'Sign Up Your School - Ugbekun',
   description: 'Create a new Ugbekun school management account',
 }
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Left Side - Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <LoginIllustration />
-      </div>
-
-      {/* Right Side - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
-        <div className="w-full max-w-md">
-          <SignupForm />
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#050B1D] text-white">
+          <p className="text-sm">Loading registration form...</p>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <SchoolSubscriptionForm />
+    </Suspense>
   )
 }
