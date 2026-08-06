@@ -23,9 +23,9 @@ const getLoginTargetUrl = (): string => {
 }
 
 export async function POST(request: NextRequest) {
-  // 30-second timeout — prevents hanging on Render.com cold-start
+  // 90-second timeout — allows Render.com cold-start to complete
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30000)
+  const timeoutId = setTimeout(() => controller.abort(), 90000)
 
   try {
     const body = await request.json()

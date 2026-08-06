@@ -290,7 +290,7 @@ export const apiSlice = {
     const controller = hasAbort ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => {
       try { controller.abort(); } catch (e) {}
-    }, 25000) : null;
+    }, 90000) : null;
 
     try {
       const finalUrl = options?.cacheBust ? appendCacheBuster(url) : url;
@@ -332,7 +332,7 @@ export const apiSlice = {
     const controller = hasAbort ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => {
       try { controller.abort(); } catch (e) {}
-    }, 25000) : null;
+    }, 90000) : null;
 
     try {
       const headers = {

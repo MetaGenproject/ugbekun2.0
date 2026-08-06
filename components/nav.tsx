@@ -136,12 +136,16 @@ export function Navigation() {
             </Link>
             <button 
               type="button"
-              style={{ padding: '8px', color: '#fff', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '40px', minHeight: '40px' }}
-              onClick={() => setIsOpen(!isOpen)}
+              style={{ padding: '8px', color: '#fff', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px', touchAction: 'manipulation' }}
+              onClick={() => setIsOpen((prev) => !prev)}
+              onTouchEnd={(e) => {
+                e.preventDefault()
+                setIsOpen((prev) => !prev)
+              }}
               aria-label="Toggle navigation menu"
               aria-expanded={isOpen}
             >
-              {isOpen ? <X size={22} /> : <Menu size={22} />}
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
@@ -149,7 +153,7 @@ export function Navigation() {
         {/* Mobile Dropdown — outside the h-20 row so it isn't clipped */}
         {isOpen && (
           <div
-            style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: '#060B18', paddingTop: '16px', paddingBottom: '16px' }}
+            style={{ position: 'relative', zIndex: 100, borderTop: '1px solid rgba(255,255,255,0.08)', background: '#060B18', paddingTop: '16px', paddingBottom: '16px' }}
             className="lg:hidden"
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
