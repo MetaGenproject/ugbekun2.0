@@ -2,13 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Determine backend URL for server-side proxy calls
 const getBackendUrl = (): string => {
-  if (process.env.BACKEND_API_URL) {
-    return process.env.BACKEND_API_URL.replace(/\/$/, '')
-  }
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
-  }
-  return 'https://ugbekunsmp-backend.onrender.com'
+  const rawUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+  return rawUrl.replace(/\/$/, '').replace(/\/api$/, '')
 }
 
 const getLoginTargetUrl = (): string => {
@@ -55,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (userJson) {
-      res.cookies.set('ugbekun_user', encodeURIComponent(userJson), {
+      res.cookies.set('ugbekun_user', userJson, {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

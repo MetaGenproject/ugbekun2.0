@@ -585,18 +585,18 @@ export default function DashboardPage() {
 
             <div className="w-px h-7 bg-slate-200 mx-0.5 sm:mx-1" />
 
-            {/* User Profile Container (Mrs. Johnson) */}
+            {/* User Profile Container */}
             <div className="flex items-center gap-3">
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-rose-100 shrink-0 shadow-xs">
+              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-blue-100 shrink-0 shadow-xs">
                 <img 
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120" 
-                  alt="Mrs. Johnson"
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.username || 'User')}&background=2563eb&color=ffffff&bold=true`} 
+                  alt={user?.username || 'User'}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="hidden sm:block text-left">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">Mrs. Johnson</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">School Administrator</p>
+                <h4 className="text-xs font-bold text-slate-800 leading-tight">{user?.username || 'User'}</h4>
+                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">{user?.roleName || 'Portal User'}</p>
               </div>
             </div>
 

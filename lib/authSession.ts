@@ -59,7 +59,14 @@ export function getAuthSession(): AuthSession {
     }
     if (!userDataStr) {
       const match = document.cookie.match(/(?:^|; )ugbekun_user=([^;]*)/)
-      if (match) userDataStr = decodeURIComponent(match[1])
+      if (match) {
+        try {
+          const raw = decodeURIComponent(match[1])
+          userDataStr = raw.startsWith('%') ? decodeURIComponent(raw) : raw
+        } catch (e) {
+          userDataStr = null
+        }
+      }
     }
   }
 

@@ -29,6 +29,9 @@ export const endpoints = {
     login: typeof window !== 'undefined' ? '/api/auth/login' : `${BASE_URL}/auth/login`,
     register: `${BASE_URL}/auth/register`,
     me: `${BASE_URL}/auth/me`,
+    forgotPassword: `${BASE_URL}/auth/forgot-password`,
+    verifyResetToken: `${BASE_URL}/auth/verify-reset-token`,
+    resetPassword: `${BASE_URL}/auth/reset-password`,
   },
   health: `${BASE_URL}/health`,
   onboarding: {
@@ -226,6 +229,7 @@ export const endpoints = {
     events: `${BASE_URL}/teacher/events`,
   },
   student: {
+    dashboardOverview: `${BASE_URL}/student/dashboard-overview`,
     profile: `${BASE_URL}/student/profile`,
     attendance: `${BASE_URL}/student/attendance`,
     tasks: `${BASE_URL}/student/tasks`,

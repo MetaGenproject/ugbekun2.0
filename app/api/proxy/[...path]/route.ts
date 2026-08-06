@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const getBackendUrl = (): string => {
-  if (process.env.BACKEND_API_URL) {
-    return process.env.BACKEND_API_URL.replace(/\/$/, '')
-  }
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
-  }
-  return 'https://ugbekunsmp-backend.onrender.com'
+  const rawUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+  return rawUrl.replace(/\/$/, '').replace(/\/api$/, '')
 }
 
 async function handleProxyRequest(request: NextRequest, params: { path: string[] }) {
@@ -43,9 +38,9 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
     const response = await fetch(targetUrl, {
       method: request.method,
       headers: {
+        ...incomingHeaders,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        ...incomingHeaders,
       },
       body: body || undefined,
     })

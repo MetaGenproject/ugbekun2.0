@@ -60,13 +60,12 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist auth session
+      // Persist auth session (writes to localStorage, sessionStorage, document.cookie & window.name)
       setAuthSession(data.token, userToStore)
 
-      // Mobile / iOS Safari fallback redirect
-      const fallbackSession = encodeURIComponent(JSON.stringify({ token: data.token, user: userToStore }))
+      // Clean redirect to dashboard without bloated/insecure URL query parameters
       if (typeof window !== 'undefined') {
-        window.location.assign(`/dashboard?auth=${fallbackSession}`)
+        window.location.assign('/dashboard')
       }
     } catch (err: any) {
       console.error('Login error:', err)
