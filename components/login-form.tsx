@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Eye, EyeOff, AlertCircle, Lock, User, ShieldCheck } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Eye, EyeOff, AlertCircle, Lock, User } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { setAuthSession } from '@/lib/authSession'
 
 export function LoginForm() {
+  const router = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -63,10 +65,8 @@ export function LoginForm() {
       // Persist auth session (writes to localStorage, sessionStorage, document.cookie & window.name)
       setAuthSession(data.token, userToStore)
 
-      // Clean redirect to dashboard without bloated/insecure URL query parameters
-      if (typeof window !== 'undefined') {
-        window.location.assign('/dashboard')
-      }
+      // Client-side navigation preserves memorySession (JS context stays alive — critical for old browsers)
+      router.push('/dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
       

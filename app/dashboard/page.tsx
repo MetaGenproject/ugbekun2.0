@@ -354,7 +354,17 @@ export default function DashboardPage() {
     )
   }
 
-  if (!user) return null
+  if (!user) {
+    // No session found — redirect to login
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login')
+    }
+    return (
+      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#94a3b8', fontSize: '14px' }}>Redirecting to login…</p>
+      </div>
+    )
+  }
 
   const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl
   const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || 'GREENFIELD INTERNATIONAL SCHOOL'
