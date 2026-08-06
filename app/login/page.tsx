@@ -62,6 +62,7 @@ export default function LoginPage() {
           </p>
           <Link
             href="/subscribe?plan=starter"
+            prefetch={false}
             className="inline-flex items-center gap-4 px-6 py-3.5 bg-gradient-to-r from-red-500/15 via-rose-500/15 to-pink-500/15 border border-pink-500/50 hover:border-pink-500/80 rounded-2xl text-white transition-all transform hover:-translate-y-0.5 shadow-xl group max-w-md w-full justify-center"
           >
             <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">

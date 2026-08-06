@@ -111,12 +111,14 @@ export function Navigation() {
           <div className="hidden lg:flex items-center space-x-3">
             <Link 
               href="/login" 
+              prefetch={false}
               style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', textDecoration: 'none', display: 'inline-block' }}
             >
               Log in
             </Link>
             <Link 
               href="/subscribe?plan=starter" 
+              prefetch={false}
               style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'linear-gradient(to right, #ef4444, #e11d48)', borderRadius: '8px', textDecoration: 'none', display: 'inline-block' }}
             >
               Get Started Free
@@ -127,6 +129,7 @@ export function Navigation() {
           <div className="flex items-center lg:hidden" style={{ gap: '10px' }}>
             <Link 
               href="/login" 
+              prefetch={false}
               style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', textDecoration: 'none', display: 'inline-block', whiteSpace: 'nowrap' }}
             >
               Sign In
@@ -150,13 +153,14 @@ export function Navigation() {
             className="lg:hidden"
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <Link href="/" onClick={() => setIsOpen(false)} style={{ display: 'block', padding: '10px 12px', fontSize: '14px', color: '#fff', fontWeight: 500, borderRadius: '8px', textDecoration: 'none' }}>Home</Link>
+              <Link href="/" prefetch={false} onClick={() => setIsOpen(false)} style={{ display: 'block', padding: '10px 12px', fontSize: '14px', color: '#fff', fontWeight: 500, borderRadius: '8px', textDecoration: 'none' }}>Home</Link>
               <Link href="#features" onClick={() => setIsOpen(false)} style={{ display: 'block', padding: '10px 12px', fontSize: '14px', color: '#d1d5db', borderRadius: '8px', textDecoration: 'none' }}>Features</Link>
               <Link href="#pricing" onClick={() => setIsOpen(false)} style={{ display: 'block', padding: '10px 12px', fontSize: '14px', color: '#d1d5db', borderRadius: '8px', textDecoration: 'none' }}>Pricing</Link>
               <Link href="#about" onClick={() => setIsOpen(false)} style={{ display: 'block', padding: '10px 12px', fontSize: '14px', color: '#d1d5db', borderRadius: '8px', textDecoration: 'none' }}>About Us</Link>
               <div style={{ paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <Link
                   href="/login"
+                  prefetch={false}
                   onClick={() => setIsOpen(false)}
                   style={{ display: 'block', textAlign: 'center', padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', textDecoration: 'none' }}
                 >
@@ -164,6 +168,7 @@ export function Navigation() {
                 </Link>
                 <Link
                   href="/subscribe?plan=starter"
+                  prefetch={false}
                   onClick={() => setIsOpen(false)}
                   style={{ display: 'block', textAlign: 'center', padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'linear-gradient(to right, #ef4444, #e11d48)', borderRadius: '8px', textDecoration: 'none' }}
                 >
