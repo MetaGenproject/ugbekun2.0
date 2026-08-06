@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Production backend URL — Render.com deployment
+const PRODUCTION_BACKEND = 'https://ugbekunsmp-backend.onrender.com'
+
 const getBackendUrl = (): string => {
-  const rawUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
-  return rawUrl.replace(/\/$/, '').replace(/\/api$/, '')
+  // Explicit env override takes priority
+  if (process.env.BACKEND_API_URL) {
+    return process.env.BACKEND_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
+  }
+  // NEXT_PUBLIC_API_URL — skip if it points to localhost (dev only)
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
+  }
+  // Production Render.com fallback
+  return PRODUCTION_BACKEND
 }
 
 async function handleProxyRequest(request: NextRequest, params: { path: string[] }) {
