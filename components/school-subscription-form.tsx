@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { 
   Building2, 
   ShieldCheck, 
@@ -47,8 +47,17 @@ function fileToBase64(file: File): Promise<string> {
 
 export function SchoolSubscriptionForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const planSlug = resolvePlanSlug(searchParams.get('plan'))
+  const [planSlug, setPlanSlug] = useState<string>('starter')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const rawPlan = params.get('plan')
+      if (rawPlan) {
+        setPlanSlug(resolvePlanSlug(rawPlan))
+      }
+    }
+  }, [])
 
   const [summary, setSummary] = useState<PlanSummary | null>(null)
   const [loadingSummary, setLoadingSummary] = useState(true)

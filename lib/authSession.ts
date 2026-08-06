@@ -29,19 +29,32 @@ let memorySession: AuthSession = {
 function parseStoredUser(userDataStr: string | null): AuthUser | null {
   if (!userDataStr) return null
 
+  let str = userDataStr
   try {
-    const parsed = JSON.parse(userDataStr)
-    if (!parsed || typeof parsed !== 'object' || !parsed.id || !parsed.role) {
-      return null
+    if (str.includes('%')) {
+      str = decodeURIComponent(str)
     }
-    return parsed as AuthUser
+    if (str.includes('%')) {
+      str = decodeURIComponent(str)
+    }
   } catch (e) {
-    return null
+    // ignore decode error
   }
+
+  try {
+    const parsed = JSON.parse(str)
+    if (parsed && typeof parsed === 'object' && parsed.id && parsed.role) {
+      return parsed as AuthUser
+    }
+  } catch (e) {
+    // ignore parse error
+  }
+
+  return null
 }
 
 export function getAuthSession(): AuthSession {
-  if (memorySession.token || memorySession.user) {
+  if (memorySession.token && memorySession.user) {
     return {
       token: memorySession.token,
       user: memorySession.user,
@@ -51,32 +64,30 @@ export function getAuthSession(): AuthSession {
   let token = safeStorage.getItem('ugbekun_token')
   let userDataStr = safeStorage.getItem('ugbekun_user')
 
-  // Cookie fallback (matching myeduride pattern for legacy mobile browsers)
   if (typeof document !== 'undefined') {
     if (!token) {
       const match = document.cookie.match(/(?:^|; )ugbekun_token=([^;]*)/)
-      if (match) token = decodeURIComponent(match[1])
+      if (match) {
+        try {
+          token = decodeURIComponent(match[1])
+        } catch (e) {}
+      }
     }
     if (!userDataStr) {
       const match = document.cookie.match(/(?:^|; )ugbekun_user=([^;]*)/)
       if (match) {
-        try {
-          const raw = decodeURIComponent(match[1])
-          userDataStr = raw.startsWith('%') ? decodeURIComponent(raw) : raw
-        } catch (e) {
-          userDataStr = null
-        }
+        userDataStr = match[1]
       }
     }
   }
 
   const user = parseStoredUser(userDataStr)
 
-  if (token || user) {
+  if (token && user) {
     memorySession = { token, user }
   }
 
-  return memorySession
+  return { token: token || null, user }
 }
 
 export function setAuthSession(token: string, user: AuthUser): void {
