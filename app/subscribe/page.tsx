@@ -1,14 +1,7 @@
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+'use client'
 
-import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
-
-// Dynamically import to avoid SSR + useSearchParams suspend issues on old mobile browsers
-const SchoolSubscriptionForm = dynamic(
-  () => import('@/components/school-subscription-form').then((m) => ({ default: m.SchoolSubscriptionForm })),
-  { ssr: false }
-)
+import { SchoolSubscriptionForm } from '@/components/school-subscription-form'
 
 function SubscribeFallback() {
   return (
