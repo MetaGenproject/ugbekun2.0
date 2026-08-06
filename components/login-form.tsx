@@ -169,14 +169,32 @@ export function LoginForm() {
           </div>
         </div>
 
-        {/* Primary Gradient Sign In Button */}
+        {/* Primary Sign In Button — inline styles for old browser compat */}
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-rose-500 hover:from-blue-700 hover:to-rose-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            padding: '14px 16px',
+            background: isLoading
+              ? 'rgba(99,102,241,0.5)'
+              : 'linear-gradient(to right, #2563eb, #4f46e5, #f43f5e)',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '13px',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            opacity: isLoading ? 0.65 : 1,
+            boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
+          }}
         >
           {isLoading ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
           ) : (
             <>
               <Lock size={14} />
@@ -184,6 +202,7 @@ export function LoginForm() {
             </>
           )}
         </button>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </form>
 
       {/* Divider */}

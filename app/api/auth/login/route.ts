@@ -12,6 +12,10 @@ const getLoginTargetUrl = (): string => {
 }
 
 export async function POST(request: NextRequest) {
+  // 30-second timeout — prevents hanging on Render.com cold-start
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
+
   try {
     const body = await request.json()
     const targetUrl = getLoginTargetUrl()
@@ -23,7 +27,10 @@ export async function POST(request: NextRequest) {
         'Accept': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     const data = await response.json().catch(() => null)
 
@@ -34,7 +41,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create successful response with same-origin session cookies for 100% mobile browser compatibility
+    // Create successful response with same-origin session cookies for mobile browser compatibility
     const res = NextResponse.json(data)
     const token = data.token
     const userJson = JSON.stringify(data.user)
@@ -50,6 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (userJson) {
+      // Store raw JSON — NextResponse.cookies already URL-encodes internally
       res.cookies.set('ugbekun_user', userJson, {
         httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
@@ -61,9 +69,17 @@ export async function POST(request: NextRequest) {
 
     return res
   } catch (err: any) {
+    clearTimeout(timeoutId)
+
+    const isTimeout = err?.name === 'AbortError' || err?.code === 'UND_ERR_CONNECT_TIMEOUT'
     console.error('[Same-Origin Auth Proxy Error]:', err)
+
     return NextResponse.json(
-      { message: 'Network connection error. Server is starting up or unreachable.' },
+      {
+        message: isTimeout
+          ? 'The server is starting up (cold start). Please wait a moment and try again.'
+          : 'Network connection error. Server is starting up or unreachable.',
+      },
       { status: 503 }
     )
   }
