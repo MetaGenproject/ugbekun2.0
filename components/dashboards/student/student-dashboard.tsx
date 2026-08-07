@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { 
   BookOpen, 
   CheckSquare, 
@@ -20,7 +21,26 @@ import {
   Phone,
   Mic,
   Square,
-  Upload
+  Upload,
+  Trophy,
+  ShieldCheck,
+  Smile,
+  DollarSign,
+  Bus,
+  Bot,
+  MessageSquare,
+  Bell,
+  ChevronRight,
+  ArrowRight,
+  Star,
+  Award,
+  Sparkles,
+  CheckCircle2,
+  MapPin,
+  Send,
+  HelpCircle,
+  ExternalLink,
+  Volume2
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
@@ -37,6 +57,7 @@ interface DashboardProps {
     role: number
   }
   activeSection: string
+  onNavigate?: (section: string) => void
 }
 
 interface StudentProfile {
@@ -136,7 +157,65 @@ interface GradeData {
   assessment?: any
 }
 
-export function StudentDashboard({ user, activeSection }: DashboardProps) {
+function getOrdinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+// Donut Chart helper component
+function SVGDonutChart({ 
+  percentage, 
+  centerLabel, 
+  color = '#10B981', 
+  bgTrack = '#E2E8F0',
+  size = 110,
+  strokeWidth = 10
+}: { 
+  percentage: number; 
+  centerLabel: string; 
+  color?: string; 
+  bgTrack?: string;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (percentage / 100) * circumference
+
+  return (
+    <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={bgTrack}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="transparent"
+          className="transition-all duration-1000 ease-out"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-1">
+        <span className="text-lg font-black text-slate-900 leading-none">{percentage}%</span>
+        <span className="text-[10px] font-bold text-slate-400 mt-0.5 leading-tight">{centerLabel}</span>
+      </div>
+    </div>
+  )
+}
+
+export function StudentDashboard({ user, activeSection, onNavigate }: DashboardProps) {
   const [profile, setProfile] = useState<StudentProfile | null>(null)
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [tasks, setTasks] = useState<TaskData | null>(null)
@@ -166,7 +245,7 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
       const result = await res.json()
       if (result.success && result.photoUrl) {
         setProfile((prev) => prev ? { ...prev, photo: result.photoUrl } : null)
-        alert('Profile photo uploaded to Cloudinary & active on ID cards, report cards, and student portal!')
+        alert('Profile photo uploaded successfully!')
       } else {
         alert(result.message || 'Failed to upload photo.')
       }
@@ -221,14 +300,14 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
             const updated = [...prev]
             const idx = updated.findIndex(ans => ans.questionId === questionId)
             if (idx >= 0) {
-              updated[idx] = { ...updated[idx], fileUrl: data.url }
+              updated[idx] = { ...updated[idx], fileUrl: data.url, fileName: file.name }
             } else {
-              updated.push({ questionId, fileUrl: data.url })
+              updated.push({ questionId, fileUrl: data.url, fileName: file.name })
             }
             return updated
           })
         } else {
-          alert('Upload failed: ' + (data.message || 'Unknown error'))
+          alert('Upload failed.')
         }
       }
     } catch (err) {
@@ -243,15 +322,16 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
     }
   }
 
-  // Audio recording helpers
   const startRecording = async (questionId: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       const chunks: Blob[] = []
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data)
       }
+
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' })
         setUploadingQuestionIds(prev => {
@@ -265,6 +345,7 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
           reader.onloadend = async () => {
             const resultStr = reader.result as string
             const base64 = resultStr.split(',')[1]
+
             const response = await fetch(endpoints.common.upload, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -346,25 +427,23 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
         }
       } else {
         alert(data.message || 'Failed to start exam.')
-        // Refresh tasks list
         const tasksRes = await apiSlice.get<{ success: boolean } & TaskData>(endpoints.student.tasks)
         if (tasksRes.success) setTasks(tasksRes)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      alert('Error starting exam attempt.')
+      alert('Error initiating exam session.')
     }
   }
 
-  const handleAssessmentSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
+  const handleAssessmentSubmit = async () => {
     if (!activeAssessment || !activeAssessmentType) return
     try {
+      const token = safeStorage.getItem('ugbekun_token')
       const url = activeAssessmentType === 'homework'
         ? endpoints.student.submitHomework(activeAssessment.id)
         : endpoints.student.submitOnlineExam(activeAssessment.id)
-      
-      const token = safeStorage.getItem('ugbekun_token')
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -373,20 +452,24 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
         },
         body: JSON.stringify({ answers: assessmentAnswers })
       })
+
       const data = await response.json()
       if (data.success) {
-        alert('Assessment submitted successfully!')
+        alert(data.message || 'Assessment submitted successfully!')
         setActiveAssessment(null)
         setActiveAssessmentType(null)
         setAssessmentAnswers([])
         setExamTimeRemaining(null)
-        // Refresh tasks list
+
         const tasksRes = await apiSlice.get<{ success: boolean } & TaskData>(endpoints.student.tasks)
         if (tasksRes.success) setTasks(tasksRes)
+
+        const gradesRes = await apiSlice.get<{ success: boolean } & GradeData>(endpoints.student.grades)
+        if (gradesRes.success) setGrades(gradesRes)
       } else {
-        alert(data.message || 'Submission failed.')
+        alert(data.message || 'Failed to submit assessment.')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
       alert('Error submitting assessment.')
     }
@@ -458,7 +541,7 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <Loader2 size={36} className="animate-spin text-blue-600" />
-        <p className="text-slate-500 font-semibold text-sm animate-pulse">Syncing school portal workspace...</p>
+        <p className="text-slate-500 font-semibold text-sm animate-pulse">Syncing student portal workspace...</p>
       </div>
     )
   }
@@ -507,1014 +590,806 @@ export function StudentDashboard({ user, activeSection }: DashboardProps) {
     }
   }
 
-  // Helper stats computed from profile/attendance
-  const gpa = grades ? Number(((grades.overallAverage / 100) * 4).toFixed(2)) : 0.00
-  const stats = [
-    { label: 'Enrolled Courses', value: `${profile.subjects.length} Subjects`, icon: BookOpen, color: 'text-violet-600 bg-violet-50 border-violet-100' },
-    { label: 'Attendance Counter', value: `${attendance?.percentage || 100}% Present`, icon: CheckSquare, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-    { label: 'Grade Average', value: `${grades?.overallAverage || 0}% (${gpa} GPA)`, icon: TrendingUp, color: 'text-blue-600 bg-blue-50 border-blue-100' },
-    { label: 'Form Room Count', value: `${profile.fellowStudentsCount} Students`, icon: Calendar, color: 'text-amber-600 bg-amber-50 border-amber-100' }
+  // Render Sub-Views based on active navigation tab
+  if (activeSection === 'academics' || activeSection === 'points-hub') {
+    return <PointsHub />
+  }
+  if (activeSection === 'media') {
+    return <StudentMediaLibrary />
+  }
+  if (activeSection === 'liveRooms') {
+    return <StudentLiveClassrooms user={user} />
+  }
+  if (activeSection === 'calendar') {
+    return <SchoolCalendar />
+  }
+
+  // Derived values for the overview cards
+  const studentName = `${profile.firstName} ${profile.lastName}`
+  const firstName = profile.firstName
+  const userRankText = grades?.rank ? `${grades.rank}${getOrdinal(grades.rank)}` : '8th'
+  const totalClass = grades?.totalClassStudents || profile.fellowStudentsCount || 32
+  const overallAvg = grades?.overallAverage ? `${grades.overallAverage}%` : '78%'
+  const attendancePct = attendance?.percentage ? `${attendance.percentage}%` : '92%'
+
+  // Mockup Timetable rows
+  const todayTimetable = [
+    { time: '08:00 AM - 08:40 AM', subject: 'Mathematics', teacher: 'Mr. Adewale', room: 'Room 12' },
+    { time: '08:45 AM - 09:25 AM', subject: 'English Language', teacher: 'Mrs. Johnson', room: 'Room 8' },
+    { time: '09:30 AM - 10:10 AM', subject: 'Basic Science', teacher: 'Mr. Okoro', room: 'Room 15' },
+    { time: '10:30 AM - 11:10 AM', subject: 'Social Studies', teacher: 'Mrs. Ibrahim', room: 'Room 9' },
+    { time: '11:15 AM - 11:55 AM', subject: 'Computer Studies', teacher: 'Mr. Emmanuel', room: 'ICT Lab' },
   ]
 
-  // Render Sub-Views based on active navigation tab
+  // Subject Performance chart data
+  const subjectScores = [
+    { subject: 'Mathematics', score: 82, color: 'bg-blue-600' },
+    { subject: 'English Lang.', score: 75, color: 'bg-blue-600' },
+    { subject: 'Basic Science', score: 79, color: 'bg-purple-600' },
+    { subject: 'Social Studies', score: 72, color: 'bg-amber-500' },
+    { subject: 'Computer Studies', score: 88, color: 'bg-cyan-500' },
+    { subject: 'Civic Education', score: 70, color: 'bg-rose-500' },
+  ]
+
+  // Default overview dashboard (activeSection === 'overview' or 'dashboard' or default)
   return (
-    <div className="space-y-8">
-      {/* School Header */}
-      <SchoolHeader />
+    <div className="space-y-6 text-slate-900 pb-12">
 
-      {/* Profile Welcome Banner */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-[#003da5] via-[#0063a6] to-[#009ca6] p-6 md:p-8 shadow-md overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-40" />
-        </div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="relative group shrink-0">
-              {profile.photo ? (
-                <img
-                  src={profile.photo}
-                  alt={`${profile.firstName} ${profile.lastName}`}
-                  className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover border-2 border-white/40 shadow-xl"
-                />
-              ) : (
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white/20 border-2 border-white/40 shadow-xl flex items-center justify-center font-black text-white text-xl uppercase">
-                  {profile.firstName.substring(0, 1)}{profile.lastName.substring(0, 1)}
-                </div>
-              )}
-              <label className="absolute -bottom-1 -right-1 bg-white text-slate-800 p-1.5 rounded-full shadow-md cursor-pointer hover:bg-slate-100 transition" title="Upload Student Photo to Cloudinary">
-                {uploadingPhoto ? <Loader2 size={14} className="animate-spin text-blue-600" /> : <Upload size={14} />}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handlePhotoUpload(e.target.files[0])
-                    }
-                  }}
-                  className="hidden"
-                />
-              </label>
+      {/* Main Grid: Left Main Dashboard Content (col-8/9) + Right Widget Sidebar (col-4/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left 8/9 Columns: Main Dashboard Content */}
+        <div className="lg:col-span-8 space-y-6">
+          
+          {/* 1. Top Hero Welcome Banner */}
+          <div className="relative rounded-3xl bg-gradient-to-r from-[#070D22] via-[#0E1A42] to-[#12245A] p-6 sm:p-8 text-white shadow-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            
+            {/* Background Campus Image Overlay */}
+            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+              <Image
+                src="/login-bg.png"
+                alt="School Campus"
+                fill
+                className="object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#070D22] via-transparent to-[#12245A]" />
             </div>
 
-            <div className="space-y-2">
-              <span className="px-2.5 py-1 text-xs font-bold text-white bg-white/20 rounded-full border border-white/30 shadow-sm inline-block">
-                {profile.branchName || 'Academy Workspace'}
-              </span>
-              <h1 className="text-3xl font-extrabold text-white tracking-tight">
-                Welcome Back, {profile.firstName} {profile.lastName}
-              </h1>
-              <p className="text-white/80 text-sm max-w-xl font-medium">
-                Room: <span className="text-white font-bold">{profile.className || 'Not Enrolled'} ({profile.sectionName || 'N/A'})</span> | Reg: <span className="text-white font-bold">{profile.registerNo || 'N/A'}</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Render tab-specific sections */}
-      {activeSection === 'overview' && (
-        <div className="space-y-8">
-          {/* Stats Grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {stats.map((stat, idx) => {
-              const IconComp = stat.icon
-              return (
-                <div 
-                  key={idx} 
-                  className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm hover:shadow-md transition duration-300 flex items-center justify-between group"
-                >
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{stat.label}</p>
-                    <p className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{stat.value}</p>
-                  </div>
-                  <div className={`p-3.5 rounded-xl border ${stat.color} transition duration-300 group-hover:scale-105 shadow-sm`}>
-                    <IconComp size={20} className="stroke-[2.5]" />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Subject Roster */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm lg:col-span-2">
-              <div className="flex items-center gap-2">
-                <BookOpen size={18} className="text-blue-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Enrolled Subjects</h3>
-              </div>
-              {profile.subjects.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-400">No subjects currently assigned to this classroom.</p>
-              ) : (
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {profile.subjects.map((sub, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 hover:bg-slate-100/50 transition flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{sub.name}</p>
-                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{sub.code} ({sub.type})</span>
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center font-bold text-blue-600 text-xs">
-                        {sub.name.substring(0, 2)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Form Teacher Information */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2">
-                <GraduationCap size={18} className="text-blue-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Form Teacher</h3>
-              </div>
-              {profile.formTeacher ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center font-black text-blue-700 uppercase">
-                      {profile.formTeacher.name.substring(0, 2)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-800">{profile.formTeacher.name}</p>
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Class Manager</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    {profile.formTeacher.email && (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                        <Mail size={14} className="text-slate-400" />
-                        <span className="truncate">{profile.formTeacher.email}</span>
-                      </div>
-                    )}
-                    {profile.formTeacher.phone && (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                        <Phone size={14} className="text-slate-400" />
-                        <span>{profile.formTeacher.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm font-semibold text-slate-400">No form teacher allocated to this classroom yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeSection === 'assignments' && (
-        <div className="space-y-6">
-          {/* Assessment Workspace Drawer / Panel */}
-          {activeAssessment && (
-            <div className="rounded-xl border border-blue-200 bg-white p-6 space-y-6 shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900">
-                    Taking Assessment: {activeAssessment.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Subject: {activeAssessment.subjectName} • Type: {activeAssessmentType === 'homework' ? 'Homework' : 'Exam'}</p>
-                  {activeAssessmentType === 'online_exam' && examTimeRemaining !== null && (
-                    <div className="mt-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-xs font-bold text-rose-700 inline-flex items-center gap-1.5 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                      Time Remaining: {Math.floor(examTimeRemaining / 60)}m {examTimeRemaining % 60}s
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveAssessment(null)
-                    setActiveAssessmentType(null)
-                    setAssessmentAnswers([])
-                    setExamTimeRemaining(null)
-                  }}
-                  className="text-xs font-bold text-slate-400 hover:text-slate-600"
-                >
-                  Cancel & Exit
-                </button>
-              </div>
-
-              <form onSubmit={handleAssessmentSubmit} className="space-y-6">
-                {(activeAssessment.questions || []).map((q: any, qIdx: number) => {
-                  const studentAns = assessmentAnswers.find(ans => ans.questionId === q.id)
-                  const isUploading = uploadingQuestionIds.has(q.id)
-
-                  return (
-                    <div key={q.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="text-sm font-extrabold text-slate-800">
-                          Question {qIdx + 1}: {q.questionText}
-                        </span>
-                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-md text-[9px] font-bold">
-                          {q.points || 1} Points
-                        </span>
-                      </div>
-
-                      {/* Render based on question type */}
-                      {q.type === 'MCQ' && (
-                        <div className="grid sm:grid-cols-2 gap-2">
-                          {(q.options || []).map((opt: string, oIdx: number) => {
-                            const isChecked = studentAns?.answerText === opt
-                            return (
-                              <label
-                                key={oIdx}
-                                className={`flex items-center gap-2.5 p-3 rounded-lg border cursor-pointer transition ${isChecked ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`question-${q.id}`}
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setAssessmentAnswers(prev => {
-                                      const updated = [...prev]
-                                      const idx = updated.findIndex(ans => ans.questionId === q.id)
-                                      if (idx >= 0) {
-                                        updated[idx] = { ...updated[idx], answerText: opt }
-                                      } else {
-                                        updated.push({ questionId: q.id, answerText: opt })
-                                      }
-                                      return updated
-                                    })
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
-                                />
-                                <span className="text-xs font-semibold text-slate-700">{opt}</span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {q.type === 'TF' && (
-                        <div className="flex gap-4">
-                          {['True', 'False'].map((opt) => {
-                            const isChecked = studentAns?.answerText === opt
-                            return (
-                              <label
-                                key={opt}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer transition ${isChecked ? 'bg-blue-50 border-blue-300 font-bold' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`question-${q.id}`}
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setAssessmentAnswers(prev => {
-                                      const updated = [...prev]
-                                      const idx = updated.findIndex(ans => ans.questionId === q.id)
-                                      if (idx >= 0) {
-                                        updated[idx] = { ...updated[idx], answerText: opt }
-                                      } else {
-                                        updated.push({ questionId: q.id, answerText: opt })
-                                      }
-                                      return updated
-                                    })
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
-                                />
-                                <span className="text-xs font-semibold text-slate-700">{opt}</span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {q.type === 'DOCUMENT' && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="file"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) handleFileUpload(q.id, file)
-                              }}
-                              className="text-xs font-semibold bg-white border border-slate-200 rounded-lg p-2 focus:outline-none"
-                            />
-                            {isUploading && (
-                              <Loader2 className="animate-spin text-blue-600" size={16} />
-                            )}
-                          </div>
-                          {studentAns?.fileUrl && (
-                            <p className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                              ✓ Document ready: <a href={studentAns.fileUrl} target="_blank" rel="noreferrer" className="underline">View file</a>
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {q.type === 'AUDIO' && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            {recordingQuestionId === q.id ? (
-                              <button
-                                type="button"
-                                onClick={stopRecording}
-                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
-                              >
-                                <Square size={12} /> Stop Recording
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => startRecording(q.id)}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
-                              >
-                                <Mic size={12} /> Start Recording
-                              </button>
-                            )}
-
-                            {isUploading && (
-                              <Loader2 className="animate-spin text-blue-600" size={16} />
-                            )}
-                          </div>
-                          {studentAns?.audioUrl && (
-                            <div className="space-y-1">
-                              <p className="text-xs text-emerald-600 font-bold">✓ Audio uploaded successfully:</p>
-                              <audio controls src={studentAns.audioUrl} className="h-8 w-full max-w-xs" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-
-                <button
-                  type="submit"
-                  disabled={uploadingQuestionIds.size > 0}
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-lg shadow-sm transition disabled:opacity-50"
-                >
-                  Submit Assessment Answers
-                </button>
-              </form>
-            </div>
-          )}
-
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Study Materials & Assignments */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm lg:col-span-1">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-blue-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Study Materials & Notes</h3>
-              </div>
-              {tasks?.notes.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-400">No study materials uploaded for your class yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {tasks?.notes.map((note) => (
-                    <div key={note.id} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold text-slate-800">{note.title}</p>
-                        <p className="text-xs font-semibold text-slate-500">{note.description}</p>
-                        <div className="flex items-center gap-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider pt-1">
-                          <span>By {note.teacherName}</span>
-                          <span>•</span>
-                          <span>{new Date(note.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => window.open(`${endpoints.health.replace('/health', '')}/uploads/${note.encName}`, '_blank')}
-                        className="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 transition shadow-sm"
-                        title="Download material file"
-                      >
-                        <Download size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Online Assessments Workspace */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm lg:col-span-1">
-              <div className="flex items-center gap-2">
-                <Activity size={18} className="text-violet-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Online Exams</h3>
-              </div>
-              {tasks?.onlineExams.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-400">No online exams allocated to your class yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {tasks?.onlineExams.map((ex) => {
-                    const isUpcoming = ex.examDate ? new Date(ex.examDate).getTime() > Date.now() : false
-                    return (
-                      <div key={ex.id} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{ex.title}</p>
-                          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                            {ex.subjectName} {(ex.duration && ex.duration > 0) ? `• ${ex.duration} Mins` : ''}
-                          </p>
-                          {ex.examDate && (
-                            <span className="text-[10px] text-violet-600 font-bold block pt-1">
-                              Scheduled: {new Date(ex.examDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                            </span>
-                          )}
-                          {ex.submitted && ex.submittedAt && (
-                            <span className="text-[10px] text-slate-400 font-bold block pt-1 uppercase">
-                              Submitted on {new Date(ex.submittedAt).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          {ex.submitted ? (
-                            <div className="text-right">
-                              <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 rounded-full inline-block mb-1">
-                                Completed
-                              </span>
-                              <p className="text-sm font-black text-slate-800">{ex.score} Marks</p>
-                            </div>
-                          ) : isUpcoming ? (
-                            <span className="px-2.5 py-1 text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg inline-block">
-                              Locked
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleStartExamAttempt(ex)}
-                              className="px-2.5 py-1 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg inline-block transition cursor-pointer"
-                            >
-                              Take Exam
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Homework Assignments Workspace */}
-            <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm lg:col-span-1">
-              <div className="flex items-center gap-2">
-                <CheckSquare size={18} className="text-blue-600" />
-                <h3 className="text-base font-extrabold text-slate-900">Homework Assignments</h3>
-              </div>
-              {tasks?.homeworks.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-400">No homework assignments allocated to your class yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {tasks?.homeworks.map((hw) => (
-                    <div key={hw.id} className="p-4 rounded-xl border border-slate-200/60 bg-slate-50 flex items-center justify-between gap-4">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold text-slate-800">{hw.title}</p>
-                        <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{hw.subjectName}</p>
-                        {hw.submitted && hw.submittedAt ? (
-                          <span className="text-[10px] text-slate-400 font-bold block pt-1 uppercase">
-                            Submitted: {new Date(hw.submittedAt).toLocaleDateString()}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-red-500 font-bold block pt-1 uppercase">
-                            Due: {new Date(hw.dueDate).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        {hw.submitted ? (
-                          <div className="text-right">
-                            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-700 rounded-full inline-block mb-1">
-                              Submitted
-                            </span>
-                            <p className="text-sm font-black text-slate-800">
-                              {hw.score !== null ? `${hw.score} Marks` : 'Pending Grade'}
-                            </p>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setActiveAssessment(hw)
-                              setActiveAssessmentType('homework')
-                              setAssessmentAnswers([])
-                            }}
-                            className="px-2.5 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg inline-block transition"
-                          >
-                            Solve Task
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeSection === 'grades' && grades && (
-        <div className="space-y-6">
-          {/* Ranking Configuration Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl bg-slate-100/80 border border-slate-200 shadow-2xs">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-wide">Ranking Mode:</span>
-                <select
-                  value={rankingType}
-                  onChange={(e) => setRankingType(e.target.value)}
-                  className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="full">Full Class Ranking</option>
-                  <option value="topn">Top-N Bracket</option>
-                  <option value="hidden">Hidden</option>
-                </select>
-              </div>
-
-              {rankingType === 'topn' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-wide">Limit N:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={rankingLimit}
-                    onChange={(e) => setRankingLimit(Number(e.target.value))}
-                    className="w-16 text-xs font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            {/* Left Welcome Info */}
+            <div className="relative z-10 flex items-center gap-5">
+              <div className="relative shrink-0">
+                {profile.photo ? (
+                  <img
+                    src={profile.photo}
+                    alt={studentName}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-white/30 shadow-xl"
                   />
+                ) : (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-600 border-2 border-white/30 shadow-xl flex items-center justify-center font-black text-white text-xl uppercase">
+                    {firstName.substring(0, 1)}{profile.lastName.substring(0, 1)}
+                  </div>
+                )}
+                {/* Green Online Dot */}
+                <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0E1A42]" />
+              </div>
+
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                  Good Morning, {firstName}! 👋
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-300 font-medium">
+                  Stay focused today and achieve your goals.
+                </p>
+                <div className="inline-block pt-1">
+                  <span className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full border border-white/15 text-[11px] text-slate-200 italic font-medium">
+                    &ldquo;Discipline today, success tomorrow.&rdquo;
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
 
-            <button
-              onClick={handleExportPdf}
-              disabled={exportingPdf || (!grades?.isEcd && grades?.reportCard.length === 0)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-black rounded-lg shadow-sm transition shrink-0 cursor-pointer"
+            {/* Right Meta Info Card */}
+            <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs space-y-2 shrink-0 min-w-[220px]">
+              <div className="flex items-center gap-2 text-slate-200">
+                <Calendar size={14} className="text-sky-400 shrink-0" />
+                <span className="font-semibold">Thursday, 30 July 2026</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-200">
+                <Clock size={14} className="text-sky-400 shrink-0" />
+                <span className="font-semibold">08:00 AM</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-200">
+                <GraduationCap size={14} className="text-purple-400 shrink-0" />
+                <span className="font-semibold">2025/2026 Academic Session</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 2. Top 4 Metric Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            
+            {/* Card 1: Average Score */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                  <Star size={20} className="fill-emerald-600" />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Average Score</p>
+                <h3 className="text-2xl font-black text-slate-900 mt-0.5">{overallAvg}</h3>
+                <p className="text-[11px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
+                  <span>↑ 6% from last term</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Class Position */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
+                  <Trophy size={20} />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Class Position</p>
+                <h3 className="text-2xl font-black text-slate-900 mt-0.5">{userRankText}</h3>
+                <p className="text-[11px] font-medium text-slate-500 mt-1">
+                  out of {totalClass} students
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Attendance */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <ShieldCheck size={20} />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Attendance</p>
+                <h3 className="text-2xl font-black text-slate-900 mt-0.5">{attendancePct}</h3>
+                <p className="text-[11px] font-bold text-blue-600 mt-1 flex items-center gap-1">
+                  <span>↑ 4% this term</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Card 4: Behaviour Rating */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                  <Smile size={20} />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Behaviour Rating</p>
+                <h3 className="text-2xl font-black text-slate-900 mt-0.5">Excellent</h3>
+                <p className="text-[11px] font-medium text-amber-600 mt-1">
+                  Keep it up! 🥳
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 3. Middle Row 1: Timetable, Upcoming Assignments, Upcoming Exams */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Today's Timetable */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900">Today&apos;s Timetable</h3>
+                  <button 
+                    onClick={() => onNavigate?.('timetable')} 
+                    className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View full timetable</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {todayTimetable.map((slot, idx) => (
+                    <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">{slot.time}</span>
+                        <span className="font-bold text-slate-900">{slot.subject}</span>
+                        <span className="text-[10px] text-slate-500 block">{slot.teacher}</span>
+                      </div>
+                      <span className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700">
+                        {slot.room}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Upcoming Assignments */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900">Upcoming Assignments</h3>
+                  <button 
+                    onClick={() => onNavigate?.('assignments')} 
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    View all
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Mathematics Homework</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">Due Tomorrow, 31 July 2026</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-bold shrink-0">
+                      Due Tomorrow
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">English Essay</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">Due 1 Aug 2026</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold shrink-0">
+                      2 Days Left
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Basic Science Worksheet</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">Due 2 Aug 2026</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold shrink-0">
+                      3 Days Left
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-center pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('assignments')}
+                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Go to assignments</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Upcoming CBT / Exams */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-extrabold text-slate-900">Upcoming CBT / Exams</h3>
+                  <button 
+                    onClick={() => onNavigate?.('cbt-exams')} 
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    View all
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                        <Award size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">English Language Test</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">1 Aug 2026, 10:00 AM</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 text-[10px] font-bold shrink-0">
+                      2 Days Left
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                        <Award size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Mathematics CBT</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">5 Aug 2026, 10:00 AM</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 text-[10px] font-bold shrink-0">
+                      6 Days Left
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                        <Award size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Basic Science Test</h4>
+                        <p className="text-[10px] text-slate-500 font-medium">7 Aug 2026, 10:00 AM</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200 text-[10px] font-bold shrink-0">
+                      8 Days Left
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-center pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('cbt-exams')}
+                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Go to exams</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 4. Middle Row 2: 4 Small Quick Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            {/* Homework Progress Donut Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-3">
+              <h3 className="text-xs font-extrabold text-slate-900">Homework Progress</h3>
+              
+              <div className="flex items-center gap-4 py-1">
+                <SVGDonutChart percentage={76} centerLabel="Completed" color="#10B981" />
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-slate-600 font-medium">Completed</span>
+                    <span className="font-bold text-slate-900 ml-auto">19</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="text-slate-600 font-medium">Pending</span>
+                    <span className="font-bold text-slate-900 ml-auto">6</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="text-slate-600 font-medium">Overdue</span>
+                    <span className="font-bold text-slate-900 ml-auto">2</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('assignments')}
+                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View all homework</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* Attendance Summary Donut Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-3">
+              <h3 className="text-xs font-extrabold text-slate-900">Attendance Summary</h3>
+              
+              <div className="flex items-center gap-4 py-1">
+                <SVGDonutChart percentage={92} centerLabel="Present" color="#10B981" />
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-slate-600 font-medium">Present</span>
+                    <span className="font-bold text-slate-900 ml-auto">92%</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="text-slate-600 font-medium">Late</span>
+                    <span className="font-bold text-slate-900 ml-auto">5%</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="text-slate-600 font-medium">Absent</span>
+                    <span className="font-bold text-slate-900 ml-auto">3%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('attendance')}
+                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View full attendance</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* School Fee Status Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold text-slate-900">School Fee Status</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                  Paid
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <DollarSign size={20} />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-slate-900">Paid</h4>
+                  <p className="text-[10px] text-slate-500 font-medium">No outstanding fees</p>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-500 font-semibold bg-slate-50 p-2 rounded-xl border border-slate-100">
+                Next Term Begins: <span className="text-slate-900 font-bold">7 Sep 2026</span>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('school-fees')}
+                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>View payment history</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* MyEduRide Status Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold text-slate-900">MyEduRide Status</h3>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Bus size={20} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pickup Point</span>
+                  <h4 className="text-xs font-extrabold text-slate-900 truncate">Alaka Estate Gate</h4>
+                  <p className="text-[11px] font-bold text-emerald-600 mt-0.5">On the way</p>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-500 font-semibold bg-slate-50 p-2 rounded-xl border border-slate-100">
+                Escort: <span className="text-slate-900 font-bold">Mr. Sunday</span>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button 
+                  onClick={() => onNavigate?.('myeduride')}
+                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Track My Ride</span>
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 5. Bottom Split Section: Subject Performance Bar Chart + Recent Activities Timeline */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            
+            {/* Subject Performance Overview (This Term) Bar Chart */}
+            <div className="md:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900">Subject Performance Overview (This Term)</h3>
+                <button 
+                  onClick={() => onNavigate?.('results')} 
+                  className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                >
+                  View full report →
+                </button>
+              </div>
+
+              <div className="pt-4 pb-2">
+                <div className="h-48 flex items-end justify-between gap-3 px-2 border-b border-slate-200">
+                  {subjectScores.map((item, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
+                      <span className="text-[10px] font-bold text-slate-700 opacity-0 group-hover:opacity-100 transition">
+                        {item.score}%
+                      </span>
+                      <div 
+                        className={`w-full rounded-t-lg transition-all duration-700 ${item.color} group-hover:brightness-110 shadow-sm`} 
+                        style={{ height: `${item.score}%` }} 
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between gap-2 px-2 pt-3 text-[10px] font-bold text-slate-500 text-center">
+                  {subjectScores.map((item, idx) => (
+                    <span key={idx} className="flex-1 truncate" title={item.subject}>
+                      {item.subject}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activities Timeline */}
+            <div className="md:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-extrabold text-slate-900">Recent Activities</h3>
+                <button className="text-xs font-bold text-blue-600 hover:underline cursor-pointer">
+                  View all
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">You submitted Mathematics Homework</p>
+                    <span className="text-[10px] text-slate-400 font-medium">Today, 7:30 AM</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
+                    <Award size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">You scored 18/20 in Basic Science Test</p>
+                    <span className="text-[10px] text-slate-400 font-medium">Yesterday, 2:15 PM</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                    <BookOpen size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">You attended Mathematics Lesson</p>
+                    <span className="text-[10px] text-slate-400 font-medium">Yesterday, 8:00 AM</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
+                    <Bell size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">You have a new announcement</p>
+                    <span className="text-[10px] text-slate-400 font-medium">30 Jul, 7:45 AM</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Right 4/3 Columns: Widget Sidebar Column (OSe AI, EduChat, Announcements) */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Card 1: OSe AI Assistant */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                  <Bot size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">OSe AI Assistant</h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => alert('OSe AI Assistant launched!')}
+                className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                Ask OSe
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-2">
+              <p className="font-bold text-slate-900">Good morning, {firstName}! 👋</p>
+              <p className="text-slate-500 font-medium text-[11px]">Here are a few things for you.</p>
+
+              <div className="space-y-2 pt-1">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0">📗</span>
+                  <div>
+                    <h5 className="font-bold text-slate-900 text-xs">Revise Mathematics Chapter 5</h5>
+                    <p className="text-[10px] text-slate-400 font-medium">Recommended based on your performance</p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0">📘</span>
+                  <div>
+                    <h5 className="font-bold text-slate-900 text-xs">You have 2 assignments</h5>
+                    <p className="text-[10px] text-slate-400 font-medium">Due tomorrow</p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0">📙</span>
+                  <div>
+                    <h5 className="font-bold text-slate-900 text-xs">English Test on Friday</h5>
+                    <p className="text-[10px] text-slate-400 font-medium">Don&apos;t forget to prepare!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => alert('Opening OSe AI Interactive Assistant Chat...')}
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-between cursor-pointer"
             >
-              {exportingPdf ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download size={14} />
-                  Export A4 PDF
-                </>
-              )}
+              <span>Chat with OSe</span>
+              <ArrowRight size={16} />
             </button>
           </div>
 
-          {/* Unified A4 Live Report Card Preview */}
-          <div className="overflow-x-auto w-full py-4 bg-slate-50 border border-slate-200/60 shadow-2xs rounded-xl flex justify-center">
-            {!grades?.isEcd && grades?.reportCard.length === 0 ? (
-              <p className="text-sm font-semibold text-slate-400 p-6 italic">No grades or exam marks recorded for this session yet.</p>
-            ) : (() => {
-              if (grades?.isEcd) {
-                const assessment = grades.assessment || {}
-                const commentText = assessment.narrativeComment || 'No qualitative narrative commentary or developmental remarks have been logged for this term evaluation.'
+          {/* Card 2: EduChat (Messages) */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-slate-900">EduChat (Messages)</h3>
+              <button 
+                onClick={() => onNavigate?.('communication')} 
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                View all
+              </button>
+            </div>
 
-                return (
-                  <div 
-                    id="a4-report-card-preview" 
-                    className="bg-white border border-slate-300 shadow-lg p-10 font-sans text-slate-800 flex flex-col justify-between select-none shrink-0"
-                    style={{ width: '794px', height: '1123px', minWidth: '794px', minHeight: '1123px' }}
-                  >
-                    <div>
-                      {/* A4 Header Accent */}
-                      <div className="bg-emerald-700 text-white p-6 flex justify-between items-center rounded-sm">
-                        <div className="space-y-1">
-                          <h2 className="text-base font-black tracking-wide uppercase">{profile.branchName || 'UGBEKUN SCHOOLS'}</h2>
-                          <p className="text-[10px] font-semibold text-emerald-200">MONTESSORI & NARRATIVE ASSESSMENT SHEET</p>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <h3 className="text-sm font-bold text-white uppercase">{assessment.exam?.name || 'TERM EVALUATION'}</h3>
-                          <p className="text-[10px] text-emerald-200">Date Issued: {new Date().toLocaleDateString()}</p>
-                        </div>
-                      </div>
-
-                      {/* Profile Information Block */}
-                      <div className="grid grid-cols-2 gap-4 border border-slate-200 p-4 rounded-sm text-xs mt-6">
-                        <div className="space-y-2">
-                          <p className="text-slate-500 font-semibold">Student Name: <span className="text-slate-900 font-black">{profile.lastName}, {profile.firstName}</span></p>
-                          <p className="text-slate-500 font-semibold">Registration No: <span className="text-slate-900 font-black">{profile.registerNo || 'Pending'}</span></p>
-                          <p className="text-slate-500 font-semibold">Classroom: <span className="text-slate-900 font-black">{profile.className} ({profile.sectionName || 'Main'})</span></p>
-                        </div>
-                        <div className="space-y-1 text-slate-500 font-semibold text-[10px]">
-                          <p className="font-extrabold text-emerald-700 text-xs mb-1">EVALUATION LEGEND:</p>
-                          <p>EM : Emerging (Starting to demonstrate skill)</p>
-                          <p>DV : Developing (Demonstrates occasionally)</p>
-                          <p>AC : Achieved (Performs consistently)</p>
-                          <p>MS : Mastered (Internalized skill / models for peers)</p>
-                        </div>
-                      </div>
-
-                      {/* Developmental Matrix */}
-                      <div className="mt-8 grid grid-cols-2 gap-6">
-                        {/* Psychomotor Domain */}
-                        <div className="border border-slate-200 rounded-lg overflow-hidden">
-                          <div className="bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider py-2 px-3">
-                            1. Psychomotor Domain
-                          </div>
-                          <div className="p-4 space-y-4">
-                            {[
-                              { label: 'Writing Mastery', val: assessment.writingMastery },
-                              { label: 'Drawing Capability', val: assessment.drawingCapability },
-                              { label: 'Physical Coordination', val: assessment.physicalCoordination },
-                              { label: 'Motor Skill Progression', val: assessment.motorSkillProgression }
-                            ].map((f, i) => (
-                              <div key={i} className="space-y-1.5">
-                                <p className="text-xs font-bold text-slate-700">{f.label}</p>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {['EM', 'DV', 'AC', 'MS'].map(lvl => (
-                                    <span 
-                                      key={lvl} 
-                                      className={`text-[9px] font-black text-center py-0.5 rounded border ${
-                                        f.val === lvl 
-                                          ? 'bg-emerald-600 border-emerald-600 text-white' 
-                                          : 'bg-slate-50 border-slate-200 text-slate-400'
-                                      }`}
-                                    >
-                                      {lvl}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Behavioral Domain */}
-                        <div className="border border-slate-200 rounded-lg overflow-hidden">
-                          <div className="bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider py-2 px-3">
-                            2. Behavioral Domain
-                          </div>
-                          <div className="p-4 space-y-4">
-                            {[
-                              { label: 'General Punctuality', val: assessment.generalPunctuality },
-                              { label: 'Peer Respect', val: assessment.peerRespect },
-                              { label: 'Aesthetic Neatness', val: assessment.aestheticNeatness },
-                              { label: 'Active Group Participation', val: assessment.activeGroupParticipation }
-                            ].map((f, i) => (
-                              <div key={i} className="space-y-1.5">
-                                <p className="text-xs font-bold text-slate-700">{f.label}</p>
-                                <div className="grid grid-cols-4 gap-1">
-                                  {['EM', 'DV', 'AC', 'MS'].map(lvl => (
-                                    <span 
-                                      key={lvl} 
-                                      className={`text-[9px] font-black text-center py-0.5 rounded border ${
-                                        f.val === lvl 
-                                          ? 'bg-indigo-600 border-indigo-600 text-white' 
-                                          : 'bg-slate-50 border-slate-200 text-slate-400'
-                                      }`}
-                                    >
-                                      {lvl}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Summary & narrative feedback */}
-                    <div className="space-y-6">
-                      <div className="border border-slate-200 p-4 rounded-sm space-y-2">
-                        <h5 className="text-[10px] font-black text-emerald-800 uppercase tracking-wide">Holistic Developmental Commentary</h5>
-                        <p className="text-slate-700 font-semibold italic text-[11px] leading-relaxed">
-                          "{commentText}"
-                        </p>
-                      </div>
-
-                      {/* Resumption & Form Teacher Details */}
-                      <div className="grid grid-cols-2 gap-4 border border-slate-200 p-3 rounded-sm text-xs">
-                        <p className="text-slate-500 font-semibold">Next Term Resumption: <span className="text-slate-900 font-bold">To Be Announced</span></p>
-                        <p className="text-slate-500 font-semibold">Form Teacher: <span className="text-slate-900 font-bold">{profile.formTeacher?.name || 'Form Teacher'}</span></p>
-                      </div>
-
-                      {/* Signature lines */}
-                      <div className="grid grid-cols-2 gap-12 pt-6">
-                        <div className="border-t border-slate-250 text-center pt-2">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Form Teacher Signature</span>
-                        </div>
-                        <div className="border-t border-slate-250 text-center pt-2">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">School Principal Signature</span>
-                        </div>
-                      </div>
-
-                      {/* Bottom disclaimer */}
-                      <div className="border-t border-slate-100 text-center pt-4 space-y-1">
-                        <p className="text-[8.5px] text-slate-400 font-semibold">This is an official computer-generated student narrative evaluation compiled on the Ugbekun 2.0 Portal.</p>
-                        <p className="text-[8.5px] text-slate-400 font-semibold">© {new Date().getFullYear()} {profile.branchName || 'Ugbekun Schools'}. All rights reserved.</p>
-                      </div>
-                    </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    T
                   </div>
-                )
-              }
-
-              // GPA rating letter
-              let gpaGrade = 'F'
-              if (grades?.overallAverage) {
-                const avg = grades.overallAverage
-                if (avg >= 70) gpaGrade = 'A'
-                else if (avg >= 60) gpaGrade = 'B'
-                else if (avg >= 50) gpaGrade = 'C'
-                else if (avg >= 45) gpaGrade = 'D'
-                else if (avg >= 40) gpaGrade = 'E'
-              }
-
-              // Display rank computed suffix
-              const getOrdinalSuffix = (i: number) => {
-                const j = i % 10, k = i % 100
-                if (j === 1 && k !== 11) return 'st'
-                if (j === 2 && k !== 12) return 'nd'
-                if (j === 3 && k !== 13) return 'rd'
-                return 'th'
-              }
-
-              let displayRank = '-'
-              if (grades?.rank && grades?.totalClassStudents) {
-                if (rankingType === 'full') {
-                  displayRank = `${grades.rank}${getOrdinalSuffix(grades.rank)} of ${grades.totalClassStudents}`
-                } else if (rankingType === 'topn') {
-                  if (grades.rank <= rankingLimit) {
-                    displayRank = `${grades.rank}${getOrdinalSuffix(grades.rank)} (Top ${rankingLimit})`
-                  } else {
-                    displayRank = 'Graded'
-                  }
-                } else if (rankingType === 'hidden') {
-                  displayRank = 'Hidden'
-                }
-              }
-
-              return (
-                <div 
-                  id="a4-report-card-preview" 
-                  className="bg-white border border-slate-350 shadow-lg p-10 font-sans text-slate-800 flex flex-col justify-between select-none shrink-0"
-                  style={{ width: '794px', height: '1123px', minWidth: '794px', minHeight: '1123px' }}
-                >
                   <div>
-                    {/* A4 Header Accent */}
-                    <div className="bg-blue-900 text-white p-6 flex justify-between items-center rounded-sm">
-                      <div className="space-y-1">
-                        <h2 className="text-base font-black tracking-wide uppercase">{profile.branchName || 'UGBEKUN SCHOOLS'}</h2>
-                        <p className="text-[10px] font-semibold text-blue-200">OFFICIAL TERM REPORT CARD • BRANCH: {profile.branchName || 'GEN'}</p>
-                      </div>
-                      <div className="text-right space-y-1">
-                        <h3 className="text-sm font-bold text-white uppercase">{grades?.reportCard[0]?.examName || 'TERM EVALUATION'}</h3>
-                        <p className="text-[10px] text-blue-200">Date Issued: {new Date().toLocaleDateString()}</p>
-                      </div>
-                    </div>
-
-                    {/* Profile Information Block */}
-                    <div className="grid grid-cols-2 gap-4 border border-slate-200 p-4 rounded-sm text-xs mt-6">
-                      <div className="space-y-2">
-                        <p className="text-slate-500 font-semibold">Student Name: <span className="text-slate-900 font-black">{profile.lastName}, {profile.firstName}</span></p>
-                        <p className="text-slate-500 font-semibold">Registration No: <span className="text-slate-900 font-black">{profile.registerNo || 'Pending'}</span></p>
-                        <p className="text-slate-500 font-semibold">Classroom: <span className="text-slate-900 font-black">{profile.className} ({profile.sectionName || 'Main'})</span></p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-slate-500 font-semibold">Overall Average: <span className="text-slate-900 font-black">{grades.overallAverage}%</span></p>
-                        <p className="text-slate-500 font-semibold">GPA Grade: <span className="text-slate-900 font-black text-blue-700">{gpaGrade}</span></p>
-                        <p className="text-slate-500 font-semibold">Class Ranking: <span className="text-slate-950 font-black underline decoration-blue-500 decoration-2">{displayRank}</span></p>
-                      </div>
-                    </div>
-
-                    {/* Academic scoreboard */}
-                    <div className="mt-8 space-y-3">
-                      <h4 className="text-xs font-black text-blue-900 uppercase tracking-wider">Academic Score Board</h4>
-                      <table className="w-full text-left border-collapse border border-slate-200">
-                        <thead>
-                          <tr className="bg-blue-900 text-white text-[9px] font-black uppercase tracking-wider">
-                            <th className="py-2.5 px-3 border border-slate-200">Subject Code</th>
-                            <th className="py-2.5 px-3 border border-slate-200">Subject Name</th>
-                            <th className="py-2.5 px-3 border border-slate-200 text-center">Status</th>
-                            <th className="py-2.5 px-3 border border-slate-200 text-right">Score</th>
-                            <th className="py-2.5 px-3 border border-slate-200 text-right">Class Average</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 text-xs">
-                          {grades.reportCard.map((row) => (
-                            <tr key={row.id} className="hover:bg-slate-50/50 transition">
-                              <td className="py-2.5 px-3 border border-slate-200 font-bold text-slate-800">{row.subjectCode || '-'}</td>
-                              <td className="py-2.5 px-3 border border-slate-200 font-semibold text-slate-700">{row.subjectName}</td>
-                              <td className="py-2.5 px-3 border border-slate-200 text-center">
-                                {row.absent ? (
-                                  <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">Absent</span>
-                                ) : row.mark !== null ? (
-                                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Graded</span>
-                                ) : (
-                                  <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">Pending</span>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 border border-slate-200 text-right font-black text-slate-900">
-                                {row.absent ? '-' : (row.mark !== null ? `${row.mark}` : '-')}
-                              </td>
-                              <td className="py-2.5 px-3 border border-slate-200 text-right font-semibold text-slate-500">
-                                {row.absent ? '-' : `${row.classAverage}`}
-                              </td>
-                            </tr>
-                          ))}
-                          {/* Empty padding rows for layout uniformity if short */}
-                          {grades.reportCard.length < 5 && 
-                            Array.from({ length: 5 - grades.reportCard.length }).map((_, i) => (
-                              <tr key={`fill-${i}`}>
-                                <td className="py-2.5 px-3 border border-slate-200">&nbsp;</td>
-                                <td className="py-2.5 px-3 border border-slate-200">&nbsp;</td>
-                                <td className="py-2.5 px-3 border border-slate-200">&nbsp;</td>
-                                <td className="py-2.5 px-3 border border-slate-200">&nbsp;</td>
-                                <td className="py-2.5 px-3 border border-slate-200">&nbsp;</td>
-                              </tr>
-                            ))
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Summary & remarks footer section */}
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-3 gap-4 mt-6">
-                      <div className="col-span-2 border border-slate-200 p-4 rounded-sm space-y-2">
-                        <h5 className="text-[9px] font-black text-blue-900 uppercase tracking-wide">Form Teacher Commentary</h5>
-                        <p className="text-slate-600 font-semibold italic text-[11px] leading-relaxed">
-                          {grades.commentary ? `"${grades.commentary}"` : '"No performance commentary has been entered for this term yet."'}
-                        </p>
-                      </div>
-                      <div className="border border-slate-200 p-4 rounded-sm space-y-2 text-xs">
-                        <h5 className="text-[9px] font-black text-blue-900 uppercase tracking-wide">Term Overview</h5>
-                        <p className="text-[10px] text-slate-500 font-semibold">Next Resumption Date:</p>
-                        <p className="text-xs font-black text-slate-800">To Be Announced</p>
-                        <p className="text-[10px] text-slate-500 font-semibold mt-2">Form Teacher:</p>
-                        <p className="text-[10px] font-black text-slate-800">{profile.formTeacher?.name || 'Form Teacher'}</p>
-                      </div>
-                    </div>
-
-                    {/* Signature lines */}
-                    <div className="grid grid-cols-2 gap-12 pt-8">
-                      <div className="border-t border-slate-250 text-center pt-2">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Form Teacher Signature</span>
-                      </div>
-                      <div className="border-t border-slate-250 text-center pt-2">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">School Principal Signature</span>
-                      </div>
-                    </div>
-
-                    {/* Bottom disclaimer */}
-                    <div className="border-t border-slate-100 text-center pt-4 space-y-1">
-                      <p className="text-[8.5px] text-slate-400 font-semibold">This is an official computer-generated student evaluation record compiled on the Ugbekun 2.0 Portal.</p>
-                      <p className="text-[8.5px] text-slate-400 font-semibold">© {new Date().getFullYear()} {profile.branchName || 'Ugbekun Schools'}. All rights reserved.</p>
-                    </div>
+                    <h4 className="text-xs font-bold text-slate-900">Mrs. Johnson</h4>
+                    <p className="text-[10px] text-slate-500 truncate max-w-[170px]">Kindly submit your essay before tomorrow.</p>
                   </div>
                 </div>
-              )
-            })()}
-          </div>
-        </div>
-      )}
-
-      {activeSection === 'attendance' && (
-        <div className="space-y-6">
-          {/* Attendance Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Attendance Rate</p>
-              <p className="text-3xl font-black text-emerald-600 mt-2">{attendance?.percentage ?? 100}%</p>
-            </div>
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Present Days</p>
-              <p className="text-3xl font-black text-blue-600 mt-2">{attendance?.presentCount ?? 0}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Absent Days</p>
-              <p className="text-3xl font-black text-rose-600 mt-2">{attendance?.absentCount ?? 0}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm text-center">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Late Days</p>
-              <p className="text-3xl font-black text-amber-600 mt-2">{attendance?.lateCount ?? 0}</p>
-            </div>
-          </div>
-
-          {/* Daily Logs Table */}
-          <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <CheckSquare size={18} className="text-blue-600" />
-              <h3 className="text-base font-extrabold text-slate-900">Daily Attendance History</h3>
-            </div>
-            {!attendance?.logs || attendance.logs.length === 0 ? (
-              <p className="text-sm font-semibold text-slate-400 italic">No attendance records have been registered for this term yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-150 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Teacher Remark</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
-                    {attendance.logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-50/50 transition">
-                        <td className="py-3.5 px-4 font-semibold text-slate-700">
-                          {new Date(log.attendanceDate).toLocaleDateString(undefined, {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {log.status === 'present' && (
-                            <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">
-                              Present
-                            </span>
-                          )}
-                          {log.status === 'absent' && (
-                            <span className="px-2.5 py-0.5 text-xs font-bold bg-rose-100 text-rose-700 rounded-full border border-rose-200">
-                              Absent
-                            </span>
-                          )}
-                          {log.status === 'late' && (
-                            <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full border border-amber-200">
-                              Late
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-slate-500 italic font-medium">
-                          {log.remark || '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] text-slate-400 block font-medium">8:15 AM</span>
+                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold inline-flex items-center justify-center mt-0.5">
+                    2
+                  </span>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {activeSection === 'timetable' && (
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-blue-600" />
-            <h3 className="text-base font-extrabold text-slate-900">Timetable & Assigned Sessions</h3>
-          </div>
-          {profile.subjects.length === 0 ? (
-            <p className="text-sm font-semibold text-slate-400">No classes assigned to display in the schedule.</p>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {profile.subjects.map((sub, idx) => (
-                <div key={idx} className="p-5 rounded-xl border border-slate-200/60 bg-slate-50 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase bg-blue-100 text-blue-700 rounded-md">
-                      {sub.type}
-                    </span>
-                    <Clock size={14} className="text-slate-400" />
+              <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    A
                   </div>
                   <div>
-                    <h4 className="text-base font-black text-slate-800">{sub.name}</h4>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{sub.code}</span>
-                  </div>
-                  <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500 font-semibold">
-                    <span>Weekly Session</span>
-                    <span className="text-slate-800">Allocated</span>
+                    <h4 className="text-xs font-bold text-slate-900">Mr. Adewale</h4>
+                    <p className="text-[10px] text-slate-500 truncate max-w-[170px]">Don&apos;t forget our test on Friday.</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">Yesterday</span>
+              </div>
 
-      {activeSection === 'settings' && (
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-6 shadow-sm max-w-2xl">
-          <div className="flex items-center gap-2">
-            <User size={18} className="text-blue-600" />
-            <h3 className="text-base font-extrabold text-slate-900">Platform Settings & Profile</h3>
+              <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    S
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">School Admin</h4>
+                    <p className="text-[10px] text-slate-500 truncate max-w-[170px]">Inter-house sport next week Friday.</p>
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">Yesterday</span>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    S
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">Study Group (JSS 2A)</h4>
+                    <p className="text-[10px] text-slate-500 truncate max-w-[170px]">Chisom: When is the test?</p>
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">27 Jul</span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 text-center">
+              <button 
+                onClick={() => onNavigate?.('communication')}
+                className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>Open EduChat</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <div className="w-20 h-20 rounded-full bg-blue-100 text-blue-700 font-black text-2xl uppercase flex items-center justify-center border-4 border-white shadow-md">
-              {profile.firstName.substring(0, 1)}{profile.lastName.substring(0, 1)}
+          {/* Card 3: School Announcements */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-slate-900">School Announcements</h3>
+              <button className="text-xs font-bold text-blue-600 hover:underline cursor-pointer">
+                View all
+              </button>
             </div>
-            <div className="space-y-1.5 text-center sm:text-left flex-1 min-w-0">
-              <h4 className="text-lg font-black text-slate-800">{profile.firstName} {profile.lastName}</h4>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registration: {profile.registerNo || 'N/A'}</p>
-              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-slate-600 font-semibold pt-3 border-t border-slate-200/60">
-                <p>Gender: <span className="text-slate-800 font-bold capitalize">{profile.gender || 'Not Specified'}</span></p>
-                <p>Branch Code: <span className="text-slate-800 font-bold uppercase">{profile.branchName || 'N/A'}</span></p>
-                <p>Class Room: <span className="text-slate-800 font-bold">{profile.className || 'N/A'}</span></p>
-                <p>Section: <span className="text-slate-800 font-bold">{profile.sectionName || 'N/A'}</span></p>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Bell size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Independence Day Celebration</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">School will be closed on 1st October.</p>
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 block">30 Jul 2026</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Trophy size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Inter-House Sport</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">Starts next Friday. Get ready!</p>
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 block">29 Jul 2026</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <BookOpen size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Library New Books</h4>
+                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">New adventure books are now available.</p>
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 block">28 Jul 2026</span>
+                </div>
               </div>
             </div>
           </div>
+
         </div>
-      )}
 
-      {activeSection === 'media' && (
-        <StudentMediaLibrary />
-      )}
+      </div>
 
-      {activeSection === 'liveRooms' && (
-        <StudentLiveClassrooms />
-      )}
-
-      {activeSection === 'points-hub' && (
-        <PointsHub />
-      )}
-
-      {activeSection === 'calendar' && (
-        <SchoolCalendar user={user} />
-      )}
     </div>
   )
 }

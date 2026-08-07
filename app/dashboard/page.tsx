@@ -28,13 +28,15 @@ import {
   CreditCard,
   CalendarDays,
   BarChart3,
+  MessageSquare,
+  Bus,
+  User,
+  LayoutDashboard,
   Boxes,
   LayoutGrid,
   ChevronRight,
   Mail,
   Globe,
-  MessageSquare,
-  Bus,
   UserPlus,
   ArrowRight,
   Sparkles,
@@ -151,15 +153,20 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       ]
     case 7: // Student
       return [
-        { id: 'overview', label: 'My Studies', icon: BookOpen, active: true },
-        { id: 'points-hub', label: 'Points Hub & XP', icon: Award },
-        { id: 'assignments', label: 'Assignments Tracker', icon: CheckSquare },
-        { id: 'media', label: 'Media Library', icon: FileText },
-        { id: 'liveRooms', label: 'Virtual Classrooms', icon: Video },
-        { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
-        { id: 'grades', label: 'Grade Sheet & GPA', icon: TrendingUp },
-        { id: 'timetable', label: 'Timetable Schedule', icon: Calendar },
-        { id: 'settings', label: 'Platform Settings', icon: Settings },
+        { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, active: true },
+        { id: 'academics', label: 'My Academics', icon: GraduationCap },
+        { id: 'assignments', label: 'Assignments', icon: FileText },
+        { id: 'cbt-exams', label: 'CBT & Exams', icon: Award },
+        { id: 'results', label: 'Results', icon: TrendingUp },
+        { id: 'timetable', label: 'Timetable', icon: Calendar },
+        { id: 'attendance', label: 'Attendance', icon: CheckSquare },
+        { id: 'school-fees', label: 'School Fees', icon: DollarSign },
+        { id: 'communication', label: 'Communication', icon: MessageSquare, badge: '5' },
+        { id: 'liveRooms', label: 'Campus Live', icon: Video },
+        { id: 'media', label: 'Library', icon: BookOpen },
+        { id: 'myeduride', label: 'MyEduRide', icon: Bus },
+        { id: 'profile', label: 'Profile', icon: User },
+        { id: 'settings', label: 'Settings', icon: Settings },
       ]
     default:
       return [
@@ -390,7 +397,7 @@ export default function DashboardPage() {
       case 6:
         return <ParentDashboard user={user} activeSection={activeSection} />
       case 7:
-        return <StudentDashboard user={user} activeSection={activeSection} />
+        return <StudentDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       default:
         return <DefaultDashboard user={user} roleName={ROLE_NAMES[user.role] || 'User'} />
     }
