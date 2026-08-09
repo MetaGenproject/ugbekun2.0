@@ -35,10 +35,10 @@ interface AttendanceRecord {
 }
 
 interface AttendanceRegisterProps {
-  formAllocations: FormAllocation[]
+  formAllocations?: FormAllocation[]
 }
 
-export default function AttendanceRegister({ formAllocations }: AttendanceRegisterProps) {
+export default function AttendanceRegister({ formAllocations = [] }: AttendanceRegisterProps) {
   const [selectedFormIdx, setSelectedFormIdx] = useState(0)
   const [attendanceDate, setAttendanceDate] = useState(() => {
     // Default to today's local date
@@ -55,7 +55,7 @@ export default function AttendanceRegister({ formAllocations }: AttendanceRegist
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const activeForm = formAllocations[selectedFormIdx]
+  const activeForm = (formAllocations || [])[selectedFormIdx]
 
   // Load students roster and existing records
   const loadRosterAndAttendance = async () => {

@@ -132,14 +132,20 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       ]
     case 3: // Teacher
       return [
-        { id: 'classroom', label: 'My Classroom', icon: BookOpen, active: true },
-        { id: 'roster', label: 'Student Roster', icon: Users },
-        { id: 'grades', label: 'Gradebook & Exams', icon: TrendingUp },
-        { id: 'attendance', label: 'Attendance Tracker', icon: CheckSquare },
-        { id: 'points-hub', label: 'Points Hub & XP', icon: Award },
-        { id: 'attrition', label: 'Attrition Radar', icon: Activity },
-        { id: 'calendar', label: 'School Calendar', icon: Calendar },
-        { id: 'settings', label: 'Personal Settings', icon: Settings },
+        { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, active: true },
+        { id: 'my-classes', label: 'My Classes', icon: Users },
+        { id: 'my-subjects', label: 'My Subjects', icon: BookOpen },
+        { id: 'ai-planner', label: 'Lesson Plan', icon: FileText },
+        { id: 'assignments', label: 'Assignments', icon: CheckSquare },
+        { id: 'cbt-exams', label: 'CBT / Tests', icon: Award },
+        { id: 'gradebook', label: 'Scores Entry', icon: TrendingUp },
+        { id: 'roster', label: 'My Students', icon: UserCheck },
+        { id: 'attendance', label: 'Attendance', icon: Calendar },
+        { id: 'class-reports', label: 'Class Reports', icon: FileSpreadsheet },
+        { id: 'subject-reports', label: 'Subject Reports', icon: BarChart3 },
+        { id: 'attrition', label: 'Performance Overview', icon: Activity },
+        { id: 'communication', label: 'Messages', icon: MessageSquare, badge: '12' },
+        { id: 'announcements', label: 'Announcements', icon: Bell },
       ]
     case 6: // Parent
       return [
@@ -393,7 +399,7 @@ export default function DashboardPage() {
           />
         )
       case 3:
-        return <TeacherDashboard user={user} activeSection={activeSection} />
+        return <TeacherDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       case 6:
         return <ParentDashboard user={user} activeSection={activeSection} />
       case 7:

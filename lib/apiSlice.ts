@@ -192,6 +192,7 @@ export const endpoints = {
     inventoryItemDelete: (id: number) => `${BASE_URL}/admin/inventory/items/${id}`,
   },
   teacher: {
+    dashboardOverview: `${BASE_URL}/teacher/dashboard-overview`,
     profile: `${BASE_URL}/teacher/profile`,
     exams: `${BASE_URL}/teacher/exams`,
     students: `${BASE_URL}/teacher/students`,

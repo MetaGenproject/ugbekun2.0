@@ -37,7 +37,7 @@ interface LessonPlan {
 }
 
 interface AiLessonPlannerProps {
-  profile: TeacherProfile
+  profile?: TeacherProfile
 }
 
 export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
@@ -88,7 +88,8 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
       return
     }
 
-    const alloc = profile.subjectAssignments[parseInt(selectedAllocationIdx)]
+    const allocList = profile?.subjectAssignments || []
+    const alloc = allocList[parseInt(selectedAllocationIdx)]
     if (!alloc) {
       alert('No valid class allocation found.')
       return
@@ -127,7 +128,8 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
   }
 
   const handleSavePlan = async () => {
-    const alloc = profile.subjectAssignments[parseInt(selectedAllocationIdx)]
+    const allocList = profile?.subjectAssignments || []
+    const alloc = allocList[parseInt(selectedAllocationIdx)]
     if (!alloc) return
 
     setError(null)
@@ -176,7 +178,8 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
   }
 
   const handleEditClick = (plan: LessonPlan) => {
-    const allocIdx = profile.subjectAssignments.findIndex(
+    const allocList = profile?.subjectAssignments || []
+    const allocIdx = allocList.findIndex(
       (a) => a.classId === plan.classId && a.subjectId === plan.subjectId
     )
     if (allocIdx !== -1) {
@@ -260,7 +263,7 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                   onChange={(e) => setSelectedAllocationIdx(e.target.value)}
                   className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-violet-500 focus:outline-none cursor-pointer"
                 >
-                  {profile.subjectAssignments.map((alloc, idx) => (
+                  {(profile?.subjectAssignments || []).map((alloc, idx) => (
                     <option key={idx} value={idx}>
                       {alloc.className} • {alloc.subjectName} ({alloc.sectionName})
                     </option>

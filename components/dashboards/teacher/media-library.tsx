@@ -20,10 +20,10 @@ interface MediaItem {
 }
 
 interface MediaLibraryProps {
-  teacherId: number
+  teacherId?: number
 }
 
-export function MediaLibrary({ teacherId }: MediaLibraryProps) {
+export function MediaLibrary({ teacherId = 0 }: MediaLibraryProps) {
   const [items, setItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

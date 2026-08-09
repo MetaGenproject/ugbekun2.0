@@ -31,7 +31,7 @@ interface LiveRoom {
 }
 
 interface LiveClassroomHubProps {
-  profile: TeacherProfile
+  profile?: TeacherProfile
 }
 
 export function LiveClassroomHub({ profile }: LiveClassroomHubProps) {
@@ -84,7 +84,8 @@ export function LiveClassroomHub({ profile }: LiveClassroomHubProps) {
     setIsSubmitting(true)
     setError(null)
 
-    const alloc = profile.subjectAssignments[parseInt(selectedAllocIdx)]
+    const allocList = profile?.subjectAssignments || []
+    const alloc = allocList[parseInt(selectedAllocIdx)]
     const body: any = {
       title,
       roomName: `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`,
@@ -358,7 +359,7 @@ export function LiveClassroomHub({ profile }: LiveClassroomHubProps) {
                     onChange={(e) => setSelectedAllocIdx(e.target.value)}
                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-200 rounded-lg focus:ring-1 focus:ring-sky-500 focus:outline-none cursor-pointer"
                   >
-                    {profile.subjectAssignments.map((alloc, idx) => (
+                    {(profile?.subjectAssignments || []).map((alloc, idx) => (
                       <option key={idx} value={idx}>
                         {alloc.className} • {alloc.subjectName} ({alloc.sectionName})
                       </option>

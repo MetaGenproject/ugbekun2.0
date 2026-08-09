@@ -27,15 +27,15 @@ interface SchoolEvent {
 }
 
 interface SchoolCalendarProps {
-  user: {
-    id: number
-    username: string
-    role: number
+  user?: {
+    id?: number
+    username?: string
+    role?: number
   }
 }
 
 export default function SchoolCalendar({ user }: SchoolCalendarProps) {
-  const isAdmin = user.role === 2
+  const isAdmin = user?.role === 2
 
   const [events, setEvents] = useState<SchoolEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,7 +58,7 @@ export default function SchoolCalendar({ user }: SchoolCalendarProps) {
 
   // Determine endpoint based on role
   const getEventsEndpoint = useMemo(() => {
-    switch (user.role) {
+    switch (user?.role) {
       case 2:
         return endpoints.admin.events
       case 3:
@@ -70,7 +70,7 @@ export default function SchoolCalendar({ user }: SchoolCalendarProps) {
       default:
         return endpoints.student.events // fallback
     }
-  }, [user.role])
+  }, [user?.role])
 
   // Fetch events
   const fetchEvents = async () => {
