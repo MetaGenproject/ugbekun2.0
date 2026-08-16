@@ -36,7 +36,13 @@ import {
   CalendarDays,
   FileSpreadsheet,
   FilePlus,
-  Edit3
+  Edit3,
+  Plus,
+  X,
+  Mail,
+  Phone,
+  MapPin,
+  User
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
@@ -51,6 +57,7 @@ import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
 import { QuestionBankManager } from './question-bank-manager'
 import SchoolCalendar from '../admin/school-calendar'
+import { getAvatarUrl } from '@/lib/avatar'
 
 interface DashboardProps {
   user: {
@@ -163,6 +170,27 @@ interface DashboardOverviewData {
   }>
 }
 
+interface RosterStudent {
+  id: number
+  registerNo: string | null
+  rollNo: number | null
+  firstName: string
+  lastName: string
+  gender: string
+  photo: string | null
+  className: string
+  sectionName: string
+  parent: {
+    id: number
+    name: string
+    fatherName: string | null
+    motherName: string | null
+    mobileno: string | null
+    email: string | null
+    address: string | null
+  } | null
+}
+
 // Donut Chart Helper
 function SVGDonutChart({ 
   percentage, 
@@ -222,6 +250,24 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [error, setError] = useState<string | null>(null)
   const [remindersList, setRemindersList] = useState<Array<{ id: number; text: string; subtext?: string; done: boolean }>>([])
 
+  // Student Roster State
+  const [rosterStudents, setRosterStudents] = useState<RosterStudent[]>([])
+  const [loadingRoster, setLoadingRoster] = useState<boolean>(false)
+
+  // Parent Message Modal State
+  const [showMsgModal, setShowMsgModal] = useState<boolean>(false)
+  const [selectedParentId, setSelectedParentId] = useState<number | null>(null)
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
+  const [selectedParentName, setSelectedParentName] = useState<string>('')
+  const [msgSubject, setMsgSubject] = useState<string>('')
+  const [msgBody, setMsgBody] = useState<string>('')
+  const [sendingMsg, setSendingMsg] = useState<boolean>(false)
+  const [msgSuccess, setMsgSuccess] = useState<string | null>(null)
+
+  // New Reminder Input State
+  const [newReminderText, setNewReminderText] = useState<string>('')
+  const [addingReminder, setAddingReminder] = useState<boolean>(false)
+
   useEffect(() => {
     let active = true
 
@@ -279,8 +325,80 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
     }
   }, [user])
 
-  const toggleReminder = (id: number) => {
-    setRemindersList(prev => prev.map(r => r.id === id ? { ...r, done: !r.done } : r))
+  // Fetch Student Roster with Parent Contacts when entering Roster tab
+  useEffect(() => {
+    if (activeSection === 'roster' || activeSection === 'my-classes' || activeSection === 'my-students') {
+      async function fetchRoster() {
+        try {
+          setLoadingRoster(true)
+          const res = await apiSlice.get<{ success: boolean; students: RosterStudent[] }>(endpoints.teacher.roster)
+          if (res.success) {
+            setRosterStudents(res.students)
+          }
+        } catch (err) {
+          console.error('Failed to fetch student roster:', err)
+        } finally {
+          setLoadingRoster(false)
+        }
+      }
+      fetchRoster()
+    }
+  }, [activeSection])
+
+  const handleToggleReminder = async (id: number) => {
+    try {
+      setRemindersList(prev => prev.map(r => r.id === id ? { ...r, done: !r.done } : r))
+      await apiSlice.put(endpoints.teacher.toggleReminder(id), {})
+    } catch (err) {
+      console.error('Failed to toggle reminder:', err)
+    }
+  }
+
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newReminderText.trim()) return
+    try {
+      setAddingReminder(true)
+      const res = await apiSlice.post<{ success: boolean; reminder: any }>(endpoints.teacher.createReminder, {
+        text: newReminderText.trim()
+      })
+      if (res.success && res.reminder) {
+        setRemindersList(prev => [{ id: res.reminder.id, text: res.reminder.text, done: res.reminder.done }, ...prev])
+        setNewReminderText('')
+      }
+    } catch (err) {
+      console.error('Failed to create reminder:', err)
+    } finally {
+      setAddingReminder(false)
+    }
+  }
+
+  const handleSendParentMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedParentId || !msgBody.trim()) return
+    try {
+      setSendingMsg(true)
+      setMsgSuccess(null)
+      const res = await apiSlice.post<{ success: boolean; message: string }>(endpoints.teacher.sendMessage, {
+        parentId: selectedParentId,
+        studentId: selectedStudentId,
+        subject: msgSubject.trim() || 'Teacher Notice',
+        message: msgBody.trim()
+      })
+      if (res.success) {
+        setMsgSuccess('Message sent to parent successfully!')
+        setMsgSubject('')
+        setMsgBody('')
+        setTimeout(() => {
+          setShowMsgModal(false)
+          setMsgSuccess(null)
+        }, 1500)
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to send message to parent.')
+    } finally {
+      setSendingMsg(false)
+    }
   }
 
   if (loading) {
@@ -308,17 +426,194 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   if (activeSection === 'gradebook' || activeSection === 'grades') {
     return <GradebookInterface />
   }
+
+  // MY STUDENTS / ROSTER SUB-VIEW
   if (activeSection === 'roster' || activeSection === 'my-classes' || activeSection === 'my-students') {
     return (
-      <div className="space-y-6">
-        <SchoolHeader />
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Student Roster & Class Allocations</h2>
-          <p className="text-sm text-slate-500 mb-6">Manage student records across your assigned classes.</p>
+      <div className="space-y-6 pb-12 font-sans">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <Users className="text-blue-600" size={24} />
+              Student Roster & Family Directory
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              View students in your assigned classes and communicate directly with guardians and parents.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
+              Total Students: {rosterStudents.length}
+            </span>
+          </div>
         </div>
+
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Class Roster & Guardian Information ({rosterStudents.length})
+            </h3>
+            {loadingRoster && <Loader2 size={16} className="animate-spin text-blue-600" />}
+          </div>
+
+          {rosterStudents.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
+                  <tr>
+                    <th className="p-4">Reg No</th>
+                    <th className="p-4">Student Name</th>
+                    <th className="p-4">Class</th>
+                    <th className="p-4">Gender</th>
+                    <th className="p-4">Parent / Guardian</th>
+                    <th className="p-4">Contact Phone</th>
+                    <th className="p-4 text-right">Quick Communication</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rosterStudents.map((st) => (
+                    <tr key={st.id} className="hover:bg-slate-50/80 transition">
+                      <td className="p-4 font-mono text-slate-500 text-[11px]">
+                        {st.registerNo || `REG-${st.id}`}
+                      </td>
+                      <td className="p-4 font-bold text-slate-900 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 overflow-hidden shrink-0 border border-blue-200">
+                          <img
+                            src={getAvatarUrl(st.photo, `${st.firstName} ${st.lastName}`)}
+                            alt={`${st.firstName} ${st.lastName}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span>{st.firstName} {st.lastName}</span>
+                      </td>
+                      <td className="p-4 font-semibold text-blue-600">{st.className} {st.sectionName}</td>
+                      <td className="p-4">{st.gender}</td>
+                      <td className="p-4">
+                        {st.parent ? (
+                          <div>
+                            <span className="font-bold text-slate-900 block">{st.parent.name}</span>
+                            <span className="text-[10px] text-slate-400 block">{st.parent.fatherName ? `Father: ${st.parent.fatherName}` : (st.parent.motherName ? `Mother: ${st.parent.motherName}` : 'Guardian')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">No Parent Linked</span>
+                        )}
+                      </td>
+                      <td className="p-4 font-mono text-slate-600">
+                        {st.parent?.mobileno || 'N/A'}
+                      </td>
+                      <td className="p-4 text-right">
+                        {st.parent ? (
+                          <button
+                            onClick={() => {
+                              setSelectedParentId(st.parent!.id)
+                              setSelectedStudentId(st.id)
+                              setSelectedParentName(`${st.parent!.name} (Parent of ${st.firstName})`)
+                              setShowMsgModal(true)
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition border border-indigo-200 cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Mail size={13} />
+                            <span>Message Parent</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">No Contact</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-12 text-center text-slate-500 text-xs">
+              No students enrolled in your assigned classes yet.
+            </div>
+          )}
+        </div>
+
+        {/* Message Parent Modal */}
+        {showMsgModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Mail className="text-indigo-600" size={20} />
+                  Send Notice to Parent
+                </h3>
+                <button
+                  onClick={() => setShowMsgModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {msgSuccess && (
+                <div className="p-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+                  {msgSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleSendParentMessage} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Recipient Parent</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={selectedParentName}
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Subject *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Progress Update / Homework Reminder"
+                    value={msgSubject}
+                    onChange={(e) => setMsgSubject(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Message Body *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Write your note to the parent..."
+                    value={msgBody}
+                    onChange={(e) => setMsgBody(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowMsgModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendingMsg}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md cursor-pointer"
+                  >
+                    {sendingMsg ? 'Sending...' : 'Send Message'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
+
   if (activeSection === 'attendance') {
     return <AttendanceRegister formAllocations={profile?.formAllocations || []} />
   }
@@ -344,65 +639,40 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
     return <SchoolCalendar user={user} />
   }
 
-  // Derived values grounded in real DB data
+  // Derived values grounded strictly in real DB data
   const teacherName = profile.name || user.username
-  const primaryForm = profile.primaryForm || (profile.formAllocations[0] ? `${profile.formAllocations[0].className} ${profile.formAllocations[0].sectionName}` : 'Primary 5B')
+  const primaryForm = profile.primaryForm || (profile.formAllocations[0] ? `${profile.formAllocations[0].className} ${profile.formAllocations[0].sectionName}` : 'Unassigned Class')
   
-  const studentsCount = dashboardOverview?.kpi?.studentsCount || 32
-  const presentTodayCount = dashboardOverview?.kpi?.presentTodayCount || 28
-  const subjectsCount = dashboardOverview?.kpi?.subjectsCount || 5
-  const assignmentsCount = dashboardOverview?.kpi?.assignmentsCount || 6
-  const pendingReviewCount = dashboardOverview?.kpi?.pendingReviewCount || 3
-  const testsCount = dashboardOverview?.kpi?.testsCount || 2
-  const ongoingTestsCount = dashboardOverview?.kpi?.ongoingTestsCount || 1
-  const classAverage = dashboardOverview?.kpi?.classAverage || 82
+  const studentsCount = dashboardOverview?.kpi?.studentsCount ?? 0
+  const presentTodayCount = dashboardOverview?.kpi?.presentTodayCount ?? 0
+  const subjectsCount = dashboardOverview?.kpi?.subjectsCount ?? 0
+  const assignmentsCount = dashboardOverview?.kpi?.assignmentsCount ?? 0
+  const pendingReviewCount = dashboardOverview?.kpi?.pendingReviewCount ?? 0
+  const testsCount = dashboardOverview?.kpi?.testsCount ?? 0
+  const ongoingTestsCount = dashboardOverview?.kpi?.ongoingTestsCount ?? 0
+  const classAverage = dashboardOverview?.kpi?.classAverage ?? 0
 
   const attSummary = dashboardOverview?.attendance || {
-    overallPercentage: 87,
-    presentCount: 28,
-    lateCount: 2,
-    absentCount: 2,
-    presentPct: 87,
-    latePct: 6,
-    absentPct: 6
+    overallPercentage: 0,
+    presentCount: 0,
+    lateCount: 0,
+    absentCount: 0,
+    presentPct: 0,
+    latePct: 0,
+    absentPct: 0
   }
 
-  const subjectPerformance = dashboardOverview?.subjectPerformance || [
-    { name: 'Mathematics', score: 84 },
-    { name: 'English Language', score: 78 },
-    { name: 'Basic Science', score: 81 },
-    { name: 'Social Studies', score: 76 },
-    { name: 'Computer Studies', score: 88 }
-  ]
-
+  const subjectPerformance = dashboardOverview?.subjectPerformance || []
   const teachingSummary = dashboardOverview?.teachingSummary || {
-    lessonNotesCount: 18,
-    assignmentsGivenCount: 15,
-    testsCreatedCount: 6,
-    scoresEnteredPct: 78
+    lessonNotesCount: 0,
+    assignmentsGivenCount: 0,
+    testsCreatedCount: 0,
+    scoresEnteredPct: 0
   }
 
-  const subjectsList = dashboardOverview?.subjects || [
-    { id: 1, name: 'Mathematics', studentsCount: 32, score: 84, nextLesson: 'Tomorrow 9:00 AM' },
-    { id: 2, name: 'English Language', studentsCount: 32, score: 78, nextLesson: 'Today 11:00 AM' },
-    { id: 3, name: 'Basic Science', studentsCount: 32, score: 81, nextLesson: 'Tomorrow 10:00 AM' },
-    { id: 4, name: 'Social Studies', studentsCount: 32, score: 76, nextLesson: 'Friday 9:00 AM' },
-    { id: 5, name: 'Computer Studies', studentsCount: 32, score: 88, nextLesson: 'Friday 11:00 AM' }
-  ]
-
-  const myClassesList = dashboardOverview?.myClasses || [
-    { name: 'Primary 5B', role: 'Class Teacher', studentsCount: 32 },
-    { name: 'Primary 4A', role: 'Subject Teacher', studentsCount: 28 },
-    { name: 'Primary 6C', role: 'Subject Teacher', studentsCount: 30 }
-  ]
-
-  const recentActivitiesList = dashboardOverview?.recentActivities || [
-    { id: 1, text: 'You assigned a new Mathematics homework', timestamp: '2 hours ago', icon: 'homework' },
-    { id: 2, text: 'You created a CBT English Language Test', timestamp: '5 hours ago', icon: 'exam' },
-    { id: 3, text: 'You entered scores for Mathematics Test', timestamp: 'Yesterday, 4:30 PM', icon: 'scores' },
-    { id: 4, text: 'You marked attendance for Primary 5B', timestamp: 'Yesterday, 8:15 AM', icon: 'attendance' },
-    { id: 5, text: 'You published results for Basic Science Test', timestamp: '29 July, 3:20 PM', icon: 'results' }
-  ]
+  const subjectsList = dashboardOverview?.subjects || []
+  const myClassesList = dashboardOverview?.myClasses || []
+  const recentActivitiesList = dashboardOverview?.recentActivities || []
 
   const subjectBarColors: Record<string, string> = {
     'Mathematics': 'bg-emerald-500',
@@ -412,49 +682,45 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
     'Computer Studies': 'bg-cyan-500'
   }
 
+  const currentDateFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
   // Default Overview Dashboard View
   return (
-    <div className="space-y-6 text-slate-900 pb-12">
+    <div className="space-y-6 text-slate-900 pb-12 font-sans">
 
-      {/* Main Grid Layout: Left Content (col-8/9) + Right Sidebar Column (col-4/3) */}
+      {/* Main Grid Layout: Left Content (col-8) + Right Sidebar Column (col-4) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* Left 8/9 Columns: Main Dashboard Body */}
+        {/* Left Columns: Main Dashboard Body */}
         <div className="lg:col-span-8 space-y-6">
           
           {/* 1. Top Hero Welcome Banner */}
           <div className="relative rounded-3xl bg-gradient-to-r from-[#070D22] via-[#0E1A42] to-[#12245A] p-6 sm:p-8 text-white shadow-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             
-            {/* Background Image Vignette Overlay */}
-            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
-              <Image
-                src="/login-bg.png"
-                alt="Campus Silhouette"
-                fill
-                className="object-cover object-center"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#070D22] via-transparent to-[#12245A]" />
-            </div>
-
             {/* Left Hero Content */}
             <div className="relative z-10 space-y-1">
+              <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-xs text-blue-100 inline-flex items-center gap-1.5 mb-2">
+                <Sparkles size={13} className="text-yellow-300" />
+                Teacher Workspace
+              </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                Good Morning, {teacherName}! 👋
+                Good Day, {teacherName}! 👋
               </h1>
               <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                Here&apos;s what&apos;s happening in <span className="text-white font-bold">{primaryForm}</span> today.
+                Connected with <span className="text-white font-bold">{profile.branchName || 'School Campus'}</span> &bull; Primary Class: <span className="text-white font-bold">{primaryForm}</span>
               </p>
             </div>
 
-            {/* Right Date/Time Box */}
-            <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs space-y-2 shrink-0 min-w-[200px]">
-              <div className="flex items-center gap-2 text-slate-200">
-                <Calendar size={14} className="text-sky-400 shrink-0" />
-                <span className="font-semibold">Thursday, 30 July 2026</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-200">
-                <Clock size={14} className="text-sky-400 shrink-0" />
-                <span className="font-semibold">08:00 AM</span>
+            {/* Right Date Box */}
+            <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs space-y-1 shrink-0">
+              <div className="flex items-center gap-2 text-slate-200 font-bold">
+                <Calendar size={15} className="text-sky-400 shrink-0" />
+                <span>{currentDateFormatted}</span>
               </div>
             </div>
 
@@ -483,14 +749,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-none">{subjectsCount}</h3>
                 <p className="text-[11px] font-bold text-slate-500 mt-0.5">Subjects</p>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">You teach</span>
+                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">Assigned to teach</span>
               </div>
             </div>
 
             {/* Card 3: Assignments */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
               <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <CheckSquare size={20} />
+                <CheckCircle2 size={20} />
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-none">{assignmentsCount}</h3>
@@ -507,7 +773,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-none">{testsCount}</h3>
                 <p className="text-[11px] font-bold text-slate-500 mt-0.5">Tests / CBT</p>
-                <span className="text-[10px] font-bold text-blue-600 block mt-0.5">{ongoingTestsCount} Ongoing</span>
+                <span className="text-[10px] font-bold text-blue-600 block mt-0.5">{ongoingTestsCount} Active</span>
               </div>
             </div>
 
@@ -519,19 +785,19 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-none">{classAverage}%</h3>
                 <p className="text-[11px] font-bold text-slate-500 mt-0.5">Class Average</p>
-                <span className="text-[10px] font-bold text-emerald-600 block mt-0.5">↑ 4% vs last term</span>
+                <span className="text-[10px] font-bold text-emerald-600 block mt-0.5">DB Score Average</span>
               </div>
             </div>
 
           </div>
 
-          {/* 3. Middle Row 1: Attendance Overview, Class Performance Overview, My Teaching Summary */}
+          {/* 3. Middle Row: Attendance, Subject Performance, Teaching Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* Widget 1: Attendance Overview (Today) */}
+            {/* Widget 1: Attendance Overview */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
               <div>
-                <h3 className="text-sm font-extrabold text-slate-900 mb-4">Attendance Overview (Today)</h3>
+                <h3 className="text-sm font-extrabold text-slate-900 mb-4">Attendance Overview</h3>
                 
                 <div className="flex items-center gap-4 py-1">
                   <SVGDonutChart percentage={attSummary.overallPercentage} centerLabel="Overall" color="#10B981" size={120} />
@@ -560,50 +826,55 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   onClick={() => onNavigate?.('attendance')}
                   className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
                 >
-                  <span>View full attendance</span>
+                  <span>Take Daily Roll Call</span>
                   <ArrowRight size={14} />
                 </button>
               </div>
             </div>
 
-            {/* Widget 2: Class Performance Overview (This Term) */}
+            {/* Widget 2: Class Performance Overview */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-extrabold text-slate-900">Class Performance Overview</h3>
+                  <h3 className="text-sm font-extrabold text-slate-900">Subject Score Averages</h3>
                   <button 
                     onClick={() => onNavigate?.('attrition')} 
                     className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
                   >
-                    View all
+                    View All
                   </button>
                 </div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Average Score by Subject</p>
 
-                <div className="space-y-3 text-xs">
-                  {subjectPerformance.map((sub, idx) => (
-                    <div key={idx} className="space-y-1">
-                      <div className="flex justify-between text-[11px] font-bold text-slate-700">
-                        <span>{sub.name}</span>
-                        <span>{sub.score}%</span>
+                {subjectPerformance.length > 0 ? (
+                  <div className="space-y-3 text-xs">
+                    {subjectPerformance.map((sub, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold text-slate-700">
+                          <span className="truncate max-w-[130px]">{sub.name}</span>
+                          <span>{sub.score}%</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-700 ${subjectBarColors[sub.name] || 'bg-blue-600'}`} 
+                            style={{ width: `${Math.min(100, Math.max(0, sub.score))}%` }} 
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-700 ${subjectBarColors[sub.name] || 'bg-blue-600'}`} 
-                          style={{ width: `${sub.score}%` }} 
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-slate-400 text-xs italic">
+                    No subject score averages calculated yet.
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-100 text-center">
                 <button 
-                  onClick={() => onNavigate?.('attrition')}
+                  onClick={() => onNavigate?.('gradebook')}
                   className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
                 >
-                  <span>View detailed performance</span>
+                  <span>Open Marks Gradebook</span>
                   <ArrowRight size={14} />
                 </button>
               </div>
@@ -612,7 +883,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
             {/* Widget 3: My Teaching Summary */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
               <div>
-                <h3 className="text-sm font-extrabold text-slate-900 mb-4">My Teaching Summary</h3>
+                <h3 className="text-sm font-extrabold text-slate-900 mb-4">My Teaching Activity</h3>
 
                 <div className="space-y-3 text-xs">
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
@@ -624,20 +895,20 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                     </div>
                     <div className="text-right">
                       <span className="font-black text-slate-900 text-sm">{teachingSummary.lessonNotesCount}</span>
-                      <span className="text-[10px] text-slate-400 block font-medium">This term</span>
+                      <span className="text-[10px] text-slate-400 block font-medium">Created</span>
                     </div>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                        <CheckSquare size={15} />
+                        <CheckCircle2 size={15} />
                       </div>
-                      <span className="font-bold text-slate-800">Assignments Given</span>
+                      <span className="font-bold text-slate-800">Assignments</span>
                     </div>
                     <div className="text-right">
                       <span className="font-black text-slate-900 text-sm">{teachingSummary.assignmentsGivenCount}</span>
-                      <span className="text-[10px] text-slate-400 block font-medium">This term</span>
+                      <span className="text-[10px] text-slate-400 block font-medium">Assigned</span>
                     </div>
                   </div>
 
@@ -646,24 +917,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                         <Award size={15} />
                       </div>
-                      <span className="font-bold text-slate-800">Tests / CBT Created</span>
+                      <span className="font-bold text-slate-800">CBT Tests</span>
                     </div>
                     <div className="text-right">
                       <span className="font-black text-slate-900 text-sm">{teachingSummary.testsCreatedCount}</span>
-                      <span className="text-[10px] text-slate-400 block font-medium">This term</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                        <TrendingUp size={15} />
-                      </div>
-                      <span className="font-bold text-slate-800">Scores Entered</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-black text-slate-900 text-sm">{teachingSummary.scoresEnteredPct}%</span>
-                      <span className="text-[10px] text-slate-400 block font-medium">This term</span>
+                      <span className="text-[10px] text-slate-400 block font-medium">Published</span>
                     </div>
                   </div>
                 </div>
@@ -671,10 +929,10 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
               <div className="pt-2 border-t border-slate-100 text-center">
                 <button 
-                  onClick={() => onNavigate?.('gradebook')}
+                  onClick={() => onNavigate?.('ai-planner')}
                   className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
                 >
-                  <span>Go to teaching tools</span>
+                  <span>AI Lesson Planner</span>
                   <ArrowRight size={14} />
                 </button>
               </div>
@@ -682,278 +940,129 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
           </div>
 
-          {/* 4. Middle Row 2: My Subjects (This Term) Cards Grid */}
+          {/* 4. My Classes Grid */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-slate-900">My Subjects (This Term)</h3>
+              <h3 className="text-sm font-extrabold text-slate-900">My Assigned Classes</h3>
               <button 
-                onClick={() => onNavigate?.('my-subjects')} 
+                onClick={() => onNavigate?.('roster')} 
                 className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
               >
-                View all subjects
+                View Roster
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-              {subjectsList.map((sub: any, idx: number) => (
-                <div key={idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-between space-y-3 hover:border-slate-300 transition">
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-black text-slate-900 truncate" title={sub.name}>{sub.name}</h4>
-                    <p className="text-[10px] text-slate-500 font-semibold">{sub.studentsCount} Students</p>
-                  </div>
-
-                  <div className="space-y-1 py-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-slate-400 font-medium">Average Score</span>
-                      <span className="font-bold text-emerald-600">{sub.score}%</span>
+            {myClassesList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {myClassesList.map((cls, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">{cls.name}</h4>
+                      <span className="text-[10px] font-bold text-blue-600 uppercase block">{cls.role}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-slate-400 font-medium">Next Lesson</span>
-                      <span className="font-semibold text-slate-700">{sub.nextLesson}</span>
-                    </div>
+                    <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700">
+                      {cls.studentsCount} Students
+                    </span>
                   </div>
-
-                  <button 
-                    onClick={() => onNavigate?.('gradebook')}
-                    className="text-[11px] font-bold text-blue-600 hover:underline flex items-center justify-between pt-1 border-t border-slate-200/60 cursor-pointer"
-                  >
-                    <span>Manage {sub.name.split(' ')[0]}</span>
-                    <ArrowRight size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 5. Recent Activities Timeline */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Recent Activities</h3>
-
-            <div className="space-y-3.5">
-              {recentActivitiesList.map((act: any, idx: number) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={16} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900">{act.text}</p>
-                    <span className="text-[10px] text-slate-400 font-medium">{act.timestamp}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-slate-400 text-xs italic">
+                No class allocations found for your account.
+              </div>
+            )}
           </div>
 
         </div>
 
-        {/* Right 4/3 Columns: Widget Sidebar Column (Calendar, Reminders, My Classes, Quick Links, OSe AI) */}
+        {/* Right 4 Columns: Sidebar Column */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* Card 1: Class Calendar Widget */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-slate-900">Class Calendar</h3>
-              <button 
-                onClick={() => onNavigate?.('calendar')} 
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+          {/* Sidebar Widget 1: Interactive Teacher Reminders */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <ListTodo size={15} className="text-indigo-600" />
+                Teacher Checklist Reminders
+              </h3>
+              <span className="text-[10px] text-blue-600 font-bold">{remindersList.length} Items</span>
+            </div>
+
+            {/* Inline Add Reminder */}
+            <form onSubmit={handleAddReminder} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add new task..."
+                value={newReminderText}
+                onChange={(e) => setNewReminderText(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+              />
+              <button
+                type="submit"
+                disabled={addingReminder}
+                className="px-3 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 cursor-pointer"
               >
-                View full calendar
+                <Plus size={14} />
               </button>
-            </div>
+            </form>
 
-            {/* Mini Calendar View */}
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <button className="text-slate-400 hover:text-slate-700 p-1"><ChevronLeft size={16} /></button>
-                <span className="font-extrabold text-slate-800 text-xs">July 2026</span>
-                <button className="text-slate-400 hover:text-slate-700 p-1"><ChevronRight size={16} /></button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
-                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
-              </div>
-
-              <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold">
-                <span className="text-slate-300 p-1">28</span>
-                <span className="text-slate-300 p-1">29</span>
-                <span className="text-slate-300 p-1">30</span>
-                <span className="text-slate-700 p-1">1</span>
-                <span className="text-slate-700 p-1">2</span>
-                <span className="text-slate-700 p-1">3</span>
-                <span className="text-slate-700 p-1">4</span>
-                
-                <span className="text-slate-700 p-1">5</span>
-                <span className="text-slate-700 p-1">6</span>
-                <span className="text-slate-700 p-1">7</span>
-                <span className="text-slate-700 p-1">8</span>
-                <span className="text-slate-700 p-1">9</span>
-                <span className="text-slate-700 p-1">10</span>
-                <span className="text-slate-700 p-1">11</span>
-
-                <span className="text-slate-700 p-1">12</span>
-                <span className="text-slate-700 p-1">13</span>
-                <span className="text-slate-700 p-1">14</span>
-                <span className="text-slate-700 p-1">15</span>
-                <span className="text-slate-700 p-1">16</span>
-                <span className="text-slate-700 p-1">17</span>
-                <span className="text-slate-700 p-1">18</span>
-
-                <span className="text-slate-700 p-1">19</span>
-                <span className="text-slate-700 p-1">20</span>
-                <span className="text-slate-700 p-1">21</span>
-                <span className="text-slate-700 p-1">22</span>
-                <span className="text-slate-700 p-1">23</span>
-                <span className="text-slate-700 p-1">24</span>
-                <span className="text-slate-700 p-1">25</span>
-
-                <span className="text-slate-700 p-1">26</span>
-                <span className="text-slate-700 p-1">27</span>
-                <span className="text-slate-700 p-1">28</span>
-                <span className="text-slate-700 p-1">29</span>
-                <span className="p-1 rounded-full bg-blue-600 text-white font-bold inline-block w-6 h-6 leading-4 mx-auto">30</span>
-                <span className="text-slate-700 p-1">31</span>
-                <span className="text-slate-300 p-1">1</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Today's Reminders */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Today&apos;s Reminders</h3>
-
-            <div className="space-y-2.5">
-              {remindersList.map((rem) => (
-                <div 
-                  key={rem.id} 
-                  onClick={() => toggleReminder(rem.id)}
-                  className={`p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 text-xs ${rem.done ? 'bg-slate-50 border-slate-200 text-slate-400 line-through' : 'bg-white border-slate-200 text-slate-900 hover:bg-slate-50'}`}
-                >
-                  <div className={`w-4 h-4 rounded-md border mt-0.5 flex items-center justify-center shrink-0 ${rem.done ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>
-                    {rem.done && <CheckCircle size={12} />}
-                  </div>
-                  <div>
-                    <p className="font-bold leading-snug">{rem.text}</p>
-                    {rem.subtext && <span className="text-[10px] text-slate-400 font-medium block mt-0.5">{rem.subtext}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Card 3: My Classes */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-slate-900">My Classes</h3>
-              <button 
-                onClick={() => onNavigate?.('my-classes')} 
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-              >
-                View all
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              {myClassesList.map((cls: any, idx: number) => (
-                <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-2 h-8 rounded-full ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-emerald-500' : 'bg-purple-600'}`} />
+            <div className="space-y-2.5 pt-1">
+              {remindersList.length > 0 ? (
+                remindersList.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => handleToggleReminder(r.id)}
+                    className="w-full flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 text-left text-xs transition border border-transparent hover:border-slate-100 cursor-pointer"
+                  >
+                    {r.done ? (
+                      <CheckCircle2 size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0 mt-0.5" />
+                    )}
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900">{cls.name}</h4>
-                      <span className="text-[10px] text-slate-500 font-medium">{cls.role}</span>
+                      <span className={`font-medium block ${r.done ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                        {r.text}
+                      </span>
+                      {r.subtext && <span className="text-[10px] text-rose-500 font-semibold block">{r.subtext}</span>}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="py-4 text-center text-slate-400 text-xs italic">
+                  All teacher reminders cleared.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar Widget 2: Recent Teacher Activity Stream */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <Activity size={15} className="text-emerald-600" />
+                Recent Activity Stream
+              </h3>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {recentActivitiesList.length > 0 ? (
+                recentActivitiesList.map((act) => (
+                  <div key={act.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                      <Activity size={15} />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-900 block truncate">{act.text}</span>
+                      <span className="text-[10px] text-slate-400 block">{act.timestamp}</span>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-slate-700">{cls.studentsCount} Students</span>
+                ))
+              ) : (
+                <div className="py-4 text-center text-slate-400 text-xs italic">
+                  No recent activities recorded.
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-
-          {/* Card 4: Quick Links */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Quick Links</h3>
-
-            <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
-              <button 
-                onClick={() => onNavigate?.('attendance')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-100 hover:border-blue-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <CheckSquare size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-blue-600">Take Attendance</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate?.('gradebook')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-purple-50 border border-slate-100 hover:border-purple-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <Edit3 size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-purple-600">Enter Scores</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate?.('assignments')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <FilePlus size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-indigo-600">Create Assignment</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate?.('cbt-exams')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-amber-50 border border-slate-100 hover:border-amber-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <Award size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-amber-600">Create Test / CBT</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate?.('class-reports')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-100 hover:border-rose-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <FileSpreadsheet size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-rose-600">Generate Report</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate?.('ai-planner')}
-                className="p-3 rounded-xl bg-slate-50 hover:bg-cyan-50 border border-slate-100 hover:border-cyan-200 transition group flex flex-col items-center gap-1.5 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-600 flex items-center justify-center group-hover:scale-105 transition">
-                  <FileText size={16} />
-                </div>
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-cyan-600">Lesson Notes</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 5: OSe AI Assistant Sidebar Widget */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shrink-0">
-                <Bot size={22} />
-              </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900">OSe AI Assistant</h3>
-                <p className="text-[10px] text-slate-400 font-medium">Your AI assistant for smarter teaching.</p>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => alert('Opening OSe AI Assistant for Teachers...')}
-              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-blue-500/20 transition-all flex items-center justify-between cursor-pointer"
-            >
-              <span>Chat with OSe</span>
-              <ArrowRight size={16} />
-            </button>
           </div>
 
         </div>
