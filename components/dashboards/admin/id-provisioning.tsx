@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { safeStorage } from '@/lib/safeStorage'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { 
   Award, ShieldAlert, FileText, Download, Trash2, CheckCircle2, AlertCircle, 
-  RefreshCw, Users, UserPlus, HelpCircle, Layers, ClipboardList, BookOpen, Plus
+  RefreshCw, Users, UserPlus, HelpCircle, Layers, ClipboardList, BookOpen, Plus, Loader2
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -62,7 +64,56 @@ interface StaffOption {
 }
 
 export function IdProvisioning() {
-  const [activeTab, setActiveTab] = useState<'cards' | 'certificates' | 'provision'>('cards')
+  const [activeTab, setActiveTab] = useState<'cards' | 'certificates' | 'provision' | 'batch-slips'>('cards')
+
+  // Batch Login Slips Export states
+  const [batchPdfClassId, setBatchPdfClassId] = useState<string>('all')
+  const [batchPdfSectionId, setBatchPdfSectionId] = useState<string>('all')
+  const [isExportingBatchPdf, setIsExportingBatchPdf] = useState(false)
+
+  const handleExportBatchLoginSlipsPdf = async () => {
+    try {
+      setIsExportingBatchPdf(true)
+      showSystemStatus({
+        type: 'PROCESSING',
+        title: 'Processing...',
+        message: 'Compiling Class Batch Login Slips PDF...',
+        durationMs: 0
+      })
+
+      const token = safeStorage.getItem('ugbekun_token')
+      const pdfUrl = endpoints.admin.exportClassLoginSlipsPdf(batchPdfClassId, batchPdfSectionId)
+
+      const res = await fetch(pdfUrl, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        }
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to generate Class Batch Login Slips PDF.')
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `Batch_Login_Slips_${batchPdfClassId === 'all' ? 'All_Classes' : `Class_${batchPdfClassId}`}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Successfully completed.',
+        message: 'Class Batch Login Slips PDF exported successfully!'
+      })
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to export login slips PDF.'))
+    } finally {
+      setIsExportingBatchPdf(false)
+    }
+  }
   
   // Lists
   const [cards, setCards] = useState<IdCard[]>([])
@@ -184,7 +235,7 @@ export function IdProvisioning() {
       loadCards()
     } else if (activeTab === 'certificates') {
       loadCertificates()
-    } else if (activeTab === 'provision') {
+    } else if (activeTab === 'provision' || activeTab === 'batch-slips') {
       loadOptions()
     }
   }, [activeTab, cardPage, certPage, cardStatusFilter, cardTypeFilter, certTypeFilter])
@@ -332,7 +383,7 @@ export function IdProvisioning() {
       </div>
 
       {/* Tabs Menu */}
-      <div className="flex border-b border-slate-200 bg-white p-1 rounded-xl shadow-sm max-w-md">
+      <div className="flex border-b border-slate-200 bg-white p-1 rounded-xl shadow-sm max-w-xl">
         <button
           onClick={() => setActiveTab('cards')}
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
@@ -352,6 +403,16 @@ export function IdProvisioning() {
           }`}
         >
           <Award size={14} /> Certificates
+        </button>
+        <button
+          onClick={() => setActiveTab('batch-slips')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'batch-slips' 
+              ? 'bg-slate-100 text-slate-800 border-b-2 border-blue-600' 
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileText size={14} /> Batch Login Slips (PDF)
         </button>
         <button
           onClick={() => setActiveTab('provision')}
@@ -632,6 +693,72 @@ export function IdProvisioning() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* BATCH LOGIN SLIPS TAB VIEW */}
+      {activeTab === 'batch-slips' && (
+        <div className="space-y-6 animate-scale-in">
+          <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 p-6 shadow-md text-white space-y-5 font-sans">
+            <div className="flex items-center justify-between border-b border-blue-800/50 pb-4">
+              <div>
+                <h3 className="font-black text-lg text-white flex items-center gap-2">
+                  <FileText className="text-blue-400" size={22} /> Batch Class Login Slips PDF Generator Desk
+                </h3>
+                <p className="text-slate-300 text-xs mt-1">
+                  Export printable, cut-out credential slips for all enrolled students and parents in a selected class.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">Select Class</label>
+                <select
+                  value={batchPdfClassId}
+                  onChange={(e) => setBatchPdfClassId(e.target.value)}
+                  className="w-full text-xs font-semibold p-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-blue-400"
+                >
+                  <option value="all">All Classes (Entire Branch)</option>
+                  {classes.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">Select Section (Optional)</label>
+                <select
+                  value={batchPdfSectionId}
+                  onChange={(e) => setBatchPdfSectionId(e.target.value)}
+                  className="w-full text-xs font-semibold p-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-blue-400"
+                >
+                  <option value="all">All Sections</option>
+                  {batchPdfClassId !== 'all' &&
+                    classes
+                      .find((c) => c.id === Number(batchPdfClassId))
+                      ?.sections.map((s) => (
+                        <option key={s.section.id} value={s.section.id}>
+                          Section {s.section.name}
+                        </option>
+                      ))}
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={handleExportBatchLoginSlipsPdf}
+                  disabled={isExportingBatchPdf}
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isExportingBatchPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  <span>Export Class Batch Slips (PDF)</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

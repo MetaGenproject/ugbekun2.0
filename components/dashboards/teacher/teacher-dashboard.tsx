@@ -42,11 +42,14 @@ import {
   Mail,
   Phone,
   MapPin,
-  User
+  User,
+  Eye,
+  Check
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import GradebookInterface from './gradebook-interface'
 import MontessoriMatrix from './montessori-matrix'
 import AttendanceRegister from './attendance-register'
@@ -268,6 +271,30 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [newReminderText, setNewReminderText] = useState<string>('')
   const [addingReminder, setAddingReminder] = useState<boolean>(false)
 
+  // Homework Management State
+  const [homeworksList, setHomeworksList] = useState<any[]>([])
+  const [loadingHomeworks, setLoadingHomeworks] = useState<boolean>(false)
+  const [showCreateHwModal, setShowCreateHwModal] = useState<boolean>(false)
+
+  // New Homework Form State
+  const [hwTitle, setHwTitle] = useState<string>('')
+  const [hwDescription, setHwDescription] = useState<string>('')
+  const [hwClassId, setHwClassId] = useState<string>('')
+  const [hwSubjectId, setHwSubjectId] = useState<string>('')
+  const [hwDueDate, setHwDueDate] = useState<string>('')
+  const [publishingHw, setPublishingHw] = useState<boolean>(false)
+
+  // Submissions Drawer/Modal State
+  const [selectedHwForSubmissions, setSelectedHwForSubmissions] = useState<any | null>(null)
+  const [hwSubmissions, setHwSubmissions] = useState<any[]>([])
+  const [loadingSubmissions, setLoadingSubmissions] = useState<boolean>(false)
+
+  // Submissions Grading State
+  const [gradingSubmissionId, setGradingSubmissionId] = useState<number | null>(null)
+  const [gradeScore, setGradeScore] = useState<string>('')
+  const [gradeFeedback, setGradeFeedback] = useState<string>('')
+  const [savingGrade, setSavingGrade] = useState<boolean>(false)
+
   useEffect(() => {
     let active = true
 
@@ -343,6 +370,21 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
       }
       fetchRoster()
     }
+
+    if (activeSection === 'assignments' || activeSection === 'homeworks') {
+      async function fetchHomeworks() {
+        try {
+          setLoadingHomeworks(true)
+          const res = await apiSlice.get<{ success: boolean; homeworks: any[] }>(endpoints.teacher.homeworks)
+          if (res.success) setHomeworksList(res.homeworks || [])
+        } catch (err) {
+          console.error('Failed to fetch homeworks:', err)
+        } finally {
+          setLoadingHomeworks(false)
+        }
+      }
+      fetchHomeworks()
+    }
   }, [activeSection])
 
   const handleToggleReminder = async (id: number) => {
@@ -395,9 +437,80 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         }, 1500)
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to send message to parent.')
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to send message to parent.'))
     } finally {
       setSendingMsg(false)
+    }
+  }
+
+  const handleCreateHomework = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!hwTitle.trim() || !hwClassId || !hwSubjectId || !hwDueDate) return
+    try {
+      setPublishingHw(true)
+      const res = await apiSlice.post<{ success: boolean; homework: any; message: string }>(endpoints.teacher.homeworks, {
+        title: hwTitle.trim(),
+        description: hwDescription.trim(),
+        classId: Number(hwClassId),
+        subjectId: Number(hwSubjectId),
+        dueDate: hwDueDate
+      })
+      if (res.success && res.homework) {
+        setHomeworksList(prev => [res.homework, ...prev])
+        setHwTitle('')
+        setHwDescription('')
+        setHwClassId('')
+        setHwSubjectId('')
+        setHwDueDate('')
+        setShowCreateHwModal(false)
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Successfully completed.',
+          message: 'Homework assignment published successfully!'
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to publish homework.'))
+    } finally {
+      setPublishingHw(false)
+    }
+  }
+
+  const handleViewSubmissions = async (hw: any) => {
+    setSelectedHwForSubmissions(hw)
+    try {
+      setLoadingSubmissions(true)
+      const res = await apiSlice.get<{ success: boolean; submissions: any[] }>(endpoints.teacher.homeworkSubmissions(hw.id))
+      if (res.success) setHwSubmissions(res.submissions || [])
+    } catch (err) {
+      console.error('Failed to fetch submissions:', err)
+    } finally {
+      setLoadingSubmissions(false)
+    }
+  }
+
+  const handleSaveSubmissionGrade = async (submissionId: number) => {
+    try {
+      setSavingGrade(true)
+      const res = await apiSlice.post<{ success: boolean; submission: any; message: string }>(
+        endpoints.teacher.gradeHomework(submissionId),
+        { score: gradeScore ? Number(gradeScore) : null, feedback: gradeFeedback }
+      )
+      if (res.success) {
+        setHwSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, score: res.submission.score, feedback: res.submission.feedback } : s))
+        setGradingSubmissionId(null)
+        setGradeScore('')
+        setGradeFeedback('')
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Successfully completed.',
+          message: 'Submission graded successfully!'
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to save grade.'))
+    } finally {
+      setSavingGrade(false)
     }
   }
 
@@ -614,17 +727,321 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
     )
   }
 
+  // HOMEWORK & ASSIGNMENTS MANAGEMENT SUB-VIEW
+  if (activeSection === 'assignments' || activeSection === 'homeworks') {
+    return (
+      <div className="space-y-6 pb-12 font-sans">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <CheckSquare className="text-purple-600" size={24} />
+              Homework & Assignments Manager
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Create homework assignments for your classes and grade student submissions in real time.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setShowCreateHwModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
+          >
+            <Plus size={16} />
+            <span>Create Homework Assignment</span>
+          </button>
+        </div>
+
+        {/* Homework List */}
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Published Assignments ({homeworksList.length})
+            </h3>
+            {loadingHomeworks && <Loader2 size={16} className="animate-spin text-purple-600" />}
+          </div>
+
+          {homeworksList.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {homeworksList.map((hw) => (
+                <div key={hw.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold">
+                        {hw.class?.name || 'Class'} &bull; {hw.subject?.name || 'Subject'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        Due: {new Date(hw.dueDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 text-sm mt-1">{hw.title}</h4>
+                    {hw.description && <p className="text-xs text-slate-500 line-clamp-2">{hw.description}</p>}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-600">
+                      Created: {new Date(hw.createdAt).toLocaleDateString()}
+                    </span>
+                    <button
+                      onClick={() => handleViewSubmissions(hw)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Eye size={14} className="text-purple-600" />
+                      <span>View Submissions</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-slate-400 text-xs italic">
+              No homework assignments created yet. Click &quot;Create Homework Assignment&quot; to publish your first assignment.
+            </div>
+          )}
+        </div>
+
+        {/* Create Homework Modal */}
+        {showCreateHwModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <CheckSquare className="text-purple-600" size={20} />
+                  New Homework Assignment
+                </h3>
+                <button
+                  onClick={() => setShowCreateHwModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateHomework} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Assignment Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Mathematics Algebra Worksheet 4"
+                    value={hwTitle}
+                    onChange={(e) => setHwTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
+                    <select
+                      required
+                      value={hwClassId}
+                      onChange={(e) => setHwClassId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
+                    >
+                      <option value="">Select Class</option>
+                      {profile.formAllocations.map((fa) => (
+                        <option key={fa.classId} value={fa.classId}>
+                          {fa.className} ({fa.sectionName})
+                        </option>
+                      ))}
+                      {profile.subjectAssignments.map((sa) => (
+                        <option key={sa.classId} value={sa.classId}>
+                          {sa.className} ({sa.sectionName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Subject *</label>
+                    <select
+                      required
+                      value={hwSubjectId}
+                      onChange={(e) => setHwSubjectId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
+                    >
+                      <option value="">Select Subject</option>
+                      {profile.subjectAssignments.map((sa) => (
+                        <option key={sa.subjectId} value={sa.subjectId}>
+                          {sa.subjectName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Due Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={hwDueDate}
+                    onChange={(e) => setHwDueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Description / Instructions</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Instructions for students..."
+                    value={hwDescription}
+                    onChange={(e) => setHwDescription(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                  />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateHwModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={publishingHw}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md cursor-pointer"
+                  >
+                    {publishingHw ? 'Publishing...' : 'Publish Assignment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* View Submissions Modal */}
+        {selectedHwForSubmissions && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <FileText className="text-purple-600" size={20} />
+                    Submissions: {selectedHwForSubmissions.title}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Due Date: {new Date(selectedHwForSubmissions.dueDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedHwForSubmissions(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {loadingSubmissions ? (
+                <div className="py-12 flex justify-center items-center gap-2 text-xs text-slate-500">
+                  <Loader2 size={18} className="animate-spin text-purple-600" />
+                  <span>Loading submissions...</span>
+                </div>
+              ) : hwSubmissions.length > 0 ? (
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                  {hwSubmissions.map((sub) => (
+                    <div key={sub.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <User size={16} className="text-purple-600" />
+                          <span className="font-bold text-slate-900">{sub.student?.firstName} {sub.student?.lastName} ({sub.student?.registerNo})</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Submitted: {new Date(sub.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {gradingSubmissionId === sub.id ? (
+                        <div className="p-3 bg-white border border-purple-200 rounded-xl space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-bold text-slate-700 mb-1">Score Mark *</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 85"
+                                value={gradeScore}
+                                onChange={(e) => setGradeScore(e.target.value)}
+                                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-slate-700 mb-1">Feedback Note</label>
+                              <input
+                                type="text"
+                                placeholder="Good effort!"
+                                value={gradeFeedback}
+                                onChange={(e) => setGradeFeedback(e.target.value)}
+                                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setGradingSubmissionId(null)}
+                              className="px-3 py-1 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleSaveSubmissionGrade(sub.id)}
+                              disabled={savingGrade}
+                              className="px-4 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer"
+                            >
+                              {savingGrade ? 'Saving...' : 'Save Grade'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                          <div>
+                            <span className="font-semibold text-slate-700">
+                              Score: {sub.score !== null ? `${sub.score}%` : 'Not Graded Yet'}
+                            </span>
+                            {sub.feedback && <p className="text-[11px] text-slate-500 italic mt-0.5">&ldquo;{sub.feedback}&rdquo;</p>}
+                          </div>
+                          <button
+                            onClick={() => {
+                              setGradingSubmissionId(sub.id)
+                              setGradeScore(sub.score !== null ? String(sub.score) : '')
+                              setGradeFeedback(sub.feedback || '')
+                            }}
+                            className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition border border-purple-200 cursor-pointer"
+                          >
+                            Grade Submission
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-400 text-xs italic">
+                  No students have submitted responses for this homework yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const normalizedProfile = profile ? { ...profile, id: profile.teacherId } : undefined
+
   if (activeSection === 'attendance') {
     return <AttendanceRegister formAllocations={profile?.formAllocations || []} />
   }
   if (activeSection === 'ai-planner' || activeSection === 'lesson-plan') {
-    return <AiLessonPlanner profile={profile} />
+    return <AiLessonPlanner profile={normalizedProfile as any} />
   }
   if (activeSection === 'media') {
     return <MediaLibrary teacherId={profile?.teacherId || user?.id || 0} />
   }
   if (activeSection === 'liveRooms') {
-    return <LiveClassroomHub profile={profile} />
+    return <LiveClassroomHub profile={normalizedProfile as any} />
   }
   if (activeSection === 'points-hub') {
     return <TeacherPointsHub />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Award,
   Laptop,
@@ -27,7 +27,8 @@ import {
   Shield,
   FileCheck,
   Printer,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react'
 import {
   Table,
@@ -38,6 +39,8 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 
 type ExamTab = 
   | 'exam-setup-manual' 
@@ -53,9 +56,38 @@ type ExamTab =
   | 'exam-hall' 
   | 'exam-timetable'
 
+interface ClassData {
+  id: number
+  name: string
+  sections: Array<{ section: { id: number; name: string } }>
+}
+
+interface ExamRecord {
+  id: number
+  name: string
+  termId: number
+  typeId: number
+  sessionId: number
+  createdAt: string
+  remark?: string
+}
+
 export function ExamCbtManagement() {
   const [activeTab, setActiveTab] = useState<ExamTab>('exam-setup-cbt')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Data State
+  const [classesList, setClassesList] = useState<ClassData[]>([])
+  const [publishedExams, setPublishedExams] = useState<ExamRecord[]>([])
+  const [loadingExams, setLoadingExams] = useState(true)
+
+  // Exam Form State
+  const [examName, setExamName] = useState('')
+  const [selectedClassId, setSelectedClassId] = useState('')
+  const [termId, setTermId] = useState('1')
+  const [durationMins, setDurationMins] = useState('45')
+  const [totalQuestions, setTotalQuestions] = useState('40')
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false)
 
   // CBT Exam Simulator State
   const [currentCbtQ, setCurrentCbtQ] = useState(0)
@@ -72,6 +104,26 @@ export function ExamCbtManagement() {
   const [isPublished, setIsPublished] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
 
+  // Fetch classes and exams on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoadingExams(true)
+        const [clsRes, examRes] = await Promise.all([
+          apiSlice.get<{ success: boolean; classes: ClassData[] }>(endpoints.admin.classesSections).catch(() => null),
+          apiSlice.get<{ success: boolean; exams: ExamRecord[] }>(endpoints.admin.exams).catch(() => null),
+        ])
+        if (clsRes?.classes) setClassesList(clsRes.classes)
+        if (examRes?.exams) setPublishedExams(examRes.exams)
+      } catch (err) {
+        console.error('[EXAM SETUP] Error loading setup data:', err)
+      } finally {
+        setLoadingExams(false)
+      }
+    }
+    loadData()
+  }, [])
+
   // CBT Mock Questions
   const mockCbtQuestions = [
     { id: 1, q: 'Solve for x: 3x + 15 = 45', options: ['x = 5', 'x = 10', 'x = 15', 'x = 20'], correct: 'x = 10' },
@@ -80,9 +132,61 @@ export function ExamCbtManagement() {
     { id: 4, q: 'Calculate the perimeter of a rectangle with length 12cm and width 8cm.', options: ['40cm', '96cm', '20cm', '48cm'], correct: '40cm' },
   ]
 
+  const handleCreateExam = async (e: React.FormEvent, isCbt: boolean = false) => {
+    e.preventDefault()
+    if (!examName.trim()) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Required information missing.',
+        message: 'Exam Name is required. Please enter an exam title before submitting.'
+      })
+      return
+    }
+
+    try {
+      setIsSubmittingExam(true)
+      showSystemStatus({
+        type: 'PROCESSING',
+        title: 'Processing...',
+        message: 'Publishing exam setup to database...',
+        durationMs: 0
+      })
+
+      const payload = {
+        name: examName.trim(),
+        termId: Number(termId || 1),
+        typeId: isCbt ? 3 : 1,
+        markDistribution: isCbt ? ['CBT Test', 'Theory', 'Objective'] : ['Theory', 'Objective'],
+        remark: isCbt ? `CBT Exam (${durationMins || 45} mins)` : 'Manual Paper Exam'
+      }
+
+      const res = await apiSlice.post<{ success: boolean; exam: ExamRecord }>(endpoints.admin.exams, payload)
+      
+      if (res.success && res.exam) {
+        setPublishedExams(prev => [res.exam, ...prev])
+        setExamName('')
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Successfully completed.',
+          message: `Exam "${res.exam.name}" successfully created and saved to database.`
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to complete exam setup.'))
+    } finally {
+      setIsSubmittingExam(false)
+    }
+  }
+
   const handleAiGenerate = (e: React.FormEvent) => {
     e.preventDefault()
     setIsGenerating(true)
+    showSystemStatus({
+      type: 'PROCESSING',
+      title: 'Processing...',
+      message: `Generating AI questions for ${aiSubject}...`,
+      durationMs: 0
+    })
     setTimeout(() => {
       setAiQuestions([
         { q: `If 2x - 4 = 12, what is the value of x?`, options: ['x = 6', 'x = 8', 'x = 10', 'x = 4'], ans: 'x = 8' },
@@ -90,20 +194,35 @@ export function ExamCbtManagement() {
         { q: `What is the gradient of the line y = 4x + 7?`, options: ['4', '7', '1/4', '-4'], ans: '4' },
       ])
       setIsGenerating(false)
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Successfully completed.',
+        message: 'AI questions generated successfully!'
+      })
     }, 1000)
   }
 
   const handlePublishResults = () => {
     setIsPublishing(true)
+    showSystemStatus({
+      type: 'PROCESSING',
+      title: 'Processing...',
+      message: 'Publishing examination results to student/parent portal...',
+      durationMs: 0
+    })
     setTimeout(() => {
       setIsPublished(true)
       setIsPublishing(false)
-      alert('1st Term Examination Results published to Ugbekun Portal! SMS and EduChat notifications dispatched to all parents.')
+      showSystemStatus({
+        type: 'SUCCESS',
+        title: 'Successfully completed.',
+        message: 'Examination results published to Ugbekun Portal! SMS and EduChat notifications dispatched.'
+      })
     }, 1000)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       {/* Header Banner */}
       <div className="relative rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
@@ -136,7 +255,7 @@ export function ExamCbtManagement() {
         </div>
       </div>
 
-      {/* 12 Sub-Module Tabs Bar */}
+      {/* Sub-Module Tabs Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs">
         <button onClick={() => setActiveTab('exam-setup-manual')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'exam-setup-manual' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📝 Exam Setup (Manual)
@@ -162,53 +281,220 @@ export function ExamCbtManagement() {
         <button onClick={() => setActiveTab('result-publishing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'result-publishing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📢 Result Publishing
         </button>
-        <button onClick={() => setActiveTab('test-manual')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'test-manual' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          ✍️ Test Score (Manual)
-        </button>
-        <button onClick={() => setActiveTab('test-setup-cbt')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'test-setup-cbt' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🧪 Test Setup CBT
-        </button>
-        <button onClick={() => setActiveTab('exam-hall')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'exam-hall' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🏫 Exam Hall Seating
-        </button>
-        <button onClick={() => setActiveTab('exam-timetable')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'exam-timetable' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🗓️ Exam Timetable
-        </button>
       </div>
 
       {/* 1. EXAM SETUP MANUAL */}
       {activeTab === 'exam-setup-manual' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-2xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Manual Paper Exam Configuration</h3>
-          <p className="text-xs text-slate-500">Configure paper-based written examinations and hall distribution.</p>
-          <form onSubmit={e => { e.preventDefault(); alert('Manual Exam Created!'); }} className="space-y-3">
-            <input type="text" placeholder="Exam Title (e.g. 1st Term Mathematics Theory)" className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 font-semibold" required />
-            <div className="grid grid-cols-2 gap-3">
-              <input type="text" placeholder="Target Class (e.g. Primary 4)" className="px-3 py-2 border rounded-xl text-xs bg-slate-50" required />
-              <input type="date" className="px-3 py-2 border rounded-xl text-xs bg-slate-50" required />
-            </div>
-            <button type="submit" className="px-4 py-2 bg-cyan-600 text-white font-bold text-xs rounded-xl">Create Manual Exam</button>
-          </form>
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
+            <h3 className="font-black text-base text-slate-900">Manual Paper Exam Configuration</h3>
+            <p className="text-xs text-slate-500">Configure paper-based written examinations and hall distribution.</p>
+            
+            <form onSubmit={(e) => handleCreateExam(e, false)} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Exam Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 1st Term Mathematics Theory Examination"
+                  value={examName}
+                  onChange={(e) => setExamName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  >
+                    <option value="">All Branch Classes</option>
+                    {classesList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Academic Term *</label>
+                  <select
+                    value={termId}
+                    onChange={(e) => setTermId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  >
+                    <option value="1">1st Term</option>
+                    <option value="2">2nd Term</option>
+                    <option value="3">3rd Term</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingExam}
+                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
+              >
+                {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isSubmittingExam ? 'Creating Exam...' : 'Create Manual Exam'}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Published Exams Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
+            <h4 className="font-bold text-sm text-slate-900">Published Branch Exams ({publishedExams.length})</h4>
+            {loadingExams ? (
+              <div className="py-8 text-center text-slate-400 text-xs flex justify-center items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-cyan-600" />
+                <span>Loading exams records...</span>
+              </div>
+            ) : publishedExams.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b">
+                    <tr>
+                      <th className="p-3">Exam Name</th>
+                      <th className="p-3">Term</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Created Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {publishedExams.map((ex) => (
+                      <tr key={ex.id}>
+                        <td className="p-3 font-bold text-slate-900">{ex.name}</td>
+                        <td className="p-3 font-semibold text-cyan-600">{ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}</td>
+                        <td className="p-3 font-mono">{ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}</td>
+                        <td className="p-3 text-slate-500">{new Date(ex.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-slate-400 text-xs italic">
+                No exams published in database yet.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* 2. EXAM SETUP CBT */}
       {activeTab === 'exam-setup-cbt' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-2xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Computer Based Test (CBT) Setup</h3>
-          <p className="text-xs text-slate-500">Set up online CBT exams with instant automated scoring, timers, and question randomization.</p>
-          <form onSubmit={e => { e.preventDefault(); alert('CBT Exam Created!'); }} className="space-y-3">
-            <input type="text" placeholder="CBT Exam Name (e.g. 1st Term General Science CBT)" className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 font-semibold" required />
-            <div className="grid grid-cols-3 gap-3">
-              <select className="px-3 py-2 border rounded-xl text-xs bg-slate-50"><option>Primary 4</option><option>SSS 1</option></select>
-              <input type="number" placeholder="Duration (Mins)" className="px-3 py-2 border rounded-xl text-xs bg-slate-50" defaultValue={45} />
-              <input type="number" placeholder="Total Qs" className="px-3 py-2 border rounded-xl text-xs bg-slate-50" defaultValue={40} />
-            </div>
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-1">
-              <input type="checkbox" defaultChecked /> Randomize Questions per Student
-            </label>
-            <button type="submit" className="px-4 py-2 bg-cyan-600 text-white font-bold text-xs rounded-xl">Publish CBT Exam</button>
-          </form>
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
+            <h3 className="font-black text-base text-slate-900">Computer Based Test (CBT) Setup</h3>
+            <p className="text-xs text-slate-500">Set up online CBT exams with instant automated scoring, timers, and question randomization.</p>
+            
+            <form onSubmit={(e) => handleCreateExam(e, true)} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">CBT Exam Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 1st Term General Science CBT Examination"
+                  value={examName}
+                  onChange={(e) => setExamName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  >
+                    <option value="">All Branch Classes</option>
+                    {classesList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Duration (Mins) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={durationMins}
+                    onChange={(e) => setDurationMins(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Total Questions *</label>
+                  <input
+                    type="number"
+                    required
+                    value={totalQuestions}
+                    onChange={(e) => setTotalQuestions(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-1">
+                <input type="checkbox" defaultChecked /> Randomize Questions per Student
+              </label>
+
+              <button
+                type="submit"
+                disabled={isSubmittingExam}
+                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
+              >
+                {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Monitor size={16} />}
+                <span>{isSubmittingExam ? 'Publishing CBT Exam...' : 'Publish CBT Exam'}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Published Exams Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
+            <h4 className="font-bold text-sm text-slate-900">Published Branch Exams ({publishedExams.length})</h4>
+            {loadingExams ? (
+              <div className="py-8 text-center text-slate-400 text-xs flex justify-center items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-cyan-600" />
+                <span>Loading exams records...</span>
+              </div>
+            ) : publishedExams.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b">
+                    <tr>
+                      <th className="p-3">Exam Name</th>
+                      <th className="p-3">Term</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Remark</th>
+                      <th className="p-3">Created Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {publishedExams.map((ex) => (
+                      <tr key={ex.id}>
+                        <td className="p-3 font-bold text-slate-900">{ex.name}</td>
+                        <td className="p-3 font-semibold text-cyan-600">{ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}</td>
+                        <td className="p-3 font-mono">{ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}</td>
+                        <td className="p-3 text-slate-500">{ex.remark || 'N/A'}</td>
+                        <td className="p-3 text-slate-500">{new Date(ex.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-slate-400 text-xs italic">
+                No exams published in database yet.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -248,100 +534,133 @@ export function ExamCbtManagement() {
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h3 className="font-black text-base text-slate-900">CBT Live Exam Portal</h3>
-              <p className="text-xs text-slate-500 font-medium">Student CBT Examination Interface with Live Countdown Timer.</p>
+              <p className="text-xs text-slate-500">Simulated student computer-based test session.</p>
             </div>
-            <span className="font-mono font-bold text-xs bg-rose-50 text-rose-700 px-3 py-1 rounded-full border border-rose-200">
-              ⏱ Time Left: 34:12
+            <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">
+              Time Remaining: 42:18
             </span>
           </div>
 
           {!cbtSubmitted ? (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                <p className="font-extrabold text-sm text-slate-900">Question {currentCbtQ + 1} of {mockCbtQuestions.length}:</p>
-                <p className="text-xs font-semibold text-slate-800">{mockCbtQuestions[currentCbtQ].q}</p>
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  {mockCbtQuestions[currentCbtQ].options.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => setSelectedAns({ ...selectedAns, [currentCbtQ]: opt })}
-                      className={`p-3 rounded-xl border text-left text-xs font-bold transition cursor-pointer ${
-                        selectedAns[currentCbtQ] === opt ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-4 text-xs">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Question {currentCbtQ + 1} of {mockCbtQuestions.length}</span>
+                <p className="font-bold text-slate-900 text-sm mt-1">{mockCbtQuestions[currentCbtQ].q}</p>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="space-y-2">
+                {mockCbtQuestions[currentCbtQ].options.map((opt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedAns({ ...selectedAns, [currentCbtQ]: opt })}
+                    className={`w-full p-3 rounded-xl border text-left font-semibold transition cursor-pointer ${
+                      selectedAns[currentCbtQ] === opt ? 'bg-cyan-50 border-cyan-500 text-cyan-900' : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-slate-100">
                 <button
                   disabled={currentCbtQ === 0}
                   onClick={() => setCurrentCbtQ(prev => prev - 1)}
-                  className="px-4 py-2 bg-slate-100 disabled:opacity-50 text-slate-700 font-bold text-xs rounded-xl"
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl disabled:opacity-50 cursor-pointer"
                 >
-                  Previous Q
+                  Previous
                 </button>
-                {currentCbtQ < mockCbtQuestions.length - 1 ? (
-                  <button onClick={() => setCurrentCbtQ(prev => prev + 1)} className="px-4 py-2 bg-cyan-600 text-white font-bold text-xs rounded-xl">Next Q</button>
+
+                {currentCbtQ === mockCbtQuestions.length - 1 ? (
+                  <button
+                    onClick={() => {
+                      setCbtSubmitted(true)
+                      showSystemStatus({
+                        type: 'ACTION_SUCCESS',
+                        title: 'Successfully completed.',
+                        message: 'CBT Exam submitted successfully!'
+                      })
+                    }}
+                    className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  >
+                    Submit Exam
+                  </button>
                 ) : (
-                  <button onClick={() => setCbtSubmitted(true)} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl">Submit Exam</button>
+                  <button
+                    onClick={() => setCurrentCbtQ(prev => prev + 1)}
+                    className="px-4 py-2 bg-cyan-600 text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  >
+                    Next Question
+                  </button>
                 )}
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
-              <CheckCircle2 size={36} className="text-emerald-600 mx-auto" />
-              <h4 className="font-black text-slate-900 text-lg">CBT Exam Submitted Successfully!</h4>
-              <p className="text-xs font-bold text-emerald-800">Your Score: 4 / 4 (100%) • Auto-Graded by OSe Engine</p>
-              <button onClick={() => { setCbtSubmitted(false); setCurrentCbtQ(0); setSelectedAns({}); }} className="mt-2 px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Retake Demo CBT</button>
+            <div className="p-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                <CheckCircle2 size={28} />
+              </div>
+              <h4 className="font-bold text-slate-900 text-base">Exam Session Submitted!</h4>
+              <p className="text-xs text-slate-500">Your score has been logged automatically in the portal.</p>
+              <button
+                onClick={() => { setCbtSubmitted(false); setCurrentCbtQ(0); setSelectedAns({}); }}
+                className="px-4 py-2 bg-cyan-600 text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Restart Simulator
+              </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 5. QUESTION BANK */}
-      {activeTab === 'question-bank' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Master Question Bank Repository</h3>
-          <Table>
-            <TableHeader><TableRow><TableHead>Q ID</TableHead><TableHead>Subject</TableHead><TableHead>Question Text</TableHead><TableHead>Type</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {mockCbtQuestions.map(q => (
-                <TableRow key={q.id}>
-                  <TableCell className="font-mono font-bold text-cyan-700">Q-EXM-0{q.id}</TableCell>
-                  <TableCell className="font-bold text-slate-800">Mathematics</TableCell>
-                  <TableCell className="text-xs font-medium text-slate-900">{q.q}</TableCell>
-                  <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">MCQ</span></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* 6. AI QUESTION GENERATOR */}
+      {/* 5. AI QUESTION GENERATOR */}
       {activeTab === 'ai-generator' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-2xl mx-auto space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-2xl mx-auto space-y-4 text-xs">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
-            <Sparkles className="text-amber-500" size={18} /> OSe AI Exam Question Generator
+            <Sparkles className="text-cyan-600" size={20} /> AI Question & Test Generator
           </h3>
+          <p className="text-slate-500">Automatically compose curriculum-aligned test questions using AI.</p>
+
           <form onSubmit={handleAiGenerate} className="space-y-3">
-            <input type="text" value={aiSubject} onChange={e => setAiSubject(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 font-semibold" placeholder="Subject" />
-            <input type="text" value={aiTopic} onChange={e => setAiTopic(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 font-semibold" placeholder="Topic Title" />
-            <button type="submit" disabled={isGenerating} className="px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl flex items-center gap-2">
-              {isGenerating ? <Loader2 size={14} className="animate-spin text-amber-400" /> : <Sparkles size={14} className="text-amber-400" />} Generate Exam Questions
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={aiSubject}
+                  onChange={(e) => setAiSubject(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Topic</label>
+                <input
+                  type="text"
+                  value={aiTopic}
+                  onChange={(e) => setAiTopic(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 font-semibold"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isGenerating}
+              className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
+            >
+              {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              <span>{isGenerating ? 'Generating...' : 'Generate Questions'}</span>
             </button>
           </form>
 
           {aiQuestions.length > 0 && (
-            <div className="space-y-3 pt-3 border-t border-slate-100">
-              <h4 className="font-bold text-xs text-slate-900 uppercase">Generated Question Items ({aiQuestions.length})</h4>
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <h4 className="font-bold text-slate-900">Generated Questions:</h4>
               {aiQuestions.map((q, idx) => (
-                <div key={idx} className="p-3 bg-slate-50 rounded-xl border text-xs space-y-1">
+                <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <p className="font-bold text-slate-900">{idx + 1}. {q.q}</p>
-                  <p className="text-[11px] text-emerald-700 font-semibold">Answer: {q.ans}</p>
+                  <p className="text-[11px] text-slate-500">Options: {q.options.join(' | ')}</p>
+                  <p className="text-[11px] font-bold text-emerald-600">Correct Answer: {q.ans}</p>
                 </div>
               ))}
             </div>
@@ -349,109 +668,22 @@ export function ExamCbtManagement() {
         </div>
       )}
 
-      {/* 7. RESULTS PROCESSING */}
-      {activeTab === 'results-processing' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Termly Results Processing Engine</h3>
-          <p className="text-xs text-slate-500">Computes final weighted scores: (30% CA + 70% Exam = 100%), GPA grades, and position ranks.</p>
-          <Table>
-            <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>CA (30m)</TableHead><TableHead>Exam (70m)</TableHead><TableHead>Total (100%)</TableHead><TableHead>Grade</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {[
-                { name: 'Chinedu Joseph Okafor', ca: 27, exam: 65, total: 92, grade: 'A1', rank: '1st' },
-                { name: 'Amina Abubakar Bello', ca: 28, exam: 62, total: 90, grade: 'A1', rank: '2nd' },
-                { name: 'David Oluwaseun Adeleke', ca: 24, exam: 58, total: 82, grade: 'B2', rank: '3rd' },
-              ].map(r => (
-                <TableRow key={r.name}>
-                  <TableCell className="font-bold text-slate-900">{r.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.ca}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.exam}</TableCell>
-                  <TableCell className="font-mono font-black text-slate-900">{r.total}%</TableCell>
-                  <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">{r.grade}</span></TableCell>
-                  <TableCell className="font-bold text-indigo-700">{r.rank}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* 8. RESULT PUBLISHING */}
+      {/* 6. RESULT PUBLISHING */}
       {activeTab === 'result-publishing' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto text-center space-y-4">
-          <Globe size={32} className="text-cyan-600 mx-auto" />
-          <h3 className="font-black text-base text-slate-900">Publish 1st Term Results to Ugbekun Portal</h3>
-          <p className="text-xs text-slate-500 font-medium">When published, parents and students can securely view report cards online.</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto text-center space-y-4 text-xs">
+          <Award size={36} className="text-cyan-600 mx-auto" />
+          <h3 className="font-black text-base text-slate-900">Publish Term Examination Results</h3>
+          <p className="text-slate-500">Publishing makes exam report cards visible on the Student and Parent portals.</p>
 
           <button
             onClick={handlePublishResults}
             disabled={isPublishing || isPublished}
-            className={`px-6 py-3 rounded-xl text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 mx-auto ${
-              isPublished ? 'bg-emerald-600' : 'bg-slate-900 hover:bg-slate-800'
+            className={`px-6 py-3 rounded-xl text-white font-bold text-xs shadow-md transition cursor-pointer ${
+              isPublished ? 'bg-emerald-600' : 'bg-cyan-600 hover:bg-cyan-700'
             }`}
           >
-            {isPublishing ? <Loader2 size={16} className="animate-spin" /> : isPublished ? <Check size={16} /> : <Globe size={16} />}
-            {isPublished ? 'Results Published & Broadcast Dispatched' : 'Publish Report Cards Now'}
+            {isPublishing ? 'Publishing Results...' : (isPublished ? 'Results Published' : 'Publish Results Now')}
           </button>
-        </div>
-      )}
-
-      {/* 9. TEST SCORE MANUAL */}
-      {activeTab === 'test-manual' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Manual Weekly Test Score Entry</h3>
-          <p className="text-xs text-slate-500 font-medium">Fast score entry grid for weekly class quizzes.</p>
-          <Table>
-            <TableHeader><TableRow><TableHead>Student Name</TableHead><TableHead>Class</TableHead><TableHead>Test Score (20m)</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {['Chinedu Joseph Okafor', 'Amina Abubakar Bello', 'David Oluwaseun Adeleke'].map((name, i) => (
-                <TableRow key={i}>
-                  <TableCell className="font-bold text-slate-900">{name}</TableCell>
-                  <TableCell className="text-xs text-slate-600">Primary 4</TableCell>
-                  <TableCell><input type="number" defaultValue={16 + i} className="w-20 px-2 py-1 border rounded text-xs font-mono font-bold" /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* 10. TEST SETUP CBT */}
-      {activeTab === 'test-setup-cbt' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Short Quiz CBT Setup</h3>
-          <input type="text" placeholder="Quiz Title (e.g. Weekly Quiz 3)" className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50" />
-          <button onClick={() => alert('CBT Quiz Created!')} className="px-4 py-2 bg-cyan-600 text-white font-bold text-xs rounded-xl">Create Quiz CBT</button>
-        </div>
-      )}
-
-      {/* 11. EXAM HALL */}
-      {activeTab === 'exam-hall' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Exam Hall & Desk Allocation</h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            {['Main Multipurpose Hall A (120 Desks)', 'Science Lab CBT Center (60 Computers)', 'Library Extension (40 Desks)'].map((hall, i) => (
-              <div key={i} className="p-4 border rounded-2xl bg-slate-50 space-y-2">
-                <h4 className="font-bold text-xs text-slate-900">{hall}</h4>
-                <p className="text-[11px] text-slate-500">Invigilator: Mrs. Victoria Adams</p>
-                <span className="text-[10px] font-bold bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded">Allocated</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 12. EXAM TIMETABLE */}
-      {activeTab === 'exam-timetable' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Examination Timetable (CBT & Manual)</h3>
-          <Table>
-            <TableHeader><TableRow><TableHead>Date & Time</TableHead><TableHead>Subject</TableHead><TableHead>Class</TableHead><TableHead>Type</TableHead><TableHead>Venue</TableHead></TableRow></TableHeader>
-            <TableBody>
-              <TableRow><TableCell className="font-mono text-xs">2026-08-10 09:00 AM</TableCell><TableCell className="font-bold">Mathematics</TableCell><TableCell>Primary 4</TableCell><TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-50 text-cyan-700">CBT</span></TableCell><TableCell>CBT Center</TableCell></TableRow>
-              <TableRow><TableCell className="font-mono text-xs">2026-08-10 11:30 AM</TableCell><TableCell className="font-bold">English Essay</TableCell><TableCell>Primary 4</TableCell><TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700">Manual</span></TableCell><TableCell>Hall A</TableCell></TableRow>
-            </TableBody>
-          </Table>
         </div>
       )}
     </div>

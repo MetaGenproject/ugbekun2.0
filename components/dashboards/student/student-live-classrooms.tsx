@@ -14,7 +14,7 @@ interface LiveRoom {
   isLive: boolean
 }
 
-export function StudentLiveClassrooms() {
+export function StudentLiveClassrooms({ user }: { user?: any } = {}) {
   const [rooms, setRooms] = useState<LiveRoom[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

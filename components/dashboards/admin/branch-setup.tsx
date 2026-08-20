@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { 
   Plus, 
   Settings, 
@@ -11,7 +12,8 @@ import {
   Check, 
   Loader2, 
   BookMarked,
-  Info
+  Info,
+  Sparkles
 } from 'lucide-react'
 
 interface ClassData {
@@ -79,6 +81,37 @@ export function BranchSetup() {
   const [newSectionCapacity, setNewSectionCapacity] = useState('')
   const [isSubmittingClass, setIsSubmittingClass] = useState(false)
   const [isSubmittingSection, setIsSubmittingSection] = useState(false)
+  const [isSeedingPreset, setIsSeedingPreset] = useState(false)
+
+  const handleSeedPreset = async (category: 'nursery_primary' | 'secondary_only' | 'combined_k12') => {
+    try {
+      setIsSeedingPreset(true)
+      showSystemStatus({
+        type: 'PROCESSING',
+        title: 'Processing...',
+        message: 'Seeding class and section presets for school category...',
+        durationMs: 0
+      })
+
+      const res = await apiSlice.post<{ success: boolean; message: string; classesCount: number }>(
+        endpoints.admin.seedClassPreset,
+        { category }
+      )
+
+      if (res.success) {
+        await loadClassrooms()
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Successfully completed.',
+          message: res.message || 'School category classes and sections seeded successfully!'
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to seed class presets.'))
+    } finally {
+      setIsSeedingPreset(false)
+    }
+  }
 
   // Allocation state
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null)
@@ -432,7 +465,96 @@ export function BranchSetup() {
         <>
           {/* CLASSROOMS TAB */}
           {activeTab === 'classrooms' && (
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              {/* One-Click School Category Seeder Banner */}
+              <div className="rounded-2xl border border-cyan-200/80 bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 p-6 shadow-md text-white space-y-4 font-sans">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-black text-base text-white flex items-center gap-2">
+                      <Sparkles className="text-cyan-400" size={20} /> One-Click School Category Class & Section Seeder
+                    </h3>
+                    <p className="text-slate-300 text-xs mt-1">
+                      Instantly populate all standard classes and sections (A & B) for your school category in 1 click!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  {/* Option 1: Nursery & Primary */}
+                  <div
+                    onClick={() => handleSeedPreset('nursery_primary')}
+                    className="p-4 rounded-xl border border-cyan-500/30 bg-slate-900/80 hover:bg-slate-800/90 hover:border-cyan-400 transition cursor-pointer space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">🏫</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                        Primary
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white group-hover:text-cyan-300">Nursery & Primary School</h4>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Seeds Nursery 1, Nursery 2, Primary 1 through Primary 6 with Sections A (Gold) & B (Silver).
+                    </p>
+                    <button
+                      disabled={isSeedingPreset}
+                      className="w-full py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 mt-2 cursor-pointer"
+                    >
+                      {isSeedingPreset ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      <span>Seed Primary School</span>
+                    </button>
+                  </div>
+
+                  {/* Option 2: Secondary Only */}
+                  <div
+                    onClick={() => handleSeedPreset('secondary_only')}
+                    className="p-4 rounded-xl border border-indigo-500/30 bg-slate-900/80 hover:bg-slate-800/90 hover:border-indigo-400 transition cursor-pointer space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">🏛️</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                        Secondary
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white group-hover:text-indigo-300">Secondary College</h4>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Seeds JSS 1, JSS 2, JSS 3, SSS 1, SSS 2, SSS 3 with Sections A (Gold) & B (Silver).
+                    </p>
+                    <button
+                      disabled={isSeedingPreset}
+                      className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 mt-2 cursor-pointer"
+                    >
+                      {isSeedingPreset ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      <span>Seed Secondary College</span>
+                    </button>
+                  </div>
+
+                  {/* Option 3: Combined K-12 */}
+                  <div
+                    onClick={() => handleSeedPreset('combined_k12')}
+                    className="p-4 rounded-xl border border-emerald-500/30 bg-slate-900/80 hover:bg-slate-800/90 hover:border-emerald-400 transition cursor-pointer space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">🎓</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        K-12 Academy
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-white group-hover:text-emerald-300">Combined K-12 Institution</h4>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Full suite: Nursery 1 to SSS 3 (14 classes total) with Sections A (Gold) & B (Silver).
+                    </p>
+                    <button
+                      disabled={isSeedingPreset}
+                      className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 mt-2 cursor-pointer"
+                    >
+                      {isSeedingPreset ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      <span>Seed Complete K-12</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-6">
               {/* Class & Section Creation Forms */}
               <div className="space-y-6 lg:col-span-1">
                 {/* Create Class Card */}
@@ -637,7 +759,8 @@ export function BranchSetup() {
                 )}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* CURRICULUM TAB */}
           {activeTab === 'subjects' && (

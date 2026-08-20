@@ -31,20 +31,13 @@ interface TeacherOnboardingModalProps {
 
 interface EditTeacherModalProps {
   isOpen: boolean
-  teacher: {
-    id: number
-    name: string
-    email: string | null
-    phone: string | null
-    qualifications?: string | null
-    houseAddress?: string | null
-    department?: string | null
-    bankName?: string | null
-    accountNumber?: string | null
-    accountName?: string | null
-  } | null
+  teacher: any
   onClose: () => void
   onSuccess: () => void
+}
+
+export function DeactivateTeacherModal({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void } = {}) {
+  return null
 }
 
 interface OnboardResponse {

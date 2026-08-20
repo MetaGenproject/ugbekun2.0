@@ -3,6 +3,8 @@
  * Define the Base URL and manage all endpoints and fetch requests in one place.
  */
 
+import { showSystemStatus, resolveHttpStatus } from './systemStatus';
+
 const getBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
@@ -52,6 +54,30 @@ export const endpoints = {
     renewSubscription: (id: number) => `${BASE_URL}/superadmin/branches/${id}/renew-subscription`,
     extendSubscription: (id: number) => `${BASE_URL}/superadmin/branches/${id}/extend-subscription`,
     analytics: `${BASE_URL}/superadmin/analytics`,
+    revenueAnalytics: (params?: { sessionId?: number | string; branchId?: number | string; period?: string }) => {
+      const searchParams = new URLSearchParams()
+      if (params?.sessionId) searchParams.append('sessionId', String(params.sessionId))
+      if (params?.branchId) searchParams.append('branchId', String(params.branchId))
+      if (params?.period) searchParams.append('period', params.period)
+      const qs = searchParams.toString()
+      return `${BASE_URL}/superadmin/revenue-analytics${qs ? `?${qs}` : ''}`
+    },
+    revenueExportCsv: (params?: { sessionId?: number | string; branchId?: number | string; period?: string }) => {
+      const searchParams = new URLSearchParams()
+      if (params?.sessionId) searchParams.append('sessionId', String(params.sessionId))
+      if (params?.branchId) searchParams.append('branchId', String(params.branchId))
+      if (params?.period) searchParams.append('period', params.period)
+      const qs = searchParams.toString()
+      return `${BASE_URL}/superadmin/revenue-analytics/export/csv${qs ? `?${qs}` : ''}`
+    },
+    revenueExportPdf: (params?: { sessionId?: number | string; branchId?: number | string; period?: string }) => {
+      const searchParams = new URLSearchParams()
+      if (params?.sessionId) searchParams.append('sessionId', String(params.sessionId))
+      if (params?.branchId) searchParams.append('branchId', String(params.branchId))
+      if (params?.period) searchParams.append('period', params.period)
+      const qs = searchParams.toString()
+      return `${BASE_URL}/superadmin/revenue-analytics/export/pdf${qs ? `?${qs}` : ''}`
+    },
   },
   admin: {
     stats: `${BASE_URL}/admin/stats`,
@@ -60,6 +86,7 @@ export const endpoints = {
     classesSections: `${BASE_URL}/admin/classes-sections`,
     classroomStudents: (classId: number, sectionId: number) => `${BASE_URL}/admin/classroom-students?classId=${classId}&sectionId=${sectionId}`,
     classes: `${BASE_URL}/admin/classes`,
+    seedClassPreset: `${BASE_URL}/admin/classes/seed-preset`,
     toggleEcdClass: `${BASE_URL}/admin/classes/toggle-ecd`,
     sections: `${BASE_URL}/admin/sections`,
     allocateSections: `${BASE_URL}/admin/classes/allocate-sections`,
@@ -69,6 +96,7 @@ export const endpoints = {
     exams: `${BASE_URL}/admin/exams`,
     onboardStudent: `${BASE_URL}/admin/students/onboard`,
     importStudentsBulk: `${BASE_URL}/admin/students/import-bulk`,
+    exportClassLoginSlipsPdf: (classId: number | string, sectionId?: number | string) => `${BASE_URL}/admin/credentials-slips/class-pdf?classId=${classId}${sectionId ? `&sectionId=${sectionId}` : ''}`,
     student: (id: number) => `${BASE_URL}/admin/students/${id}`,
     updateStudent: (id: number) => `${BASE_URL}/admin/students/${id}`,
     deleteStudent: (id: number) => `${BASE_URL}/admin/students/${id}`,
@@ -109,6 +137,12 @@ export const endpoints = {
       `${BASE_URL}/admin/cbt/distributions?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${subjectId ? `&subjectId=${subjectId}` : ''}`,
     cbtDistributionDetail: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}`,
     toggleCbtDistributionPublish: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/toggle-publish`,
+    cbtQuestionBank: (query = '') => `${BASE_URL}/admin/cbt/question-bank${query}`,
+    cbtQuestionBankItem: (id: number) => `${BASE_URL}/admin/cbt/question-bank/${id}`,
+    cbtQuestionBankImport: `${BASE_URL}/admin/cbt/question-bank/import`,
+    cbtQuestionBankAiGenerate: `${BASE_URL}/admin/cbt/question-bank/ai-generate`,
+    cbtDistributionAnalytics: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/analytics`,
+    cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/sync-marks`,
     onlineExams: `${BASE_URL}/admin/online-exams`,
     studentAttendance: (classId?: number, sectionId?: number, date?: string) =>
       `${BASE_URL}/admin/attendance/students?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${date ? `&date=${date}` : ''}`,
@@ -141,11 +175,19 @@ export const endpoints = {
     invoices: (query = '') => `${BASE_URL}/admin/finances/invoices${query}`,
     createInvoice: `${BASE_URL}/admin/finances/invoices`,
     bulkInvoice: `${BASE_URL}/admin/finances/invoices/bulk`,
+    batchInvoicesPreview: (query: string) => `${BASE_URL}/admin/finances/invoices/batch-preview${query}`,
+    batchInvoicesGenerate: `${BASE_URL}/admin/finances/invoices/batch-generate`,
+    downloadInvoicePdf: (id: number) => `${BASE_URL}/admin/finances/invoices/${id}/pdf`,
+    downloadBatchInvoicesPdf: (query: string) => `${BASE_URL}/admin/finances/invoices/batch-pdf${query}`,
     recordPayment: `${BASE_URL}/admin/finances/payments`,
     exportFinancesCsv: `${BASE_URL}/admin/finances/export/csv`,
     exportFinancesPdf: `${BASE_URL}/admin/finances/export/pdf`,
     pendingCommentaries: `${BASE_URL}/admin/commentary/pending`,
     reviewCommentary: `${BASE_URL}/admin/commentary/review`,
+    lessonPlans: (query = '') => `${BASE_URL}/admin/lesson-plans${query}`,
+    downloadLessonPlanPdf: (id: number) => `${BASE_URL}/admin/lesson-plans/${id}/pdf`,
+    batchGenerateCommentary: `${BASE_URL}/admin/report-cards/batch-generate-commentary`,
+    batchSaveCommentary: `${BASE_URL}/admin/report-cards/batch-save-commentary`,
     staffActivities: `${BASE_URL}/admin/reports/staff-activities`,
     events: `${BASE_URL}/admin/events`,
     eventItem: (id: number) => `${BASE_URL}/admin/events/${id}`,
@@ -190,6 +232,39 @@ export const endpoints = {
     inventoryPurchase: `${BASE_URL}/admin/inventory/purchase`,
     inventorySale: `${BASE_URL}/admin/inventory/sale`,
     inventoryItemDelete: (id: number) => `${BASE_URL}/admin/inventory/items/${id}`,
+    reportCards: {
+      classes: `${BASE_URL}/admin/report-cards/classes`,
+      students: (classId: number, sectionId: number) =>
+        `${BASE_URL}/admin/report-cards/students?classId=${classId}&sectionId=${sectionId}`,
+      exportPdf: (studentId: number, classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
+        `${BASE_URL}/admin/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
+      exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
+        `${BASE_URL}/admin/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
+      commentary: `${BASE_URL}/admin/report-cards/commentary`,
+      behavioral: `${BASE_URL}/admin/report-cards/behavioral`,
+      aiComments: `${BASE_URL}/admin/report-cards/ai-comments`,
+    },
+    myeduride: {
+      config: `${BASE_URL}/admin/myeduride/config`,
+      testConnection: `${BASE_URL}/admin/myeduride/test-connection`,
+      syncRoster: `${BASE_URL}/admin/myeduride/sync-roster`,
+      overview: `${BASE_URL}/admin/myeduride/overview`,
+      buses: `${BASE_URL}/admin/myeduride/buses`,
+      gateLogs: (params?: { role?: string; status?: string; direction?: string; search?: string; limit?: number }) => {
+        const searchParams = new URLSearchParams()
+        if (params?.role) searchParams.append('role', params.role)
+        if (params?.status) searchParams.append('status', params.status)
+        if (params?.direction) searchParams.append('direction', params.direction)
+        if (params?.search) searchParams.append('search', params.search)
+        if (params?.limit) searchParams.append('limit', String(params.limit))
+        const qs = searchParams.toString()
+        return `${BASE_URL}/admin/myeduride/gate-logs${qs ? `?${qs}` : ''}`
+      },
+      scanGate: `${BASE_URL}/admin/myeduride/gate-logs/scan`,
+      manifestBoard: `${BASE_URL}/admin/myeduride/manifest/board`,
+      exportCsv: `${BASE_URL}/admin/myeduride/export/csv`,
+      exportPdf: `${BASE_URL}/admin/myeduride/export/pdf`,
+    },
   },
   teacher: {
     dashboardOverview: `${BASE_URL}/teacher/dashboard-overview`,
@@ -200,6 +275,12 @@ export const endpoints = {
     attendance: `${BASE_URL}/teacher/attendance`,
     commentary: `${BASE_URL}/teacher/commentary`,
     generateAiCommentary: `${BASE_URL}/teacher/commentary/generate-ai`,
+    batchGenerateAiCommentary: `${BASE_URL}/teacher/commentary/batch-generate-ai`,
+    batchSaveCommentary: `${BASE_URL}/teacher/commentary/batch-save`,
+    lessonPlans: `${BASE_URL}/teacher/lesson-plan`,
+    lessonPlanGenerate: `${BASE_URL}/teacher/lesson-plan/generate`,
+    lessonPlanItem: (id: number) => `${BASE_URL}/teacher/lesson-plan/${id}`,
+    downloadLessonPlanPdf: (id: number) => `${BASE_URL}/teacher/lesson-plan/${id}/pdf`,
     reportCards: `${BASE_URL}/teacher/report-cards`,
     montessoriSheet: (classId: number, sectionId: number, examId: number) =>
       `${BASE_URL}/teacher/montessori/sheet?classId=${classId}&sectionId=${sectionId}&examId=${examId}`,
@@ -216,6 +297,8 @@ export const endpoints = {
     gradeOnlineExam: (submissionId: number) => `${BASE_URL}/teacher/online-exams/submissions/${submissionId}/grade`,
     exportPdf: (studentId: number, classId: number, sectionId: number, rankingType: string, rankingLimit?: number) =>
       `${BASE_URL}/teacher/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+    exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
+      `${BASE_URL}/teacher/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
     gradebookSheet: `${BASE_URL}/teacher/gradebook/sheet`,
     gradebookSaveSingle: `${BASE_URL}/teacher/gradebook/save-single`,
     roster: `${BASE_URL}/teacher/roster`,
@@ -244,6 +327,9 @@ export const endpoints = {
     submitHomework: (homeworkId: number) => `${BASE_URL}/student/homeworks/${homeworkId}/submit`,
     submitOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/submit`,
     startOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/start`,
+    cbtActiveExams: `${BASE_URL}/student/cbt/active-exams`,
+    cbtTakeExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/take`,
+    cbtSubmitExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/submit`,
     grades: `${BASE_URL}/student/grades`,
     exportPdf: (rankingType: string, rankingLimit?: number) =>
       `${BASE_URL}/student/grades/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
@@ -467,6 +553,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const errorMessage = data?.message || `Request failed with status ${response.status}`;
+    showSystemStatus(resolveHttpStatus(response.status, errorMessage));
     throw new Error(errorMessage);
   }
 

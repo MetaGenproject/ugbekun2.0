@@ -31,26 +31,26 @@ interface StudentRow {
 }
 
 interface GradebookInterfaceProps {
-  classId: number
-  sectionId: number
-  subjectId: number
-  examId: number
-  className: string
-  sectionName: string
-  subjectName: string
-  examName: string
+  classId?: number
+  sectionId?: number
+  subjectId?: number
+  examId?: number
+  className?: string
+  sectionName?: string
+  subjectName?: string
+  examName?: string
 }
 
 export default function GradebookInterface({
-  classId,
-  sectionId,
-  subjectId,
-  examId,
-  className,
-  sectionName,
-  subjectName,
-  examName
-}: GradebookInterfaceProps) {
+  classId = 0,
+  sectionId = 0,
+  subjectId = 0,
+  examId = 0,
+  className = '',
+  sectionName = '',
+  subjectName = '',
+  examName = ''
+}: GradebookInterfaceProps = {}) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)

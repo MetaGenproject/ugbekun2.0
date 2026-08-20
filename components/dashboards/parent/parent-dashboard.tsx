@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { getAvatarUrl } from '@/lib/avatar'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 
 interface DashboardProps {
   user: {
@@ -45,6 +46,7 @@ interface DashboardProps {
     role: number
   }
   activeSection: string
+  onNavigate?: (section: string) => void
 }
 
 interface ChildSummary {
@@ -277,7 +279,7 @@ interface EventData {
   endDate: string | null
 }
 
-export function ParentDashboard({ user, activeSection }: DashboardProps) {
+export function ParentDashboard({ user, activeSection, onNavigate }: DashboardProps) {
   // Children Listing State
   const [children, setChildren] = useState<ChildSummary[]>([])
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null)
@@ -527,7 +529,7 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
         }, 1500)
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to send message.')
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to send message.'))
     } finally {
       setSendingMessage(false)
     }
@@ -741,7 +743,7 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
       link.click()
       link.remove()
     } catch (err: any) {
-      alert(err.message || 'Failed to download PDF report card.')
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to download PDF report card.'))
     } finally {
       setExportingPdf(false)
     }
@@ -922,9 +924,12 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             
             {/* Card 1: Classmates */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => onNavigate?.('grades')}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-blue-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 group-hover:scale-105 transition flex items-center justify-center font-bold">
                   <Users size={20} />
                 </div>
                 <div>
@@ -934,15 +939,19 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Classmates</span>
                 </div>
               </div>
-              <span className="text-[10px] text-emerald-600 font-bold">
-                {profile?.fellowStudentsCount ? '✓ Enrolled Class' : 'Not Enrolled'}
+              <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-between">
+                <span>{profile?.fellowStudentsCount ? '✓ Enrolled Class' : 'Not Enrolled'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-blue-500 transition" />
               </span>
             </div>
 
             {/* Card 2: Form Teacher */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => setShowMessageModal(true)}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-purple-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 group-hover:scale-105 transition flex items-center justify-center font-bold shrink-0">
                   <GraduationCap size={20} />
                 </div>
                 <div className="min-w-0">
@@ -952,15 +961,19 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Form Teacher</span>
                 </div>
               </div>
-              <span className={`text-[10px] font-bold ${(formTeacher || profile?.formTeacher) ? 'text-purple-600' : 'text-slate-400'}`}>
-                {(formTeacher || profile?.formTeacher) ? '↗ Assigned' : 'Unassigned'}
+              <span className={`text-[10px] font-bold flex items-center justify-between ${(formTeacher || profile?.formTeacher) ? 'text-purple-600' : 'text-slate-400'}`}>
+                <span>{(formTeacher || profile?.formTeacher) ? '↗ Message' : 'Unassigned'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-purple-500 transition" />
               </span>
             </div>
 
             {/* Card 3: Subjects */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => onNavigate?.('grades')}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-emerald-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 group-hover:scale-105 transition flex items-center justify-center font-bold">
                   <BookOpen size={20} />
                 </div>
                 <div>
@@ -970,15 +983,19 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Subjects</span>
                 </div>
               </div>
-              <span className="text-[10px] text-emerald-600 font-bold">
-                {profile?.subjects?.length ? '✓ Active Subjects' : 'No Subjects'}
+              <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-between">
+                <span>{profile?.subjects?.length ? '✓ Active Subjects' : 'No Subjects'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-emerald-500 transition" />
               </span>
             </div>
 
             {/* Card 4: Attendance */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => onNavigate?.('attendance')}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-amber-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 group-hover:scale-105 transition flex items-center justify-center font-bold">
                   <Activity size={20} />
                 </div>
                 <div>
@@ -988,15 +1005,19 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Attendance</span>
                 </div>
               </div>
-              <span className={`text-[10px] font-bold ${attendance && attendance.percentage >= 80 ? 'text-amber-600' : 'text-slate-400'}`}>
-                {attendance ? (attendance.percentage >= 80 ? '✓ Good Standing' : '⚠ Attention Needed') : 'No Attendance'}
+              <span className={`text-[10px] font-bold flex items-center justify-between ${attendance && attendance.percentage >= 80 ? 'text-amber-600' : 'text-slate-400'}`}>
+                <span>{attendance ? (attendance.percentage >= 80 ? '✓ Good Standing' : '⚠ Attention Needed') : 'No Attendance'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-amber-500 transition" />
               </span>
             </div>
 
             {/* Card 5: Grade Average */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => onNavigate?.('grades')}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-rose-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 group-hover:scale-105 transition flex items-center justify-center font-bold">
                   <TrendingUp size={20} />
                 </div>
                 <div>
@@ -1006,15 +1027,19 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Grade Average</span>
                 </div>
               </div>
-              <span className="text-[10px] text-rose-600 font-bold">
-                {grades?.rank ? `Rank #${grades.rank} of ${grades.totalClassStudents || 0}` : 'No Grades Published'}
+              <span className="text-[10px] text-rose-600 font-bold flex items-center justify-between">
+                <span>{grades?.rank ? `Rank #${grades.rank} of ${grades.totalClassStudents || 0}` : 'No Grades Published'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-rose-500 transition" />
               </span>
             </div>
 
             {/* Card 6: Fee Balance */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md transition">
+            <div 
+              onClick={() => onNavigate?.('billing')}
+              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-sky-200 transition cursor-pointer group"
+            >
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 group-hover:scale-105 transition flex items-center justify-center font-bold">
                   <DollarSign size={20} />
                 </div>
                 <div>
@@ -1024,8 +1049,9 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   <span className="text-[10px] text-slate-400 font-semibold uppercase">Fee Balance</span>
                 </div>
               </div>
-              <span className={`text-[10px] font-bold ${totalBalance <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {totalFeeAmount === 0 ? 'No Invoice' : totalBalance <= 0 ? '✓ Paid in Full' : '⚠ Outstanding'}
+              <span className={`text-[10px] font-bold flex items-center justify-between ${totalBalance <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <span>{totalFeeAmount === 0 ? 'No Invoice' : totalBalance <= 0 ? '✓ Paid in Full' : '⚠ Outstanding'}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 text-sky-500 transition" />
               </span>
             </div>
 
@@ -1076,15 +1102,33 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                       </div>
                     </div>
                   </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <button
+                      onClick={() => onNavigate?.('attendance')}
+                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>View Roll Call Logs</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Academic Performance Subject Bars (Dynamically built strictly from DB table) */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center justify-between">
-                      <span>Academic Performance</span>
-                      <TrendingUp size={14} className="text-blue-500" />
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                        Academic Performance
+                      </h3>
+                      <button
+                        onClick={() => onNavigate?.('grades')}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Full Report</span>
+                        <ChevronRight size={12} />
+                      </button>
+                    </div>
 
                     {grades?.reportCard && grades.reportCard.length > 0 ? (
                       <div className="space-y-2.5 pt-1 max-h-[160px] overflow-y-auto">
@@ -1119,7 +1163,13 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                       className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 cursor-pointer"
                     >
                       {exportingPdf ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                      <span>Export Report Card (PDF)</span>
+                      <span>Export PDF</span>
+                    </button>
+                    <button
+                      onClick={() => onNavigate?.('grades')}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      Grade Details →
                     </button>
                   </div>
                 </div>
@@ -1127,10 +1177,18 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                 {/* School Fee Status Card */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center justify-between">
-                      <span>School Fee Status</span>
-                      <DollarSign size={14} className="text-amber-500" />
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                        School Fee Status
+                      </h3>
+                      <button
+                        onClick={() => onNavigate?.('billing')}
+                        className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Fee Portal</span>
+                        <ChevronRight size={12} />
+                      </button>
+                    </div>
 
                     <div className="space-y-3 pt-1">
                       <div>
@@ -1171,6 +1229,16 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                       </div>
                     </div>
                   </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <button
+                      onClick={() => onNavigate?.('billing')}
+                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Invoices & Bank Info</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
                 </div>
 
               </div>
@@ -1183,7 +1251,10 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
 
                 <div className="flex flex-wrap items-center gap-3">
                   <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => {
+                      onNavigate?.('sibling-requests')
+                      setShowModal(true)
+                    }}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition cursor-pointer"
                   >
                     <Plus size={16} />
@@ -1208,11 +1279,11 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
                   </button>
 
                   <button
-                    onClick={() => alert('School bus live location synchronized with MyEduRide module.')}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 text-amber-600 font-bold text-xs hover:bg-amber-100 transition cursor-pointer"
+                    onClick={() => onNavigate?.('billing')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-600 font-bold text-xs hover:bg-emerald-100 transition cursor-pointer"
                   >
-                    <Bus size={16} />
-                    <span>Track School Bus</span>
+                    <CreditCard size={16} />
+                    <span>View Fee Invoices</span>
                   </button>
                 </div>
               </div>
@@ -1220,36 +1291,47 @@ export function ParentDashboard({ user, activeSection }: DashboardProps) {
               {/* 4 Secondary Stat Cards Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+                <div 
+                  onClick={() => onNavigate?.('calendar')}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-slate-200 transition cursor-pointer"
+                >
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Today&apos;s Classes</span>
                   <span className="text-xl font-extrabold text-slate-900 block">{timetableSlots.length} Subjects</span>
                   <span className={`text-[10px] font-bold ${timetableSlots.length > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {timetableSlots.length > 0 ? '✓ Scheduled on timetable' : 'No timetable set'}
+                    {timetableSlots.length > 0 ? '✓ View Timetable' : 'No timetable set'}
                   </span>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+                <div 
+                  onClick={() => onNavigate?.('sibling-requests')}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-blue-200 transition cursor-pointer"
+                >
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Sibling Admissions</span>
                   <span className="text-xl font-extrabold text-slate-900 block">{siblingRequests.length} Applications</span>
                   <span className={`text-[10px] font-bold ${siblingRequests.length > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
-                    {siblingRequests.length > 0 ? '↗ Under review' : 'No active requests'}
+                    {siblingRequests.length > 0 ? '↗ Manage Requests' : 'Apply Now'}
                   </span>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+                <div 
+                  onClick={() => setShowMessageModal(true)}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-purple-200 transition cursor-pointer"
+                >
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Messages / Notices</span>
                   <span className="text-xl font-extrabold text-slate-900 block">{messages.length} Direct Messages</span>
                   <span className="text-[10px] text-purple-600 font-bold">School Admin & Teachers</span>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+                <div 
+                  onClick={() => alert('School bus live location synchronized with MyEduRide module.')}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-amber-200 transition cursor-pointer"
+                >
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">MyEduRide Bus Tracker</span>
                   <span className="text-sm font-extrabold text-slate-900 block truncate">
                     {profile?.registerNo ? `ID Card: ${profile.registerNo}` : 'No Bus Assigned'}
                   </span>
                   <span className="text-[10px] text-emerald-600 font-bold">✓ MyEduRide Synced</span>
                 </div>
-
               </div>
 
               {/* Recent Activities Strip */}

@@ -100,6 +100,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'manage-branches', label: 'Manage Branches', icon: School },
         { id: 'tenants', label: 'Tenants Directory', icon: Users },
         { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+        { id: 'revenue-analytics', label: 'Revenue Analytics', icon: TrendingUp },
         { id: 'logs', label: 'System Logs', icon: Layers },
         { id: 'settings', label: 'Global Settings', icon: Settings },
       ]
@@ -401,7 +402,7 @@ export default function DashboardPage() {
       case 3:
         return <TeacherDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       case 6:
-        return <ParentDashboard user={user} activeSection={activeSection} />
+        return <ParentDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       case 7:
         return <StudentDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       default:

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { safeStorage } from '@/lib/safeStorage'
+import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import {
   UserPlus,
   Users,
@@ -215,27 +216,39 @@ export function StudentOnboarding() {
       'Parent Phone',
       'Parent Relation'
     ]
-    const sampleRow = [
-      'John',
-      'Doe',
-      'Male',
-      '2015-05-15',
-      'Primary 1',
-      'A',
-      'Robert Doe',
-      'robert@example.com',
-      '08012345678',
-      'Father'
+    const sampleRows = [
+      ['Chinedu', 'Okafor', 'Male', '2016-04-12', 'Primary 1', 'A (Gold)', 'Chief Okafor', 'okafor@example.com', '08030001122', 'Father'],
+      ['Amina', 'Bello', 'Female', '2015-08-20', 'Primary 2', 'B (Silver)', 'Hajiya Bello', 'bello@example.com', '08049998877', 'Mother'],
+      ['Emeka', 'Eze', 'Male', '2012-01-10', 'JSS 1', 'A (Gold)', 'Dr. Eze', 'eze@example.com', '08051112233', 'Guardian'],
     ]
-    const csvContent = [headers.join(','), sampleRow.join(',')].join('\n')
+    const csvContent = [headers.join(','), ...sampleRows.map(r => r.map(c => `"${c}"`).join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', 'student_bulk_onboarding_template.csv')
+    link.setAttribute('download', 'ugbekun_student_bulk_import_template.csv')
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    showSystemStatus({
+      type: 'ACTION_SUCCESS',
+      title: 'Successfully completed.',
+      message: 'Standardized CSV Import Template downloaded successfully!'
+    })
+  }
+
+  const handleFilterOutErrors = () => {
+    if (validationErrors.length === 0) return
+    const errorRows = new Set(validationErrors.map(e => e.row))
+    const validStudents = parsedStudents.filter((_, idx) => !errorRows.has(idx + 2))
+    setParsedStudents(validStudents)
+    setValidationErrors([])
+    showSystemStatus({
+      type: 'ACTION_SUCCESS',
+      title: 'Successfully completed.',
+      message: `Invalid rows removed. ${validStudents.length} valid row(s) ready for import!`
+    })
   }
 
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,6 +273,11 @@ export function StudentOnboarding() {
     if (rawRows.length < 2) {
       setValidationErrors([{ row: 0, error: 'CSV file must contain at least a header row and one student record row.' }])
       setParsedStudents([])
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Required information missing.',
+        message: 'CSV file must contain at least a header row and one student record row.'
+      })
       return
     }
 
@@ -287,8 +305,14 @@ export function StudentOnboarding() {
     if (indexMap.parentName === -1) missingHeaders.push('Parent Name')
 
     if (missingHeaders.length > 0) {
-      setValidationErrors([{ row: 0, error: `Missing required columns in CSV header: ${missingHeaders.join(', ')}` }])
+      const errMsg = `Missing required columns in CSV header: ${missingHeaders.join(', ')}`
+      setValidationErrors([{ row: 0, error: errMsg }])
       setParsedStudents([])
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Required information missing.',
+        message: errMsg
+      })
       return
     }
 
@@ -368,6 +392,20 @@ export function StudentOnboarding() {
 
     setParsedStudents(students)
     setValidationErrors(errors)
+
+    if (errors.length > 0) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Required information missing.',
+        message: `CSV pre-validation identified ${errors.length} error(s). Please review highlighted rows or filter error rows.`
+      })
+    } else {
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Successfully completed.',
+        message: `All ${students.length} student rows passed pre-validation successfully!`
+      })
+    }
   }
 
   const handleCsvSubmit = async () => {
@@ -908,8 +946,13 @@ export function StudentOnboarding() {
       )
       setResultData(res)
       loadSiblingRequests()
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Successfully completed.',
+        message: 'Sibling request approved successfully!'
+      })
     } catch (err: any) {
-      alert(err.message || 'Approval failed.')
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Approval failed.'))
     } finally {
       setApprovingId(null)
     }
@@ -927,8 +970,13 @@ export function StudentOnboarding() {
       setRejectingReq(null)
       setRejectionReason('')
       loadSiblingRequests()
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Action completed successfully.',
+        message: 'Sibling request rejected.'
+      })
     } catch (err: any) {
-      alert(err.message || 'Rejection failed.')
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Rejection failed.'))
     } finally {
       setIsRejecting(false)
     }
@@ -2234,21 +2282,34 @@ export function StudentOnboarding() {
                     </table>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                    <button
-                      onClick={handleResetCsvImport}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-50 transition cursor-pointer"
-                    >
-                      Clear File
-                    </button>
-                    <button
-                      onClick={handleCsvSubmit}
-                      disabled={validationErrors.length > 0 || parsedStudents.length === 0 || isImporting}
-                      className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isImporting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                      Import {parsedStudents.length} Students
-                    </button>
+                  <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {validationErrors.length > 0 && (
+                        <button
+                          onClick={handleFilterOutErrors}
+                          className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                        >
+                          <X size={13} /> Filter Out Error Rows ({validationErrors.length})
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleResetCsvImport}
+                        className="px-4 py-2 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        Clear File
+                      </button>
+                      <button
+                        onClick={handleCsvSubmit}
+                        disabled={validationErrors.length > 0 || parsedStudents.length === 0 || isImporting}
+                        className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isImporting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                        Import {parsedStudents.length} Valid Students
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

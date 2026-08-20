@@ -29,6 +29,7 @@ import {
   TableCaption,
 } from '@/components/ui/table'
 import { BranchSetup } from './branch-setup'
+import { OnboardingSetupChecklist } from './onboarding-setup-checklist'
 import { StudentOnboarding } from './student-onboarding'
 import { StudentPromotionModal } from './student-promotion-modal'
 import { ClassroomStudents } from './classroom-students'
@@ -518,11 +519,11 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <TimetableManager />
   }
 
-  if (activeSection === 'curriculum') {
-    return <BranchSetup />
+  if (activeSection === 'curriculum' || activeSection === 'academics' || activeSection === 'academic-structure') {
+    return <AcademicStructure />
   }
 
-  if (activeSection === 'admissions') {
+  if (activeSection === 'admissions' || activeSection === 'students-onboard' || activeSection === 'student-onboarding') {
     return <StudentOnboarding />
   }
 
@@ -530,7 +531,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <IdProvisioning />
   }
 
-  if (activeSection === 'finances') {
+  if (activeSection === 'finances' || activeSection === 'finances-dashboard' || activeSection === 'financial-records') {
     return <FinancesDashboard />
   }
 
@@ -590,7 +591,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <InventoryDashboard />
   }
 
-  if (activeSection === 'settings') {
+  if (activeSection === 'settings' || activeSection === 'branch-settings' || activeSection === 'branch-setup') {
     return <BranchSettings />
   }
 
@@ -718,6 +719,9 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   return (
     <div className="space-y-6">
+      {/* 0. Guided Branch Admin Setup Checklist */}
+      <OnboardingSetupChecklist stats={stats} onNavigateTab={onNavigate} />
+
       {/* 1. Good Morning Header Greeting Banner matching Reference Image */}
       <div className="relative rounded-2xl bg-gradient-to-r from-[#eef3fe] via-[#fbf3f6] to-[#fff8f0] border border-slate-200/70 p-5 sm:p-6 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">

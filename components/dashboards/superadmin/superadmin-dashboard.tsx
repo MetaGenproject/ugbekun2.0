@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { AddSchoolForm } from './add-school-form'
 import { EditBranchForm, type BranchDetails } from './edit-branch-form'
+import { MultiBranchRevenueAnalytics } from './multi-branch-revenue-analytics'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import {
   AlertDialog,
@@ -904,6 +905,10 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
             )}
           </div>
         </>
+      )}
+
+      {activeSection === 'revenue-analytics' && (
+        <MultiBranchRevenueAnalytics user={user} />
       )}
 
       {activeSection === 'settings' && (
