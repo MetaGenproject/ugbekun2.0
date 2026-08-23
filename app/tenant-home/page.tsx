@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 
-export default function TenantHomePage() {
+function TenantHomeContent() {
   const searchParams = useSearchParams()
   const domainParam = searchParams.get('domain')
   const subdomainParam = searchParams.get('subdomain')
@@ -76,7 +76,7 @@ export default function TenantHomePage() {
           </div>
           <button
             onClick={fetchHomepageData}
-            className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl text-sm font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg"
+            className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl text-sm font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg cursor-pointer"
           >
             <RefreshCw size={16} />
             <span>Retry Connection</span>
@@ -87,4 +87,19 @@ export default function TenantHomePage() {
   }
 
   return <SchoolLandingView initialData={homepageData} />
+}
+
+export default function TenantHomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#070d19] flex flex-col items-center justify-center text-white space-y-4">
+          <Loader2 className="w-10 h-10 animate-spin text-cyan-400" />
+          <p className="text-sm font-semibold text-slate-400 tracking-wide">Loading School Campus Portal...</p>
+        </div>
+      }
+    >
+      <TenantHomeContent />
+    </Suspense>
+  )
 }
