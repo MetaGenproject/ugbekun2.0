@@ -25,8 +25,33 @@ import {
   X,
   Upload,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  Image as ImageIcon,
+  Search,
+  Link as LinkIcon,
+  ShieldCheck,
+  FileCheck,
+  Scan,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Maximize2,
+  FileCheck2,
+  Printer,
+  ArrowLeft,
+  HelpCircle,
+  CheckSquare,
 } from 'lucide-react'
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = (error) => reject(error)
+  })
+}
 
 interface ClassData {
   id: number
@@ -88,16 +113,28 @@ interface PendingStudent {
     lastName: string
     gender: string
     birthday: string
+    admissionDate?: string
+    bloodGroup?: string
+    religion?: string
+    motherTongue?: string
     classId: string
     sectionId: string
     currentAddress: string
     previousDetails: string
+    photoBase64?: string
+    birthCertBase64?: string
+    reportCardBase64?: string
+    medicalReportBase64?: string
   }
   parent: {
+    existingParentId?: number | null
     name: string
     relation: string
     email: string
     mobileno: string
+    occupation?: string
+    address?: string
+    photoBase64?: string
   }
   classLabel: string
   sectionLabel: string
@@ -150,7 +187,53 @@ export interface OnlineAdmissionData {
 }
 
 export function StudentOnboarding() {
-  const [activeTab, setActiveTab] = useState<'direct' | 'sibling' | 'csv' | 'online'>('direct')
+  const [activeTab, setActiveTab] = useState<'direct' | 'scan' | 'sibling' | 'csv' | 'online'>('direct')
+
+  // AI Document Scanner States
+  const [scanFile, setScanFile] = useState<File | null>(null)
+  const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null)
+  const [scanMimeType, setScanMimeType] = useState<string>('')
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanStep, setScanStep] = useState<'upload' | 'verify' | 'enrolled'>('upload')
+  const [extractedScanData, setExtractedScanData] = useState<any | null>(null)
+  const [matchedScanParent, setMatchedScanParent] = useState<any | null>(null)
+  const [scanZoom, setScanZoom] = useState<number>(100)
+  const [scanRotation, setScanRotation] = useState<number>(0)
+  const [scanEnrolledResult, setScanEnrolledResult] = useState<any | null>(null)
+  const [scanIsSubmitting, setScanIsSubmitting] = useState(false)
+  const [scanErrorMsg, setScanErrorMsg] = useState<string | null>(null)
+
+  const [scanStudentForm, setScanStudentForm] = useState({
+    firstName: '',
+    lastName: '',
+    middleName: '',
+    gender: 'Male',
+    birthday: '',
+    admissionDate: '',
+    bloodGroup: '',
+    religion: '',
+    motherTongue: '',
+    classId: '',
+    sectionId: '',
+    currentAddress: '',
+    previousDetails: '',
+    photoBase64: '',
+    birthCertBase64: '',
+    scannedFormBase64: '',
+  })
+
+  const [scanParentForm, setScanParentForm] = useState({
+    existingParentId: null as number | null,
+    name: '',
+    relation: 'Father' as 'Father' | 'Mother' | 'Guardian',
+    email: '',
+    mobileno: '',
+    occupation: '',
+    address: '',
+    photoBase64: '',
+  })
+
+  const [scanAvailableSections, setScanAvailableSections] = useState<Array<{ id: number; name: string }>>([])
 
   // Online Admissions Desk States
   const [onlineAdmissions, setOnlineAdmissions] = useState<OnlineAdmissionData[]>([])
@@ -623,18 +706,407 @@ export function StudentOnboarding() {
     lastName: '',
     gender: 'Male',
     birthday: '',
+    admissionDate: '',
+    bloodGroup: '',
+    religion: '',
+    motherTongue: '',
     classId: '',
     sectionId: '',
     currentAddress: '',
     previousDetails: '',
+    photoBase64: '',
+    birthCertBase64: '',
+    reportCardBase64: '',
+    medicalReportBase64: '',
   })
 
   const [parentForm, setParentForm] = useState({
+    existingParentId: null as number | null,
     name: '',
-    relation: 'Father',
+    relation: 'Father' as 'Father' | 'Mother' | 'Guardian',
     email: '',
     mobileno: '',
+    occupation: '',
+    address: '',
+    photoBase64: '',
   })
+
+  // Helper to fuzzy-match extracted class name to school class list
+  const matchClassByName = (targetClassName?: string): string => {
+    if (!targetClassName || !classes || classes.length === 0) return ''
+    const cleanTarget = targetClassName.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const found = classes.find(c => {
+      const cleanC = c.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+      return cleanC === cleanTarget || cleanC.includes(cleanTarget) || cleanTarget.includes(cleanC)
+    })
+    return found ? String(found.id) : ''
+  }
+
+  // Update scanAvailableSections when scanStudentForm.classId changes
+  useEffect(() => {
+    if (!scanStudentForm.classId) {
+      setScanAvailableSections([])
+      setScanStudentForm(s => ({ ...s, sectionId: '' }))
+      return
+    }
+
+    const selectedClass = classes.find(c => c.id === Number(scanStudentForm.classId))
+    if (selectedClass) {
+      const secs = selectedClass.sections.map(s => s.section)
+      setScanAvailableSections(secs)
+      if (secs.length > 0 && !scanStudentForm.sectionId) {
+        setScanStudentForm(s => ({ ...s, sectionId: String(secs[0].id) }))
+      }
+    }
+  }, [scanStudentForm.classId, classes])
+
+  const handleProcessScanDocument = async (file: File) => {
+    if (!file) return
+    setIsScanning(true)
+    setScanErrorMsg(null)
+    setScanFile(file)
+
+    try {
+      const base64Data = await fileToBase64(file)
+      setScanPreviewUrl(base64Data)
+      setScanMimeType(file.type)
+
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const token = safeStorage.getItem('ugbekun_token')
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
+      const response = await fetch(`${apiUrl}/admin/students/parse-document`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errData = await response.json()
+        throw new Error(errData.message || 'AI document processing failed.')
+      }
+
+      const res = await response.json()
+      if (res.success && res.extractedData) {
+        const data = res.extractedData
+        setExtractedScanData(data)
+        setMatchedScanParent(res.matchedExistingParent || null)
+
+        const matchedClassId = matchClassByName(data.targetClass)
+        let initialSectionId = ''
+        if (matchedClassId) {
+          const selectedCls = classes.find(c => c.id === Number(matchedClassId))
+          if (selectedCls && selectedCls.sections.length > 0) {
+            const secs = selectedCls.sections.map(s => s.section)
+            setScanAvailableSections(secs)
+            initialSectionId = String(secs[0].id)
+          }
+        }
+
+        setScanStudentForm({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          middleName: data.middleName || '',
+          gender: data.gender === 'Female' ? 'Female' : 'Male',
+          birthday: data.birthday ? data.birthday.substring(0, 10) : '',
+          admissionDate: data.admissionDate ? data.admissionDate.substring(0, 10) : new Date().toISOString().substring(0, 10),
+          bloodGroup: data.bloodGroup || '',
+          religion: data.religion || '',
+          motherTongue: data.motherTongue || '',
+          classId: matchedClassId,
+          sectionId: initialSectionId,
+          currentAddress: data.homeAddress || '',
+          previousDetails: data.historicalPerformance || '',
+          photoBase64: '',
+          birthCertBase64: '',
+          scannedFormBase64: base64Data,
+        })
+
+        if (res.matchedExistingParent) {
+          const mp = res.matchedExistingParent
+          setScanParentForm({
+            existingParentId: mp.id,
+            name: mp.name,
+            relation: (mp.relation === 'Mother' ? 'Mother' : mp.relation === 'Guardian' ? 'Guardian' : 'Father') as any,
+            email: mp.email || '',
+            mobileno: mp.mobileno || '',
+            occupation: mp.occupation || '',
+            address: mp.address || '',
+            photoBase64: '',
+          })
+        } else {
+          setScanParentForm({
+            existingParentId: null,
+            name: data.parentName || '',
+            relation: (data.parentRelation === 'Mother' ? 'Mother' : data.parentRelation === 'Guardian' ? 'Guardian' : 'Father') as any,
+            email: data.parentEmail || '',
+            mobileno: data.parentPhone || '',
+            occupation: data.parentOccupation || '',
+            address: data.parentAddress || '',
+            photoBase64: '',
+          })
+        }
+
+        setScanStep('verify')
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Document Parsed with AI!',
+          message: 'Scanned registration form extracted. Please verify and make any necessary corrections.',
+        })
+      } else {
+        throw new Error('Could not extract structured data from the document.')
+      }
+    } catch (err: any) {
+      setScanErrorMsg(err?.message || 'Failed to scan and parse document.')
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  const handleConfirmScanEnrollment = async (mode: 'enroll' | 'queue') => {
+    setScanErrorMsg(null)
+    const sName = scanStudentForm.firstName.trim()
+    const sLastName = scanStudentForm.lastName.trim()
+    const pName = scanParentForm.name.trim()
+    const pEmail = scanParentForm.email.trim()
+    const pPhone = scanParentForm.mobileno.trim()
+
+    if (!sName || !sLastName) {
+      setScanErrorMsg('Student First Name and Last Name are required.')
+      return
+    }
+    if (!scanStudentForm.classId || !scanStudentForm.sectionId) {
+      setScanErrorMsg('Student Class and Section placement are required.')
+      return
+    }
+    if (!scanParentForm.existingParentId && !pName) {
+      setScanErrorMsg('Parent / Guardian Name is required.')
+      return
+    }
+    if (!scanParentForm.existingParentId && !pEmail && !pPhone) {
+      setScanErrorMsg('Parent Contact Phone or Email is required.')
+      return
+    }
+
+    const selectedClass = classes.find(c => c.id === Number(scanStudentForm.classId))
+    const classLabel = selectedClass ? selectedClass.name : ''
+    const selectedSection = scanAvailableSections.find(s => s.id === Number(scanStudentForm.sectionId))
+    const sectionLabel = selectedSection ? selectedSection.name : ''
+
+    if (mode === 'queue') {
+      const newItem: PendingStudent = {
+        id: Math.random().toString(),
+        student: {
+          ...scanStudentForm,
+          firstName: sName,
+          lastName: sLastName,
+        },
+        parent: {
+          ...scanParentForm,
+          name: pName,
+          email: pEmail,
+          mobileno: pPhone,
+        },
+        classLabel,
+        sectionLabel,
+      }
+      setPendingStudentsList(prev => [...prev, newItem])
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Saved to Onboarding Batch',
+        message: `${sName} ${sLastName} added to batch queue. Ready to scan next form!`,
+      })
+      handleScanReset()
+      return
+    }
+
+    setScanIsSubmitting(true)
+    try {
+      const payload = {
+        student: {
+          ...scanStudentForm,
+          firstName: sName,
+          lastName: sLastName,
+          classId: Number(scanStudentForm.classId),
+          sectionId: Number(scanStudentForm.sectionId),
+          photo: scanStudentForm.photoBase64 || null,
+          birthCertificate: scanStudentForm.birthCertBase64 || scanStudentForm.scannedFormBase64 || null,
+        },
+        parent: {
+          ...scanParentForm,
+          name: pName,
+          email: pEmail,
+          mobileno: pPhone,
+          photo: scanParentForm.photoBase64 || null,
+        },
+      }
+
+      const res = await apiSlice.post<OnboardResponse>(
+        endpoints.admin.onboardStudent,
+        payload
+      )
+
+      if (res.success) {
+        setScanEnrolledResult(res)
+        setScanStep('enrolled')
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Student Enrolled Successfully!',
+          message: `${sName} ${sLastName} has been registered into ${classLabel} (${sectionLabel}).`,
+        })
+      } else {
+        throw new Error((res as any)?.message || 'Enrollment failed.')
+      }
+    } catch (err: any) {
+      setScanErrorMsg(err?.message || 'Failed to complete student enrollment.')
+    } finally {
+      setScanIsSubmitting(false)
+    }
+  }
+
+  const handleScanReset = () => {
+    setScanFile(null)
+    setScanPreviewUrl(null)
+    setScanMimeType('')
+    setExtractedScanData(null)
+    setMatchedScanParent(null)
+    setScanStep('upload')
+    setScanEnrolledResult(null)
+    setScanErrorMsg(null)
+    setScanZoom(100)
+    setScanRotation(0)
+    setScanStudentForm({
+      firstName: '',
+      lastName: '',
+      middleName: '',
+      gender: 'Male',
+      birthday: '',
+      admissionDate: '',
+      bloodGroup: '',
+      religion: '',
+      motherTongue: '',
+      classId: '',
+      sectionId: '',
+      currentAddress: '',
+      previousDetails: '',
+      photoBase64: '',
+      birthCertBase64: '',
+      scannedFormBase64: '',
+    })
+    setScanParentForm({
+      existingParentId: null,
+      name: '',
+      relation: 'Father',
+      email: '',
+      mobileno: '',
+      occupation: '',
+      address: '',
+      photoBase64: '',
+    })
+  }
+  const [parentSearchQuery, setParentSearchQuery] = useState('')
+  const [isSearchingParents, setIsSearchingParents] = useState(false)
+  const [searchedParents, setSearchedParents] = useState<Array<{
+    id: number
+    name: string
+    relation: string
+    email: string
+    mobileno: string
+    photo: string | null
+    occupation?: string
+    address?: string
+    enrolledChildrenCount: number
+    children: Array<{ id: number; name: string; registerNo: string; className: string; sectionName: string }>
+  }>>([])
+  const [selectedParentPreview, setSelectedParentPreview] = useState<any | null>(null)
+
+  const handleParentSearch = async (query: string) => {
+    setParentSearchQuery(query)
+    if (!query || query.trim().length < 2) {
+      setSearchedParents([])
+      return
+    }
+
+    setIsSearchingParents(true)
+    try {
+      const res = await apiSlice.get<{ success: boolean; parents: any[] }>(
+        endpoints.admin.searchParents(query.trim())
+      )
+      setSearchedParents(res.parents || [])
+    } catch (err) {
+      console.warn('Parent search error:', err)
+      setSearchedParents([])
+    } finally {
+      setIsSearchingParents(false)
+    }
+  }
+
+  const handleLinkExistingParent = (p: any) => {
+    setSelectedParentPreview(p)
+    setParentForm({
+      existingParentId: p.id,
+      name: p.name,
+      relation: (p.relation === 'Mother' ? 'Mother' : p.relation === 'Guardian' ? 'Guardian' : 'Father') as any,
+      email: p.email || '',
+      mobileno: p.mobileno || '',
+      occupation: p.occupation || '',
+      address: p.address || '',
+      photoBase64: '',
+    })
+    setSearchedParents([])
+  }
+
+  const handleClearExistingParent = () => {
+    setSelectedParentPreview(null)
+    setParentForm({
+      existingParentId: null,
+      name: '',
+      relation: 'Father',
+      email: '',
+      mobileno: '',
+      occupation: '',
+      address: '',
+      photoBase64: '',
+    })
+    setParentSearchQuery('')
+    setSearchedParents([])
+  }
+
+  const handleStudentPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const base64 = await fileToBase64(file)
+      setStudentForm(prev => ({ ...prev, photoBase64: base64 }))
+    } catch (err) {
+      console.error('Error reading student photo:', err)
+    }
+  }
+
+  const handleParentPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const base64 = await fileToBase64(file)
+      setParentForm(prev => ({ ...prev, photoBase64: base64 }))
+    } catch (err) {
+      console.error('Error reading parent photo:', err)
+    }
+  }
+
+  const handleDocUpload = async (field: 'birthCertBase64' | 'reportCardBase64' | 'medicalReportBase64', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const base64 = await fileToBase64(file)
+      setStudentForm(prev => ({ ...prev, [field]: base64 }))
+    } catch (err) {
+      console.error(`Error reading document (${field}):`, err)
+    }
+  }
 
   // Load classrooms on mount
   useEffect(() => {
@@ -714,12 +1186,14 @@ export function StudentOnboarding() {
           previousDetails: data.historicalPerformance || '',
         }))
 
-        setParentForm({
+        setParentForm(prev => ({
+          ...prev,
+          existingParentId: null,
           name: data.parentName || '',
           relation: (data.parentRelation === 'Mother' ? 'Mother' : data.parentRelation === 'Guardian' ? 'Guardian' : 'Father') as any,
           email: data.parentEmail || '',
           mobileno: data.parentPhone || '',
-        })
+        }))
 
         setParseSuccessMsg('AI successfully parsed document! Fields have been pre-filled below.')
       } else {
@@ -848,11 +1322,11 @@ export function StudentOnboarding() {
       setErrorMsg('Student Class and Section selection are required.')
       return
     }
-    if (!pName) {
+    if (!parentForm.existingParentId && !pName) {
       setErrorMsg('Parent Name is required.')
       return
     }
-    if (!pEmail && !pPhone) {
+    if (!parentForm.existingParentId && !pEmail && !pPhone) {
       setErrorMsg('At least one Parent Contact Info (Email or Phone) is required.')
       return
     }
@@ -871,7 +1345,7 @@ export function StudentOnboarding() {
       },
       parent: {
         ...parentForm,
-        name: pName,
+        name: pName || selectedParentPreview?.name || 'Linked Parent',
         email: pEmail,
         mobileno: pPhone,
       },
@@ -882,22 +1356,24 @@ export function StudentOnboarding() {
     setPendingStudentsList([...pendingStudentsList, newItem])
     setParseSuccessMsg('')
 
-    // Reset student input fields, keeping class/section selection for fast entry
+    // Reset student input fields
     setStudentForm(prev => ({
       ...prev,
       firstName: '',
       lastName: '',
       birthday: '',
+      admissionDate: '',
+      bloodGroup: '',
+      religion: '',
+      motherTongue: '',
       currentAddress: '',
       previousDetails: '',
+      photoBase64: '',
+      birthCertBase64: '',
+      reportCardBase64: '',
+      medicalReportBase64: '',
     }))
-    setParentForm({
-      name: '',
-      relation: 'Father',
-      email: '',
-      mobileno: '',
-    })
-
+    handleClearExistingParent()
     setActiveStep(1)
   }
 
@@ -912,17 +1388,20 @@ export function StudentOnboarding() {
       lastName: '',
       gender: 'Male',
       birthday: '',
+      admissionDate: '',
+      bloodGroup: '',
+      religion: '',
+      motherTongue: '',
       classId: '',
       sectionId: '',
       currentAddress: '',
       previousDetails: '',
+      photoBase64: '',
+      birthCertBase64: '',
+      reportCardBase64: '',
+      medicalReportBase64: '',
     })
-    setParentForm({
-      name: '',
-      relation: 'Father',
-      email: '',
-      mobileno: '',
-    })
+    handleClearExistingParent()
     setParseSuccessMsg('')
     setResultData(null)
     setPendingStudentsList([])
@@ -1467,11 +1946,11 @@ export function StudentOnboarding() {
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex border-b border-slate-250 gap-6">
+      <div className="flex border-b border-slate-250 gap-6 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab('direct')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition ${activeTab === 'direct'
+          className={`pb-3 font-extrabold text-sm border-b-2 transition whitespace-nowrap ${activeTab === 'direct'
             ? 'border-blue-600 text-blue-600'
             : 'border-transparent text-slate-550 hover:text-slate-900'
             }`}
@@ -1480,8 +1959,22 @@ export function StudentOnboarding() {
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('scan')}
+          className={`pb-3 font-extrabold text-sm border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'scan'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-550 hover:text-slate-900'
+            }`}
+        >
+          <Sparkles size={14} className="text-amber-500 animate-pulse" />
+          AI Physical Form Scanner
+          <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-black">
+            OCR Assist
+          </span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('sibling')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'sibling'
+          className={`pb-3 font-extrabold text-sm border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'sibling'
             ? 'border-blue-600 text-blue-600'
             : 'border-transparent text-slate-550 hover:text-slate-900'
             }`}
@@ -1496,7 +1989,7 @@ export function StudentOnboarding() {
         <button
           type="button"
           onClick={() => setActiveTab('csv')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'csv'
+          className={`pb-3 font-extrabold text-sm border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'csv'
             ? 'border-blue-600 text-blue-600'
             : 'border-transparent text-slate-550 hover:text-slate-900'
             }`}
@@ -1506,7 +1999,7 @@ export function StudentOnboarding() {
         <button
           type="button"
           onClick={() => setActiveTab('online')}
-          className={`pb-3 font-extrabold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'online'
+          className={`pb-3 font-extrabold text-sm border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'online'
             ? 'border-blue-600 text-blue-600'
             : 'border-transparent text-slate-550 hover:text-slate-900'
             }`}
@@ -1545,10 +2038,15 @@ export function StudentOnboarding() {
               <form onSubmit={handleOnboardSubmit} className="flex-1 space-y-6 w-full">
               {/* STEP 1: STUDENT PROFILE */}
               {activeStep === 1 && (
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-5 animate-fade-in">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <GraduationCap size={16} className="text-blue-600" /> Student Profile Details
-                  </h3>
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-6 animate-fade-in">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <GraduationCap size={16} className="text-blue-600" /> Student Profile & Admission Details
+                    </h3>
+                    <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                      Step 1 of 2
+                    </span>
+                  </div>
 
                   {/* AI Document Parsing Widget */}
                   <div className="p-4 rounded-xl border border-dashed border-blue-200 bg-blue-50/40 hover:bg-blue-50/80 transition space-y-3">
@@ -1559,7 +2057,7 @@ export function StudentOnboarding() {
                       <div className="space-y-0.5">
                         <h4 className="text-xs font-black text-slate-950 tracking-tight">AI Document Parsing Assistant</h4>
                         <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                          Upload a scanned admission form, birth certificate, or previous academic transcript. AI will parse the details and autofill the registration schema instantly.
+                          Upload an admission form, birth certificate, or academic transcript. AI will autofill student & parent info instantly.
                         </p>
                       </div>
                     </div>
@@ -1588,12 +2086,52 @@ export function StudentOnboarding() {
                     </div>
                   </div>
 
+                  {/* Photograph & Core Bio Card */}
+                  <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center gap-5">
+                    <div className="relative group shrink-0">
+                      <div className="w-24 h-24 rounded-2xl bg-white border-2 border-dashed border-slate-300 flex flex-col items-center justify-center overflow-hidden shadow-inner relative">
+                        {studentForm.photoBase64 ? (
+                          <img src={studentForm.photoBase64} alt="Student Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-2 text-center text-slate-400">
+                            <Camera size={24} className="mb-1" />
+                            <span className="text-[9px] font-bold">Upload Photo</span>
+                          </div>
+                        )}
+                      </div>
+                      <label className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer shadow-md transition">
+                        <Upload size={12} />
+                        <input type="file" accept="image/*" onChange={handleStudentPhotoChange} className="hidden" />
+                      </label>
+                      {studentForm.photoBase64 && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentForm(prev => ({ ...prev, photoBase64: '' }))}
+                          className="absolute -top-1 -right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition shadow"
+                          title="Remove Photo"
+                        >
+                          <X size={10} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1 text-center sm:text-left">
+                      <div className="flex items-center gap-2 justify-center sm:justify-start">
+                        <h4 className="text-xs font-black text-slate-900">Student Passport Photograph</h4>
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">Optional</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                        Photographs are optional during initial registration. If unavailable now, registration will proceed smoothly and you can upload it later from the student directory.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">First Name</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">First Name *</label>
                       <input
                         type="text"
-                        placeholder="Student's first name"
+                        placeholder="e.g. Chidinma"
                         value={studentForm.firstName}
                         onChange={e => setStudentForm({ ...studentForm, firstName: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1601,10 +2139,10 @@ export function StudentOnboarding() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Last Name (Surname)</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Last Name (Surname) *</label>
                       <input
                         type="text"
-                        placeholder="Student's last name"
+                        placeholder="e.g. Adeleke"
                         value={studentForm.lastName}
                         onChange={e => setStudentForm({ ...studentForm, lastName: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
@@ -1612,7 +2150,7 @@ export function StudentOnboarding() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Gender</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Gender *</label>
                       <select
                         value={studentForm.gender}
                         onChange={e => setStudentForm({ ...studentForm, gender: e.target.value })}
@@ -1632,7 +2170,7 @@ export function StudentOnboarding() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Class</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Class *</label>
                       <select
                         value={studentForm.classId}
                         onChange={e => setStudentForm({ ...studentForm, classId: e.target.value })}
@@ -1646,7 +2184,7 @@ export function StudentOnboarding() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Section</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Select Section *</label>
                       <select
                         value={studentForm.sectionId}
                         onChange={e => setStudentForm({ ...studentForm, sectionId: e.target.value })}
@@ -1660,8 +2198,39 @@ export function StudentOnboarding() {
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Blood Group</label>
+                      <select
+                        value={studentForm.bloodGroup}
+                        onChange={e => setStudentForm({ ...studentForm, bloodGroup: e.target.value })}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="">-- Select Blood Group --</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Religion</label>
+                      <select
+                        value={studentForm.religion}
+                        onChange={e => setStudentForm({ ...studentForm, religion: e.target.value })}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="">-- Select Religion --</option>
+                        <option value="Christianity">Christianity</option>
+                        <option value="Islam">Islam</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                     <div className="sm:col-span-2">
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Home Address</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Home / Residential Address</label>
                       <textarea
                         placeholder="Student's home address"
                         value={studentForm.currentAddress}
@@ -1677,6 +2246,41 @@ export function StudentOnboarding() {
                         onChange={e => setStudentForm({ ...studentForm, previousDetails: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-16 resize-none"
                       />
+                    </div>
+                  </div>
+
+                  {/* Supporting Documents Section (Optional) */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <FileText size={14} className="text-slate-600" /> Supporting Admission Documents (Optional)
+                    </h4>
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg text-center space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-600 block">Birth Certificate</span>
+                        <label className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1 transition">
+                          {studentForm.birthCertBase64 ? <FileCheck size={12} className="text-emerald-600" /> : <Upload size={12} />}
+                          {studentForm.birthCertBase64 ? 'Attached' : 'Upload'}
+                          <input type="file" accept=".pdf,image/*" onChange={(e) => handleDocUpload('birthCertBase64', e)} className="hidden" />
+                        </label>
+                      </div>
+
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg text-center space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-600 block">Previous Report Card</span>
+                        <label className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1 transition">
+                          {studentForm.reportCardBase64 ? <FileCheck size={12} className="text-emerald-600" /> : <Upload size={12} />}
+                          {studentForm.reportCardBase64 ? 'Attached' : 'Upload'}
+                          <input type="file" accept=".pdf,image/*" onChange={(e) => handleDocUpload('reportCardBase64', e)} className="hidden" />
+                        </label>
+                      </div>
+
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg text-center space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-600 block">Medical Report</span>
+                        <label className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1 transition">
+                          {studentForm.medicalReportBase64 ? <FileCheck size={12} className="text-emerald-600" /> : <Upload size={12} />}
+                          {studentForm.medicalReportBase64 ? 'Attached' : 'Upload'}
+                          <input type="file" accept=".pdf,image/*" onChange={(e) => handleDocUpload('medicalReportBase64', e)} className="hidden" />
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -1699,30 +2303,159 @@ export function StudentOnboarding() {
                 </div>
               )}
 
-              {/* STEP 2: PARENT PROFILE */}
+              {/* STEP 2: PARENT PROFILE & EXISTING PARENT PROTECTION */}
               {activeStep === 2 && (
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-5 animate-fade-in">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Users size={16} className="text-amber-600" /> Parent / Guardian Contacts
-                  </h3>
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-6 animate-fade-in">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <Users size={16} className="text-amber-600" /> Parent / Guardian & Existing Parent Protection
+                    </h3>
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
+                      Step 2 of 2
+                    </span>
+                  </div>
+
+                  {/* Existing Parent Protection Search Box */}
+                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                          <ShieldCheck size={15} className="text-amber-600" /> Existing Parent Protection & Deduplication
+                        </h4>
+                        <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                          Check if this parent already has a child enrolled. Linking to an existing parent prevents duplicate logins and unifies sibling records.
+                        </p>
+                      </div>
+                    </div>
+
+                    {!selectedParentPreview ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3.5 top-3 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Type parent phone, email, or name to search existing accounts..."
+                            value={parentSearchQuery}
+                            onChange={(e) => handleParentSearch(e.target.value)}
+                            className="w-full text-xs pl-9 pr-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-amber-500 bg-white"
+                          />
+                          {isSearchingParents && (
+                            <Loader2 size={13} className="animate-spin absolute right-3 top-3 text-amber-600" />
+                          )}
+                        </div>
+
+                        {/* Search Results Dropdown / Card list */}
+                        {searchedParents.length > 0 && (
+                          <div className="border border-slate-200 rounded-xl bg-white shadow-lg overflow-hidden divide-y divide-slate-100">
+                            {searchedParents.map((p) => (
+                              <div key={p.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-3 transition">
+                                <div className="min-w-0 flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                    {p.photo ? <img src={p.photo} alt={p.name} className="w-full h-full object-cover" /> : p.name.charAt(0)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h5 className="font-bold text-xs text-slate-900 truncate">{p.name}</h5>
+                                    <p className="text-[10px] text-slate-500 font-medium truncate">
+                                      {p.mobileno || 'No phone'} | {p.email || 'No email'} | {p.enrolledChildrenCount} child(ren) enrolled
+                                    </p>
+                                    {p.children && p.children.length > 0 && (
+                                      <p className="text-[9px] text-blue-600 font-semibold truncate">
+                                        Children: {p.children.map(c => `${c.name} (${c.className})`).join(', ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleLinkExistingParent(p)}
+                                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg transition shrink-0 flex items-center gap-1 shadow-sm"
+                                >
+                                  <LinkIcon size={11} /> Link Parent
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-white border border-emerald-300 rounded-xl flex items-center justify-between gap-3 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm overflow-hidden shrink-0">
+                            {selectedParentPreview.photo ? (
+                              <img src={selectedParentPreview.photo} alt={selectedParentPreview.name} className="w-full h-full object-cover" />
+                            ) : selectedParentPreview.name.charAt(0)}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                              Linked Existing Parent
+                            </span>
+                            <h5 className="font-bold text-xs text-slate-900 mt-0.5">{selectedParentPreview.name}</h5>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              {selectedParentPreview.mobileno} | {selectedParentPreview.email}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleClearExistingParent}
+                          className="px-2.5 py-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-[11px] font-bold rounded-lg transition border border-slate-200"
+                        >
+                          Unlink / Change
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Parent Photograph & Bio */}
+                  {!parentForm.existingParentId && (
+                    <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center gap-5">
+                      <div className="relative group shrink-0">
+                        <div className="w-20 h-20 rounded-2xl bg-white border-2 border-dashed border-slate-300 flex flex-col items-center justify-center overflow-hidden shadow-inner relative">
+                          {parentForm.photoBase64 ? (
+                            <img src={parentForm.photoBase64} alt="Parent Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-2 text-center text-slate-400">
+                              <Camera size={20} className="mb-1" />
+                              <span className="text-[8px] font-bold">Upload Photo</span>
+                            </div>
+                          )}
+                        </div>
+                        <label className="absolute -bottom-1 -right-1 p-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg cursor-pointer shadow-md transition">
+                          <Upload size={11} />
+                          <input type="file" accept="image/*" onChange={handleParentPhotoChange} className="hidden" />
+                        </label>
+                      </div>
+
+                      <div className="space-y-1 text-center sm:text-left">
+                        <div className="flex items-center gap-2 justify-center sm:justify-start">
+                          <h4 className="text-xs font-black text-slate-900">Parent Passport Photograph</h4>
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">Optional</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                          Parent photographs are optional during registration and can be uploaded anytime from the parent portal or school directory.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Parent Name</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Parent Name *</label>
                       <input
                         type="text"
                         placeholder="Father or Mother's full name"
                         value={parentForm.name}
                         onChange={e => setParentForm({ ...parentForm, name: e.target.value })}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        disabled={Boolean(parentForm.existingParentId)}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
                         required
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Relationship</label>
+                      <label className="text-xs font-bold text-slate-500 block mb-1">Relationship *</label>
                       <select
                         value={parentForm.relation}
-                        onChange={e => setParentForm({ ...parentForm, relation: e.target.value })}
+                        onChange={e => setParentForm({ ...parentForm, relation: e.target.value as any })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
                       >
                         <option value="Father">Father</option>
@@ -1737,7 +2470,8 @@ export function StudentOnboarding() {
                         placeholder="e.g. 08012345678"
                         value={parentForm.mobileno}
                         onChange={e => setParentForm({ ...parentForm, mobileno: e.target.value })}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        disabled={Boolean(parentForm.existingParentId)}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
                       />
                     </div>
                     <div>
@@ -1747,7 +2481,8 @@ export function StudentOnboarding() {
                         placeholder="e.g. parent@domain.com"
                         value={parentForm.email}
                         onChange={e => setParentForm({ ...parentForm, email: e.target.value })}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        disabled={Boolean(parentForm.existingParentId)}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
                       />
                     </div>
                   </div>
@@ -1850,6 +2585,646 @@ export function StudentOnboarding() {
             </div>
           )}
         </>
+      )}
+
+      {/* TAB 2: AI PHYSICAL FORM SCANNER & VERIFICATION STUDIO */}
+      {activeTab === 'scan' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Card */}
+          <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-blue-600 text-white rounded-xl shadow-sm">
+                  <Sparkles size={18} />
+                </span>
+                <h3 className="text-base font-black text-slate-950 tracking-tight">
+                  AI-Assisted Physical Registration Form Scanner
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 font-medium max-w-2xl leading-relaxed">
+                Scan or photograph physical paper admission forms. AI instantly extracts student details, cross-checks existing parent records, and presents a side-by-side verification canvas for admin correction and 1-click enrollment.
+              </p>
+            </div>
+
+            {scanStep !== 'upload' && (
+              <button
+                type="button"
+                onClick={handleScanReset}
+                className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+              >
+                <ArrowLeft size={13} /> Scan Another Form
+              </button>
+            )}
+          </div>
+
+          {scanErrorMsg && (
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center justify-between gap-2 shadow-sm animate-shake">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{scanErrorMsg}</span>
+              </div>
+              <button type="button" onClick={() => setScanErrorMsg(null)} className="text-rose-400 hover:text-rose-700">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* STEP 1: UPLOAD OR CAMERA CAPTURE */}
+          {scanStep === 'upload' && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm space-y-6 text-center">
+              <div className="max-w-xl mx-auto space-y-3">
+                <div className="w-16 h-16 bg-blue-100/80 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                  <Scan size={32} />
+                </div>
+                <h4 className="text-sm font-black text-slate-900">Upload or Scan Physical Admission Document</h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  Upload a scanned paper form, photo of an admission slip, birth certificate, or previous report card (PDF, PNG, JPG, WEBP).
+                </p>
+              </div>
+
+              <div className="max-w-xl mx-auto p-8 border-2 border-dashed border-blue-300 rounded-2xl bg-blue-50/30 hover:bg-blue-50/70 transition flex flex-col items-center justify-center gap-4 group">
+                <div className="flex items-center gap-3">
+                  <label className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl cursor-pointer transition shadow-md flex items-center gap-2 active:scale-95">
+                    {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    {isScanning ? 'Extracting with AI...' : 'Upload Scanned Form / Document'}
+                    <input
+                      type="file"
+                      accept=".pdf,image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleProcessScanDocument(file)
+                      }}
+                      className="hidden"
+                      disabled={isScanning}
+                    />
+                  </label>
+
+                  <label className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition shadow-sm flex items-center gap-2">
+                    <Camera size={16} className="text-slate-600" />
+                    Capture via Camera
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleProcessScanDocument(file)
+                      }}
+                      className="hidden"
+                      disabled={isScanning}
+                    />
+                  </label>
+                </div>
+
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  Supports clear scanned images or single/multi-page PDF forms up to 15MB
+                </span>
+              </div>
+
+              {/* 6-Step Workflow Lifecycle Info Card */}
+              <div className="grid sm:grid-cols-3 gap-3 max-w-3xl mx-auto pt-4 text-left border-t border-slate-100">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-black">1</span>
+                    Scan & Extract
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    OCR recognizes student bio, classroom targets, and parent contacts.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                    <span className="w-5 h-5 rounded-full bg-amber-600 text-white text-[10px] flex items-center justify-center font-black">2</span>
+                    Verify & Correct
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Inspect original paper form side-by-side and correct any OCR errors.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-black">3</span>
+                    Confirm & Store
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Existing parent linked automatically; login slips generated instantly.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: SIDE-BY-SIDE VERIFICATION & CORRECTION STUDIO */}
+          {scanStep === 'verify' && (
+            <div className="grid lg:grid-cols-12 gap-6 items-start">
+              {/* LEFT COLUMN: SCANNED DOCUMENT VIEWER */}
+              <div className="lg:col-span-5 rounded-2xl border border-slate-200 bg-slate-900 text-white p-4 shadow-sm space-y-3 sticky top-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <FileText size={15} className="text-blue-400" />
+                    <span className="text-xs font-black tracking-tight">Scanned Physical Document</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setScanZoom(z => Math.max(50, z - 25))}
+                      className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut size={13} />
+                    </button>
+                    <span className="text-[10px] font-mono text-slate-400 w-10 text-center">{scanZoom}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setScanZoom(z => Math.min(250, z + 25))}
+                      className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition"
+                      title="Zoom In"
+                    >
+                      <ZoomIn size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScanRotation(r => (r + 90) % 360)}
+                      className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition ml-1"
+                      title="Rotate 90°"
+                    >
+                      <RotateCw size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Canvas / Image Container */}
+                <div className="h-[520px] overflow-auto bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-center p-2">
+                  {scanPreviewUrl ? (
+                    scanMimeType === 'application/pdf' ? (
+                      <iframe
+                        src={scanPreviewUrl}
+                        className="w-full h-full rounded-lg"
+                        title="Scanned PDF Form"
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          transform: `scale(${scanZoom / 100}) rotate(${scanRotation}deg)`,
+                          transition: 'transform 0.2s ease',
+                        }}
+                        className="origin-center"
+                      >
+                        <img
+                          src={scanPreviewUrl}
+                          alt="Scanned Physical Form"
+                          className="max-w-full rounded shadow-md object-contain"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-xs text-slate-500 font-semibold">No preview available</span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 font-medium">
+                  <span>Cross-check paper text with fields on the right.</span>
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <Sparkles size={11} /> AI OCR Active
+                  </span>
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: VERIFICATION & CORRECTION FORM */}
+              <div className="lg:col-span-7 space-y-5">
+                {/* Existing Parent Match Alert Banner */}
+                {matchedScanParent ? (
+                  <div className="p-4 rounded-2xl border border-emerald-300 bg-emerald-50 shadow-sm space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5">
+                        <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            Existing Parent Detected
+                          </span>
+                          <h4 className="text-xs font-bold text-slate-950 mt-1">
+                            {matchedScanParent.name} ({matchedScanParent.mobileno || matchedScanParent.email})
+                          </h4>
+                          <p className="text-[11px] text-slate-600 font-medium">
+                            Enrolled Children: {matchedScanParent.children?.map((c: any) => `${c.name} (${c.className})`).join(', ') || `${matchedScanParent.enrolledChildrenCount} child(ren)`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-200/60 px-2 py-1 rounded-lg">
+                          Duplicate Account Prevented
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 text-slate-600 text-xs font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Users size={14} className="text-slate-500" /> New Parent Account will be created upon confirmation.
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-semibold">Protected Against Duplicates</span>
+                  </div>
+                )}
+
+                {/* Section 1: Student Information */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <GraduationCap size={15} className="text-blue-600" /> 1. Student Bio Information
+                    </h4>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+                      Editable
+                    </span>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        value={scanStudentForm.firstName}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, firstName: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Last Name (Surname) *</label>
+                      <input
+                        type="text"
+                        value={scanStudentForm.lastName}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, lastName: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Gender *</label>
+                      <select
+                        value={scanStudentForm.gender}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, gender: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={scanStudentForm.birthday}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, birthday: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Blood Group</label>
+                      <select
+                        value={scanStudentForm.bloodGroup}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, bloodGroup: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="">-- Select Blood Group --</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Religion</label>
+                      <select
+                        value={scanStudentForm.religion}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, religion: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="">-- Select Religion --</option>
+                        <option value="Christianity">Christianity</option>
+                        <option value="Islam">Islam</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Home Address</label>
+                      <textarea
+                        value={scanStudentForm.currentAddress}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, currentAddress: e.target.value })}
+                        rows={2}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Academic Classroom Placement */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <BookOpen size={15} className="text-indigo-600" /> 2. Academic Placement
+                    </h4>
+                    {extractedScanData?.targetClass && (
+                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        OCR Identified: &quot;{extractedScanData.targetClass}&quot;
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Classroom *</label>
+                      <select
+                        value={scanStudentForm.classId}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, classId: e.target.value })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        required
+                      >
+                        <option value="">-- Choose Class --</option>
+                        {classes.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Section / Arm *</label>
+                      <select
+                        value={scanStudentForm.sectionId}
+                        onChange={e => setScanStudentForm({ ...scanStudentForm, sectionId: e.target.value })}
+                        disabled={!scanStudentForm.classId}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:opacity-50"
+                        required
+                      >
+                        <option value="">-- Choose Section --</option>
+                        {scanAvailableSections.map(sec => (
+                          <option key={sec.id} value={sec.id}>{sec.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Parent & Guardian Contacts */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <Users size={15} className="text-amber-600" /> 3. Parent / Guardian Details
+                    </h4>
+                    {scanParentForm.existingParentId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScanParentForm(prev => ({ ...prev, existingParentId: null }))
+                          setMatchedScanParent(null)
+                        }}
+                        className="text-[10px] text-rose-600 hover:text-rose-800 font-bold"
+                      >
+                        Unlink & Create Fresh Parent
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Parent Name *</label>
+                      <input
+                        type="text"
+                        value={scanParentForm.name}
+                        onChange={e => setScanParentForm({ ...scanParentForm, name: e.target.value })}
+                        disabled={Boolean(scanParentForm.existingParentId)}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Relationship *</label>
+                      <select
+                        value={scanParentForm.relation}
+                        onChange={e => setScanParentForm({ ...scanParentForm, relation: e.target.value as any })}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      >
+                        <option value="Father">Father</option>
+                        <option value="Mother">Mother</option>
+                        <option value="Guardian">Guardian</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Mobile Phone Number</label>
+                      <input
+                        type="tel"
+                        value={scanParentForm.mobileno}
+                        onChange={e => setScanParentForm({ ...scanParentForm, mobileno: e.target.value })}
+                        disabled={Boolean(scanParentForm.existingParentId)}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        value={scanParentForm.email}
+                        onChange={e => setScanParentForm({ ...scanParentForm, email: e.target.value })}
+                        disabled={Boolean(scanParentForm.existingParentId)}
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 disabled:bg-slate-100 disabled:text-slate-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Optional Photographs & Document Archives */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                  <h4 className="text-xs font-black text-slate-900 flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Camera size={15} className="text-slate-600" /> 4. Photographs (Optional)
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                      Optional — May be added later
+                    </span>
+                  </h4>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Student Photo */}
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                        {scanStudentForm.photoBase64 ? (
+                          <img src={scanStudentForm.photoBase64} alt="Student" className="w-full h-full object-cover" />
+                        ) : (
+                          <Camera size={18} className="text-slate-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] font-bold text-slate-700 block truncate">Student Passport</span>
+                        <label className="text-[10px] text-blue-600 hover:text-blue-800 font-bold cursor-pointer transition">
+                          {scanStudentForm.photoBase64 ? 'Change Photo' : 'Upload Student Photo'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0]
+                              if (f) {
+                                const b64 = await fileToBase64(f)
+                                setScanStudentForm(prev => ({ ...prev, photoBase64: b64 }))
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Scanned Physical Form Archive Badge */}
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
+                      <div className="w-12 h-12 rounded-xl bg-white border border-emerald-200 flex items-center justify-center shrink-0 text-emerald-600">
+                        <FileCheck2 size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] font-bold text-emerald-900 block truncate">Original Scanned Form</span>
+                        <span className="text-[10px] text-emerald-700 font-semibold block">Attached to Record Archive</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Confirm & Save Actions */}
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleScanReset}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs transition cursor-pointer"
+                  >
+                    Cancel & Discard Scan
+                  </button>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmScanEnrollment('queue')}
+                      disabled={scanIsSubmitting}
+                      className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                    >
+                      <UserPlus size={14} /> Add to Batch & Scan Next
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmScanEnrollment('enroll')}
+                      disabled={scanIsSubmitting}
+                      className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md shadow-blue-500/20 active:scale-[0.98] cursor-pointer"
+                    >
+                      {scanIsSubmitting ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" /> Enrolling Student...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={14} /> Confirm & Enroll Student
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: ENROLLED CONFIRMATION SLIP */}
+          {scanStep === 'enrolled' && scanEnrolledResult && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6 max-w-2xl mx-auto text-center animate-fade-in">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 size={32} />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-slate-900">Student Admitted & Stored in Records!</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  {scanEnrolledResult.data?.student?.firstName} {scanEnrolledResult.data?.student?.lastName} (Reg: {scanEnrolledResult.data?.student?.registerNo}) is successfully enrolled.
+                </p>
+              </div>
+
+              {/* Credentials Box */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                    <Key size={14} className="text-blue-600" /> Student Login Credentials
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Role: Student</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Username</span>
+                    <span className="font-mono font-bold text-slate-800">{scanEnrolledResult.credentials?.student?.username}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Initial Password</span>
+                    <span className="font-mono font-bold text-slate-800">{scanEnrolledResult.credentials?.student?.password}</span>
+                  </div>
+                </div>
+
+                {scanEnrolledResult.credentials?.parent ? (
+                  <>
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 pt-2">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                        <Key size={14} className="text-amber-600" /> Parent Portal Credentials
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">Role: Parent</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">Parent Username</span>
+                        <span className="font-mono font-bold text-slate-800">{scanEnrolledResult.credentials.parent.username}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block">Parent Password</span>
+                        <span className="font-mono font-bold text-slate-800">{scanEnrolledResult.credentials.parent.password}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[11px] font-bold flex items-center gap-1.5">
+                    <ShieldCheck size={14} /> Linked to existing parent account. Parent continues using their existing login.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Printer size={14} /> Print Admission Slip
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleScanReset}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer"
+                >
+                  <Scan size={14} /> Scan Next Physical Form
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {activeTab === 'sibling' && (

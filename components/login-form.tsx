@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertCircle, Lock, User } from 'lucide-react'
@@ -14,6 +14,31 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [tenantBranding, setTenantBranding] = useState<{
+    isCustomDomain: boolean
+    schoolName: string
+    tagline: string
+    logoUrl: string | null
+    primaryColor: string
+    secondaryColor: string
+  } | null>(null)
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+        const host = typeof window !== 'undefined' ? window.location.hostname : ''
+        const res = await fetch(`${backendUrl}/api/public/tenant/branding?domain=${host}`)
+        const json = await res.json()
+        if (json.success && json.data?.isCustomDomain) {
+          setTenantBranding(json.data)
+        }
+      } catch {
+        // Fall back to default
+      }
+    }
+    fetchBranding()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,17 +112,32 @@ export function LoginForm() {
       
       {/* Header */}
       <div className="text-center">
+        {tenantBranding?.logoUrl ? (
+          <div className="flex justify-center mb-2">
+            <img src={tenantBranding.logoUrl} alt={tenantBranding.schoolName} className="w-14 h-14 object-cover rounded-2xl border border-gray-200 shadow" />
+          </div>
+        ) : tenantBranding?.isCustomDomain ? (
+          <div className="flex justify-center mb-2">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shadow"
+              style={{ background: tenantBranding.primaryColor || '#003da5' }}
+            >
+              SCH
+            </div>
+          </div>
+        ) : null}
+
         <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">
-          Welcome Back!
+          {tenantBranding?.schoolName ? `${tenantBranding.schoolName} Portal` : 'Welcome Back!'}
         </h2>
         <p className="text-xs text-gray-500 font-medium mb-3">
-          Sign in to access your account
+          {tenantBranding?.tagline || 'Sign in to access your account'}
         </p>
         
         {/* Security Indicator */}
         <div className="inline-flex items-center justify-center gap-1.5 text-[11px] text-gray-400 font-medium">
           <Lock size={12} className="text-emerald-500" />
-          <span>Secure login. Your data is protected.</span>
+          <span>Secure institutional login with multi-tenant encryption.</span>
         </div>
       </div>
 

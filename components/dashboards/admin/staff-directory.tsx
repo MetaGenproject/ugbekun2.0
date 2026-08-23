@@ -25,7 +25,12 @@ import {
   Laptop,
   Calculator,
   User,
-  Plus
+  Plus,
+  Camera,
+  Upload,
+  ImageIcon,
+  Eye,
+  Check,
 } from 'lucide-react'
 import {
   Table,
@@ -40,24 +45,39 @@ import { TeacherOnboardingModal, EditTeacherModal, DeactivateTeacherModal } from
 
 interface TeacherRow {
   id: number
-  firstName: string | null
-  lastName: string | null
+  name?: string
+  firstName?: string | null
+  lastName?: string | null
   email: string | null
-  mobileno: string | null
-  qualification: string | null
+  phone?: string | null
+  mobileno?: string | null
+  photo?: string | null
+  qualification?: string | null
+  qualifications?: string | null
   subjectSpecialization?: string | null
-  allocatedClass: string | null
+  allocatedClass?: string | null
+  classCount?: number
+  department?: string | null
+  bankName?: string | null
+  accountNumber?: string | null
+  accountName?: string | null
   active?: boolean
 }
 
 interface StaffRow {
   id: number
+  username?: string
   name: string
-  role: string
-  email: string | null
-  mobileno: string | null
+  role: string | number
+  roleLabel?: string
+  email?: string | null
+  phone?: string | null
+  mobileno?: string | null
+  photo?: string | null
   department?: string
   status?: 'active' | 'suspended'
+  active?: boolean
+  lastLogin?: string | null
 }
 
 type StaffTab = 'teachers' | 'subject-teachers' | 'non-teaching' | 'communication'
@@ -83,6 +103,31 @@ export function StaffDirectory() {
 
   // Status Toggle State
   const [togglingId, setTogglingId] = useState<number | null>(null)
+
+  // Photograph Upload & Preview States
+  const [photoUploadTarget, setPhotoUploadTarget] = useState<{ id: number; name: string; type: 'teacher' | 'staff'; currentPhoto?: string | null } | null>(null)
+  const [photoFile, setPhotoFile] = useState<string | null>(null)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const [previewEnlargePhoto, setPreviewEnlargePhoto] = useState<{ url: string; name: string } | null>(null)
+
+  const handleSaveQuickPhoto = async () => {
+    if (!photoUploadTarget || !photoFile) return
+    setIsUploadingPhoto(true)
+    try {
+      if (photoUploadTarget.type === 'teacher') {
+        await apiSlice.post(endpoints.admin.uploadTeacherPhoto(photoUploadTarget.id), { photo: photoFile })
+      } else {
+        await apiSlice.post(endpoints.admin.uploadStaffPhoto(photoUploadTarget.id), { photo: photoFile })
+      }
+      await loadList()
+      setPhotoUploadTarget(null)
+      setPhotoFile(null)
+    } catch (err: any) {
+      alert(err?.message || 'Failed to upload photograph.')
+    } finally {
+      setIsUploadingPhoto(false)
+    }
+  }
 
   // EduChat Communication State
   const [selectedStaffForChat, setSelectedStaffForChat] = useState<{ id: number; name: string; role: string } | null>(null)
@@ -345,6 +390,7 @@ export function StaffDirectory() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">Photo</TableHead>
                       <TableHead>Teacher Name</TableHead>
                       <TableHead>Qualification</TableHead>
                       <TableHead>Specialization</TableHead>
@@ -356,47 +402,86 @@ export function StaffDirectory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTeachers.map((t) => (
-                      <TableRow key={t.id} className="hover:bg-slate-50/50">
-                        <TableCell className="font-bold text-slate-900">
-                          {[t.firstName, t.lastName].filter(Boolean).join(' ') || '—'}
-                        </TableCell>
-                        <TableCell className="text-xs font-medium text-slate-700">{t.qualification || 'B.Ed / B.Sc'}</TableCell>
-                        <TableCell>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                            {t.subjectSpecialization || 'General Subject'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-700">{t.mobileno || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-600">{t.email || '—'}</TableCell>
-                        <TableCell className="font-semibold text-slate-800">{t.allocatedClass || 'Unassigned'}</TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => handleToggleTeacherStatus(t.id)}
-                            disabled={togglingId === t.id}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer ${
-                              t.active !== false
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${t.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            {t.active !== false ? 'Active' : 'Suspended'}
-                          </button>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <button
-                            onClick={() => {
-                              setEditingTeacher(t)
-                              setIsEditModalOpen(true)
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
-                          >
-                            <Edit3 size={13} /> Edit
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredTeachers.map((t) => {
+                      const teacherDisplayName = [t.firstName, t.lastName].filter(Boolean).join(' ') || t.name || 'Teacher'
+                      return (
+                        <TableRow key={t.id} className="hover:bg-slate-50/50">
+                          <TableCell className="w-12">
+                            <div className="relative group/avatar w-10 h-10">
+                              {t.photo ? (
+                                <img
+                                  src={t.photo}
+                                  alt={teacherDisplayName}
+                                  className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-blue-500 transition"
+                                  onClick={() => setPreviewEnlargePhoto({ url: t.photo!, name: teacherDisplayName })}
+                                />
+                              ) : (
+                                <div
+                                  onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher' })}
+                                  className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-2xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition"
+                                  title="Click to upload photograph"
+                                >
+                                  {([t.firstName?.[0], t.lastName?.[0]].filter(Boolean).join('') || teacherDisplayName[0] || 'T').toUpperCase()}
+                                </div>
+                              )}
+                              <button
+                                onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
+                                className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-400 shadow-xs transition cursor-pointer"
+                                title="Update Photograph"
+                              >
+                                <Camera size={10} />
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-bold text-slate-900">
+                            {teacherDisplayName}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium text-slate-700">{t.qualification || t.qualifications || 'B.Ed / B.Sc'}</TableCell>
+                          <TableCell>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                              {t.subjectSpecialization || 'General Subject'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-slate-700">{t.mobileno || t.phone || '—'}</TableCell>
+                          <TableCell className="text-xs text-slate-600">{t.email || '—'}</TableCell>
+                          <TableCell className="font-semibold text-slate-800">{t.allocatedClass || 'Unassigned'}</TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => handleToggleTeacherStatus(t.id)}
+                              disabled={togglingId === t.id}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer ${
+                                t.active !== false
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${t.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              {t.active !== false ? 'Active' : 'Suspended'}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                                title="Upload or change photograph"
+                              >
+                                <Camera size={12} /> Photo
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingTeacher(t)
+                                  setIsEditModalOpen(true)
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
+                              >
+                                <Edit3 size={12} /> Edit
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                   <TableCaption>Showing {filteredTeachers.length} teacher record{filteredTeachers.length === 1 ? '' : 's'}.</TableCaption>
                 </Table>
@@ -493,6 +578,7 @@ export function StaffDirectory() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">Photo</TableHead>
                   <TableHead>Staff Name</TableHead>
                   <TableHead>Official Role</TableHead>
                   <TableHead>Department</TableHead>
@@ -502,27 +588,66 @@ export function StaffDirectory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredNonTeaching.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-bold text-slate-900">{s.name || (s as any).username || 'Staff Member'}</TableCell>
-                    <TableCell>
-                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-xs">
-                        {String((s as any).roleLabel || (typeof s.role === 'string' ? s.role : 'Staff'))}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-semibold text-slate-700">{s.department || 'General Administration'}</TableCell>
-                    <TableCell className="font-mono text-xs text-slate-700">{s.mobileno || '—'}</TableCell>
-                    <TableCell className="text-xs text-slate-600">{s.email || '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        onClick={() => setEditingStaff(s)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
-                      >
-                        <Edit3 size={13} /> Edit
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredNonTeaching.map((s) => {
+                  const staffDisplayName = s.name || (s as any).username || 'Staff Member'
+                  return (
+                    <TableRow key={s.id}>
+                      <TableCell className="w-12">
+                        <div className="relative group/avatar w-10 h-10">
+                          {s.photo ? (
+                            <img
+                              src={s.photo}
+                              alt={staffDisplayName}
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-blue-500 transition"
+                              onClick={() => setPreviewEnlargePhoto({ url: s.photo!, name: staffDisplayName })}
+                            />
+                          ) : (
+                            <div
+                              onClick={() => setPhotoUploadTarget({ id: s.id, name: staffDisplayName, type: 'staff' })}
+                              className="w-10 h-10 rounded-full bg-linear-to-br from-amber-500 to-orange-600 text-white font-black text-xs flex items-center justify-center shadow-2xs cursor-pointer hover:ring-2 hover:ring-amber-400 transition"
+                              title="Click to upload photograph"
+                            >
+                              {(staffDisplayName[0] || 'S').toUpperCase()}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => setPhotoUploadTarget({ id: s.id, name: staffDisplayName, type: 'staff', currentPhoto: s.photo })}
+                            className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-400 shadow-xs transition cursor-pointer"
+                            title="Update Photograph"
+                          >
+                            <Camera size={10} />
+                          </button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-bold text-slate-900">{staffDisplayName}</TableCell>
+                      <TableCell>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-xs">
+                          {String((s as any).roleLabel || (typeof s.role === 'string' ? s.role : 'Staff'))}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-semibold text-slate-700">{s.department || 'General Administration'}</TableCell>
+                      <TableCell className="font-mono text-xs text-slate-700">{s.mobileno || s.phone || '—'}</TableCell>
+                      <TableCell className="text-xs text-slate-600">{s.email || '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            onClick={() => setPhotoUploadTarget({ id: s.id, name: staffDisplayName, type: 'staff', currentPhoto: s.photo })}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                            title="Upload or change photograph"
+                          >
+                            <Camera size={12} /> Photo
+                          </button>
+                          <button
+                            onClick={() => setEditingStaff(s)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
+                          >
+                            <Edit3 size={12} /> Edit
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -775,6 +900,117 @@ export function StaffDirectory() {
           loadList()
         }}
       />
+
+      {/* QUICK PHOTO UPLOAD MODAL */}
+      {photoUploadTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 animate-in fade-in zoom-in duration-150 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                <Camera size={16} className="text-blue-600" /> Upload Staff Photograph
+              </h3>
+              <button
+                onClick={() => {
+                  setPhotoUploadTarget(null)
+                  setPhotoFile(null)
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="text-center space-y-3">
+              <p className="text-xs text-slate-600 font-medium">
+                Uploading photo for <span className="font-bold text-slate-900">{photoUploadTarget.name}</span>
+              </p>
+
+              <div className="flex justify-center">
+                {photoFile || photoUploadTarget.currentPhoto ? (
+                  <div className="relative w-28 h-28 rounded-full border-4 border-blue-500/20 overflow-hidden shadow-md">
+                    <img
+                      src={photoFile || photoUploadTarget.currentPhoto!}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-28 h-28 rounded-full border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400">
+                    <ImageIcon size={28} />
+                    <span className="text-[10px] mt-1 font-semibold">No Photo</span>
+                  </div>
+                )}
+              </div>
+
+              <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs shadow-2xs cursor-pointer transition">
+                <Upload size={14} className="text-slate-500" />
+                <span>Select New Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (evt) => {
+                        setPhotoFile(evt.target?.result as string)
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                />
+              </label>
+              <p className="text-[10px] text-slate-400">PNG, JPG, WEBP up to 5MB</p>
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoUploadTarget(null)
+                  setPhotoFile(null)
+                }}
+                disabled={isUploadingPhoto}
+                className="flex-1 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickPhoto}
+                disabled={!photoFile || isUploadingPhoto}
+                className="flex-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isUploadingPhoto ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Save Photograph
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ENLARGE PREVIEW MODAL */}
+      {previewEnlargePhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 cursor-pointer"
+          onClick={() => setPreviewEnlargePhoto(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-4 max-w-sm w-full text-center space-y-3 cursor-default animate-in fade-in zoom-in duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="font-bold text-xs text-slate-900 truncate">{previewEnlargePhoto.name}</h4>
+              <button onClick={() => setPreviewEnlargePhoto(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="w-full aspect-square rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-950">
+              <img src={previewEnlargePhoto.url} alt={previewEnlargePhoto.name} className="w-full h-full object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

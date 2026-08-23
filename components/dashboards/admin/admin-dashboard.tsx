@@ -519,8 +519,8 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <TimetableManager />
   }
 
-  if (activeSection === 'curriculum' || activeSection === 'academics' || activeSection === 'academic-structure') {
-    return <AcademicStructure />
+  if (activeSection === 'curriculum' || activeSection === 'classes' || activeSection === 'sections' || activeSection === 'subjects' || activeSection === 'academics' || activeSection === 'academic-structure') {
+    return <BranchSetup />
   }
 
   if (activeSection === 'admissions' || activeSection === 'students-onboard' || activeSection === 'student-onboarding') {

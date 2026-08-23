@@ -16,7 +16,11 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
-  Users
+  Users,
+  Camera,
+  Upload,
+  ImageIcon,
+  AlertCircle,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +99,7 @@ interface PendingStaff {
   name: string
   email: string
   phone: string
+  photo?: string | null
   qualifications?: string
   houseAddress?: string
   department?: string
@@ -116,6 +121,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [photo, setPhoto] = useState<string | null>(null)
   const [qualifications, setQualifications] = useState('')
   const [houseAddress, setHouseAddress] = useState('')
   const [department, setDepartment] = useState('')
@@ -241,6 +247,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
       name: trimmedName,
       email: trimmedEmail,
       phone: phone.trim(),
+      photo: photo || null,
       qualifications: qualifications.trim(),
       houseAddress: houseAddress.trim(),
       department: department.trim(),
@@ -264,6 +271,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
     setName('')
     setEmail('')
     setPhone('')
+    setPhoto(null)
     setQualifications('')
     setHouseAddress('')
     setDepartment('')
@@ -329,6 +337,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
         name: currentName,
         email: currentEmail,
         phone: phone.trim(),
+        photo: photo || null,
         qualifications: qualifications.trim(),
         houseAddress: houseAddress.trim(),
         department: department.trim(),
@@ -362,6 +371,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
           name: item.name,
           email: item.email,
           phone: item.phone || undefined,
+          photo: item.photo || undefined,
           qualifications: item.qualifications || undefined,
           houseAddress: item.houseAddress || undefined,
           department: item.department || undefined,
@@ -706,6 +716,58 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                     </div>
                   </div>
 
+                  {/* Staff Photograph (Optional) */}
+                  <div className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Camera size={14} className="text-[#0063a6]" />
+                        Staff Photograph <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      {photo && (
+                        <button
+                          type="button"
+                          onClick={() => setPhoto(null)}
+                          className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                        >
+                          Remove Photo
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {photo ? (
+                        <div className="relative w-16 h-16 rounded-2xl border-2 border-blue-500 overflow-hidden shadow-sm shrink-0 bg-white">
+                          <img src={photo} alt="Staff preview" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0">
+                          <ImageIcon size={22} />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-2xs cursor-pointer transition">
+                          <Upload size={13} className="text-slate-500" />
+                          <span>{photo ? 'Change Photograph' : 'Upload Photograph'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const reader = new FileReader()
+                                reader.onload = (evt) => {
+                                  setPhoto(evt.target?.result as string)
+                                }
+                                reader.readAsDataURL(file)
+                              }
+                            }}
+                          />
+                        </label>
+                        <p className="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP up to 5MB. Photo can also be added later.</p>
+                      </div>
+                    </div>
+                  </div>
+
                   {role === '3' && (
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-4">
                       <p className="text-xs font-bold text-slate-700">Teacher Designation & Immediate Class Assignment</p>
@@ -921,6 +983,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
   const [bankName, setBankName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [accountName, setAccountName] = useState('')
+  const [photo, setPhoto] = useState<string | null>(null)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -937,6 +1000,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
       setBankName(teacher.bankName || '')
       setAccountNumber(teacher.accountNumber || '')
       setAccountName(teacher.accountName || '')
+      setPhoto(teacher.photo || null)
       setErrorMsg(null)
     }
   }, [teacher])
@@ -949,7 +1013,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
     setIsSubmitting(true)
 
     try {
-      const payload = {
+      const payload: any = {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
@@ -959,6 +1023,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         bankName: bankName.trim() || undefined,
         accountNumber: accountNumber.trim() || undefined,
         accountName: accountName.trim() || undefined,
+        photo: photo || undefined,
       }
 
       await apiSlice.put(
@@ -1111,6 +1176,58 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                     disabled={isSubmitting}
                     className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Staff Photograph */}
+            <div className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Camera size={14} className="text-[#0063a6]" />
+                  Staff Photograph
+                </label>
+                {photo && (
+                  <button
+                    type="button"
+                    onClick={() => setPhoto(null)}
+                    className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                {photo ? (
+                  <div className="relative w-16 h-16 rounded-2xl border-2 border-blue-500 overflow-hidden shadow-sm shrink-0 bg-white">
+                    <img src={photo} alt="Staff preview" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0">
+                    <ImageIcon size={22} />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-2xs cursor-pointer transition">
+                    <Upload size={13} className="text-slate-500" />
+                    <span>{photo ? 'Change Photograph' : 'Upload Photograph'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          const reader = new FileReader()
+                          reader.onload = (evt) => {
+                            setPhoto(evt.target?.result as string)
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                      }}
+                    />
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-1">PNG, JPG, WEBP up to 5MB.</p>
                 </div>
               </div>
             </div>

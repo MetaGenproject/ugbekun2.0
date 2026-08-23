@@ -28,6 +28,7 @@ import {
 import { UgbekunLogo } from '@/components/logo'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { resolvePlanSlug, type PlanSummary } from '@/lib/plans'
+import { setAuthSession } from '@/lib/authSession'
 
 const nigerianStates = [
   'Lagos', 'Abuja (FCT)', 'Oyo', 'Rivers', 'Kano', 'Ogun', 'Enugu', 'Edo', 'Delta', 'Kaduna',
@@ -142,7 +143,12 @@ export function SchoolSubscriptionForm() {
         logoFileName = logoFile.name
       }
 
-      const data = await apiSlice.post(endpoints.onboarding.register, {
+      const data = await apiSlice.post<{
+        success: boolean
+        message: string
+        token?: string
+        user?: any
+      }>(endpoints.onboarding.register, {
         planSlug,
         schoolName: schoolName.trim(),
         schoolAddress: schoolAddress.trim(),
@@ -152,14 +158,26 @@ export function SchoolSubscriptionForm() {
         username: username.trim(),
         password,
         confirmPassword: password,
-        message: `Motto: ${motto} | Type: ${schoolType} | Category: ${schoolCategory} | State: ${state} | LGA: ${lga} | Est: ${yearEstablished} | Students: ${totalStudents}`,
+        state: state.trim(),
+        lga: lga.trim(),
+        motto: motto.trim(),
+        schoolType: schoolType.trim(),
+        schoolCategory: schoolCategory.trim(),
+        yearEstablished: yearEstablished.trim(),
+        totalStudents: totalStudents.trim(),
         termsAccepted: true,
         logoBase64,
         logoFileName,
       })
 
-      setSuccessMsg(data.message || 'School account created successfully! Redirecting to login...')
-      setTimeout(() => router.push('/login'), 2500)
+      if (data.token && data.user) {
+        setAuthSession(data.token, data.user)
+        setSuccessMsg('🎉 School account provisioned! Entering your dashboard...')
+        setTimeout(() => router.push('/dashboard'), 1200)
+      } else {
+        setSuccessMsg(data.message || 'School account created successfully! Redirecting to login...')
+        setTimeout(() => router.push('/login'), 1500)
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please check your network connection.'
       setErrorMsg(message)

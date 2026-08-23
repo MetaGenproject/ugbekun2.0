@@ -28,6 +28,7 @@ import {
 import { AddSchoolForm } from './add-school-form'
 import { EditBranchForm, type BranchDetails } from './edit-branch-form'
 import { MultiBranchRevenueAnalytics } from './multi-branch-revenue-analytics'
+import { SuperadminSchoolCmsEditor } from './superadmin-school-cms-editor'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import {
   AlertDialog,
@@ -909,6 +910,10 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
 
       {activeSection === 'revenue-analytics' && (
         <MultiBranchRevenueAnalytics user={user} />
+      )}
+
+      {activeSection === 'school-cms' && (
+        <SuperadminSchoolCmsEditor />
       )}
 
       {activeSection === 'settings' && (

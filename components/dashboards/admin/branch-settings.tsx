@@ -43,10 +43,12 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import { DomainSettingsTab } from './domain-settings-tab'
 
 type SettingsTab = 
   | 'school-info' 
   | 'branding' 
+  | 'domain-cms'
   | 'academic-session' 
   | 'school-calendar' 
   | 'roles-permissions' 
@@ -139,6 +141,9 @@ export function BranchSettings() {
         <button onClick={() => setActiveTab('branding')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'branding' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           🎨 Branding
         </button>
+        <button onClick={() => setActiveTab('domain-cms')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'domain-cms' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+          🌐 Custom Domain & CMS
+        </button>
         <button onClick={() => setActiveTab('academic-session')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'academic-session' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           🗓️ Academic Session
         </button>
@@ -199,6 +204,11 @@ export function BranchSettings() {
             Upload School Crest Logo (PNG / SVG)
           </div>
         </div>
+      )}
+
+      {/* 2.5 CUSTOM DOMAIN & CMS SETTINGS */}
+      {activeTab === 'domain-cms' && (
+        <DomainSettingsTab />
       )}
 
       {/* 3. ACADEMIC SESSION */}

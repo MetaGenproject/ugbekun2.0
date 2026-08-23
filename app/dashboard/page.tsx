@@ -101,6 +101,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'tenants', label: 'Tenants Directory', icon: Users },
         { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
         { id: 'revenue-analytics', label: 'Revenue Analytics', icon: TrendingUp },
+        { id: 'school-cms', label: 'School Landing Pages (CMS)', icon: Globe },
         { id: 'logs', label: 'System Logs', icon: Layers },
         { id: 'settings', label: 'Global Settings', icon: Settings },
       ]

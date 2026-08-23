@@ -44,7 +44,9 @@ import {
   MapPin,
   User,
   Eye,
-  Check
+  Check,
+  Camera,
+  ImageIcon,
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
@@ -294,6 +296,33 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [gradeScore, setGradeScore] = useState<string>('')
   const [gradeFeedback, setGradeFeedback] = useState<string>('')
   const [savingGrade, setSavingGrade] = useState<boolean>(false)
+
+  // Self-Service Photograph Upload Modal State
+  const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false)
+  const [selfPhotoFile, setSelfPhotoFile] = useState<string | null>(null)
+  const [uploadingSelfPhoto, setUploadingSelfPhoto] = useState<boolean>(false)
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null)
+
+  const handleUploadSelfPhoto = async () => {
+    if (!selfPhotoFile) return
+    setUploadingSelfPhoto(true)
+    setPhotoUploadError(null)
+    try {
+      const res = await apiSlice.post<{ success: boolean; photo: string }>(
+        endpoints.teacher.uploadPhoto,
+        { photo: selfPhotoFile }
+      )
+      if (res.success && res.photo) {
+        setProfile(prev => prev ? { ...prev, photo: res.photo } : null)
+        setShowPhotoModal(false)
+        setSelfPhotoFile(null)
+      }
+    } catch (err: any) {
+      setPhotoUploadError(err?.message || 'Failed to update photograph.')
+    } finally {
+      setUploadingSelfPhoto(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -1119,18 +1148,45 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
           {/* 1. Top Hero Welcome Banner */}
           <div className="relative rounded-3xl bg-gradient-to-r from-[#070D22] via-[#0E1A42] to-[#12245A] p-6 sm:p-8 text-white shadow-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             
-            {/* Left Hero Content */}
-            <div className="relative z-10 space-y-1">
-              <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-xs text-blue-100 inline-flex items-center gap-1.5 mb-2">
-                <Sparkles size={13} className="text-yellow-300" />
-                Teacher Workspace
-              </span>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                Good Day, {teacherName}! 👋
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                Connected with <span className="text-white font-bold">{profile.branchName || 'School Campus'}</span> &bull; Primary Class: <span className="text-white font-bold">{primaryForm}</span>
-              </p>
+            {/* Left Hero Content with Avatar */}
+            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+              <div className="relative group/avatar shrink-0">
+                {profile.photo ? (
+                  <img
+                    src={profile.photo}
+                    alt={teacherName}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl object-cover border-2 border-white/30 shadow-lg"
+                  />
+                ) : (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-linear-to-br from-blue-500 to-indigo-600 border-2 border-white/20 text-white font-black text-xl sm:text-2xl flex items-center justify-center shadow-lg">
+                    {(teacherName[0] || 'T').toUpperCase()}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setSelfPhotoFile(null)
+                    setPhotoUploadError(null)
+                    setShowPhotoModal(true)
+                  }}
+                  className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition cursor-pointer border border-white/40"
+                  title="Upload profile photograph"
+                >
+                  <Camera size={13} />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-xs text-blue-100 inline-flex items-center gap-1.5 mb-1">
+                  <Sparkles size={13} className="text-yellow-300" />
+                  Teacher Workspace
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                  Good Day, {teacherName}! 👋
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-300 font-medium">
+                  Connected with <span className="text-white font-bold">{profile.branchName || 'School Campus'}</span> &bull; Primary Class: <span className="text-white font-bold">{primaryForm}</span>
+                </p>
+              </div>
             </div>
 
             {/* Right Date Box */}
@@ -1485,6 +1541,100 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         </div>
 
       </div>
+
+      {/* SELF-SERVICE PHOTOGRAPH UPLOAD MODAL */}
+      {showPhotoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-sm w-full p-6 animate-in fade-in zoom-in duration-150 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                <Camera size={16} className="text-blue-600" /> Update Profile Photograph
+              </h3>
+              <button
+                onClick={() => {
+                  setShowPhotoModal(false)
+                  setSelfPhotoFile(null)
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {photoUploadError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold">
+                {photoUploadError}
+              </div>
+            )}
+
+            <div className="text-center space-y-3">
+              <p className="text-xs text-slate-600 font-medium">
+                Upload a clear portrait photo. This will be displayed on your staff profile and school records.
+              </p>
+
+              <div className="flex justify-center">
+                {selfPhotoFile || profile?.photo ? (
+                  <div className="relative w-28 h-28 rounded-2xl border-4 border-blue-500/20 overflow-hidden shadow-md">
+                    <img
+                      src={selfPhotoFile || profile?.photo!}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-28 h-28 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400">
+                    <ImageIcon size={28} />
+                    <span className="text-[10px] mt-1 font-semibold">No Photograph</span>
+                  </div>
+                )}
+              </div>
+
+              <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs shadow-2xs cursor-pointer transition">
+                <Upload size={14} className="text-slate-500" />
+                <span>{selfPhotoFile || profile?.photo ? 'Choose Different Image' : 'Select Photograph'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (evt) => {
+                        setSelfPhotoFile(evt.target?.result as string)
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                />
+              </label>
+              <p className="text-[10px] text-slate-400">Supported: PNG, JPG, WEBP up to 5MB</p>
+            </div>
+
+            <div className="flex gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhotoModal(false)
+                  setSelfPhotoFile(null)
+                }}
+                disabled={uploadingSelfPhoto}
+                className="flex-1 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUploadSelfPhoto}
+                disabled={!selfPhotoFile || uploadingSelfPhoto}
+                className="flex-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {uploadingSelfPhoto ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Save Photo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
