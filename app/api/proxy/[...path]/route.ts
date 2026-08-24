@@ -24,21 +24,26 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
     const queryString = searchParams ? `?${searchParams}` : ''
     const targetUrl = `${backendHost}/api/${path}${queryString}`
 
-    // Copy incoming auth headers
-    const incomingHeaders: Record<string, string> = {}
-    request.headers.forEach((value, key) => {
-      const lowerKey = key.toLowerCase()
-      if (lowerKey === 'authorization' || lowerKey === 'x-admin-teacher-id' || lowerKey === 'content-type') {
-        incomingHeaders[key] = value
-      }
-    })
+    // Build clean forwarded headers without duplicates
+    const forwardHeaders: Record<string, string> = {
+      'Accept': 'application/json',
+    }
 
-    // If Authorization missing in headers, read from cookie
-    if (!incomingHeaders['authorization'] && !incomingHeaders['Authorization']) {
+    // Copy authorization header or fall back to cookie
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    if (authHeader) {
+      forwardHeaders['Authorization'] = authHeader
+    } else {
       const tokenCookie = request.cookies.get('ugbekun_token')?.value
       if (tokenCookie) {
-        incomingHeaders['Authorization'] = `Bearer ${tokenCookie}`
+        forwardHeaders['Authorization'] = `Bearer ${tokenCookie}`
       }
+    }
+
+    // Forward x-admin-teacher-id if present
+    const teacherHeader = request.headers.get('x-admin-teacher-id')
+    if (teacherHeader) {
+      forwardHeaders['x-admin-teacher-id'] = teacherHeader
     }
 
     let body: any = null
@@ -46,13 +51,17 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
       body = await request.text().catch(() => null)
     }
 
+    // Forward single, clean Content-Type header
+    const rawContentType = request.headers.get('content-type')
+    if (rawContentType) {
+      forwardHeaders['Content-Type'] = rawContentType.split(',')[0].trim()
+    } else if (body) {
+      forwardHeaders['Content-Type'] = 'application/json'
+    }
+
     const response = await fetch(targetUrl, {
       method: request.method,
-      headers: {
-        ...incomingHeaders,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers: forwardHeaders,
       body: body || undefined,
     })
 
