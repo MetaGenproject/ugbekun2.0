@@ -49,25 +49,11 @@ export function CampusLiveManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isLiveActive, setIsLiveActive] = useState(false)
 
-  // Live Meetings Data
-  const [liveClasses, setLiveClasses] = useState([
-    { id: 'LVC-101', title: 'Primary 4 Mathematics Virtual Classroom', host: 'Mrs. Victoria Adams', time: '10:00 AM - 11:00 AM', status: 'Live Now', attendees: 28 },
-    { id: 'LVC-102', title: 'SSS 1 Physics Interactive Problem Solving', host: 'Dr. Samuel Biobaku', time: '02:00 PM - 03:00 PM', status: 'Scheduled Today', attendees: 34 },
-  ])
-
-  const [staffMeetings, setStaffMeetings] = useState([
-    { id: 'MTG-201', title: 'Weekly Staff Briefing & Academic Review', host: 'School Principal', date: '2026-08-04 03:30 PM', participants: 42, status: 'Scheduled' },
-  ])
-
-  const [ptaMeetings, setPtaMeetings] = useState([
-    { id: 'PTA-301', title: '1st Term PTA General Virtual Townhall', host: 'PTA Executive Council', date: '2026-08-15 11:00 AM', participants: 250, status: 'Open Registration' },
-  ])
-
-  const [recordings, setRecordings] = useState([
-    { id: 'REC-01', title: 'Primary 4 Fractions & Decimals Masterclass', duration: '45 mins', date: '2026-08-01', size: '240 MB', format: 'HD MP4' },
-    { id: 'REC-02', title: 'PTA Executive Council Meeting - July 2026', duration: '1 hr 12 mins', date: '2026-07-25', size: '480 MB', format: 'HD MP4' },
-    { id: 'REC-03', title: 'AI & STEM Robotics Student Webinar', duration: '58 mins', date: '2026-07-18', size: '360 MB', format: 'HD MP4' },
-  ])
+  // Live Meetings State
+  const [liveClasses, setLiveClasses] = useState<Array<{ id: string; title: string; host: string; time: string; status: string; attendees: number }>>([])
+  const [staffMeetings, setStaffMeetings] = useState<Array<{ id: string; title: string; host: string; date: string; participants: number; status: string }>>([])
+  const [ptaMeetings, setPtaMeetings] = useState<Array<{ id: string; title: string; host: string; date: string; participants: number; status: string }>>([])
+  const [recordings, setRecordings] = useState<Array<{ id: string; title: string; duration: string; date: string; size: string; format: string }>>([])
 
   return (
     <div className="space-y-6">
@@ -160,16 +146,24 @@ export function CampusLiveManagement() {
           <Table>
             <TableHeader><TableRow><TableHead>Session ID</TableHead><TableHead>Classroom Title</TableHead><TableHead>Instructor</TableHead><TableHead>Time Slot</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
-              {liveClasses.map(c => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-mono font-bold text-rose-700">{c.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{c.title}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{c.host}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-800">{c.time}</TableCell>
-                  <TableCell><span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${c.status === 'Live Now' ? 'bg-rose-100 text-rose-800 border border-rose-200 animate-pulse' : 'bg-slate-100 text-slate-700'}`}>{c.status}</span></TableCell>
-                  <TableCell className="text-right"><button onClick={() => setIsLiveActive(true)} className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded-lg">Join Classroom</button></TableCell>
+              {liveClasses.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No live virtual classrooms running or scheduled at this time.
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                liveClasses.map(c => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-mono font-bold text-rose-700">{c.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{c.title}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{c.host}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-800">{c.time}</TableCell>
+                    <TableCell><span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${c.status === 'Live Now' ? 'bg-rose-100 text-rose-800 border border-rose-200 animate-pulse' : 'bg-slate-100 text-slate-700'}`}>{c.status}</span></TableCell>
+                    <TableCell className="text-right"><button onClick={() => setIsLiveActive(true)} className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded-lg">Join Classroom</button></TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -182,15 +176,23 @@ export function CampusLiveManagement() {
           <Table>
             <TableHeader><TableRow><TableHead>Meeting ID</TableHead><TableHead>Subject</TableHead><TableHead>Organizer</TableHead><TableHead>Scheduled Date</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
-              {staffMeetings.map(m => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-mono font-bold text-slate-800">{m.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{m.title}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{m.host}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-800">{m.date}</TableCell>
-                  <TableCell className="text-right"><button onClick={() => alert('Joining Staff Meeting...')} className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded-lg">Enter Room</button></TableCell>
+              {staffMeetings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No upcoming staff conferences scheduled.
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                staffMeetings.map(m => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-mono font-bold text-slate-800">{m.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{m.title}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{m.host}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-800">{m.date}</TableCell>
+                    <TableCell className="text-right"><button onClick={() => alert('Joining Staff Meeting...')} className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded-lg">Enter Room</button></TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -213,14 +215,22 @@ export function CampusLiveManagement() {
           <Table>
             <TableHeader><TableRow><TableHead>Meeting Ref</TableHead><TableHead>Townhall Agenda</TableHead><TableHead>Date & Time</TableHead><TableHead>RSVP Attendees</TableHead></TableRow></TableHeader>
             <TableBody>
-              {ptaMeetings.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono font-bold text-rose-700">{p.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{p.title}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-800">{p.date}</TableCell>
-                  <TableCell className="font-mono font-bold text-slate-900">{p.participants} Parents</TableCell>
+              {ptaMeetings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No active PTA townhall meetings scheduled.
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                ptaMeetings.map(p => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono font-bold text-rose-700">{p.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{p.title}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-800">{p.date}</TableCell>
+                    <TableCell className="font-mono font-bold text-slate-900">{p.participants} Parents</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

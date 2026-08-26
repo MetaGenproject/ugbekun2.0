@@ -293,37 +293,34 @@ export function TimetableManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {DAYS.map(day => (
-                    <TableRow key={day}>
-                      <TableCell className="font-extrabold text-xs text-indigo-900 bg-slate-50/80">{DAY_LABELS[day]}</TableCell>
-                      <TableCell><span className="px-2 py-1 rounded bg-amber-50 text-amber-800 text-[10px] font-bold">Assembly</span></TableCell>
-                      <TableCell>
-                        <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-xs">
-                          <p className="font-bold text-indigo-950">Mathematics</p>
-                          <p className="text-[10px] text-slate-500">Mrs. Adams</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="p-2 rounded-lg bg-blue-50 border border-blue-100 text-xs">
-                          <p className="font-bold text-blue-950">English Lang.</p>
-                          <p className="text-[10px] text-slate-500">Mr. Williams</p>
-                        </div>
-                      </TableCell>
-                      <TableCell><span className="px-2 py-1 rounded bg-slate-100 text-slate-600 text-[10px] font-bold">Recess Break</span></TableCell>
-                      <TableCell>
-                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-xs">
-                          <p className="font-bold text-emerald-950">Basic Science</p>
-                          <p className="text-[10px] text-slate-500">Dr. Biobaku</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="p-2 rounded-lg bg-purple-50 border border-purple-100 text-xs">
-                          <p className="font-bold text-purple-950">Computer Studies</p>
-                          <p className="text-[10px] text-slate-500">Engr. Ojo</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {DAYS.map(day => {
+                    const daySlots = slotsGrouped[day] || []
+                    return (
+                      <TableRow key={day}>
+                        <TableCell className="font-extrabold text-xs text-indigo-900 bg-slate-50/80">{DAY_LABELS[day]}</TableCell>
+                        {daySlots.length === 0 ? (
+                          <TableCell colSpan={6} className="text-center py-3 text-slate-400 font-medium text-xs">
+                            No schedule slots added for {DAY_LABELS[day]}. Click "Add Timetable Slot" to schedule.
+                          </TableCell>
+                        ) : (
+                          daySlots.map(slot => (
+                            <TableCell key={slot.id}>
+                              {slot.type === 'BREAK' || slot.type === 'ASSEMBLY' ? (
+                                <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 text-[10px] font-bold">
+                                  {slot.title || slot.type}
+                                </span>
+                              ) : (
+                                <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-xs">
+                                  <p className="font-bold text-indigo-950">{slot.subject?.name || slot.title || 'Subject'}</p>
+                                  <p className="text-[10px] text-slate-500">{slot.teacher?.name || 'Assigned Teacher'}</p>
+                                </div>
+                              )}
+                            </TableCell>
+                          ))
+                        )}
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

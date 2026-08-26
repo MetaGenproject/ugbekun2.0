@@ -39,6 +39,7 @@ interface GradebookInterfaceProps {
   sectionName?: string
   subjectName?: string
   examName?: string
+  profile?: any
 }
 
 export default function GradebookInterface({
@@ -49,13 +50,84 @@ export default function GradebookInterface({
   className = '',
   sectionName = '',
   subjectName = '',
-  examName = ''
+  examName = '',
+  profile
 }: GradebookInterfaceProps = {}) {
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loadingMeta, setLoadingMeta] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [sheetData, setSheetData] = useState<StudentRow[]>([])
   
+  // Metadata state for selectors
+  const [examsList, setExamsList] = useState<Array<{ id: number; name: string }>>([])
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; sections: Array<{ id: number; name: string }> }>>([])
+  const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string }>>([])
+
+  const [curExamId, setCurExamId] = useState<number>(examId)
+  const [curClassId, setCurClassId] = useState<number>(classId)
+  const [curSectionId, setCurSectionId] = useState<number>(sectionId)
+  const [curSubjectId, setCurSubjectId] = useState<number>(subjectId)
+
+  // Fetch available metadata (Exams, Classes, Subjects)
+  useEffect(() => {
+    let active = true
+    async function loadMetadata() {
+      setLoadingMeta(true)
+      try {
+        const [examsRes, classesRes, subjectsRes] = await Promise.all([
+          apiSlice.get<{ success: boolean; exams: any[] }>(endpoints.teacher.exams).catch(() => ({ success: false, exams: [] })),
+          apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.teacher.classesSections).catch(() => ({ success: false, classes: [] })),
+          apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.teacher.subjects).catch(() => ({ success: false, subjects: [] })),
+        ])
+
+        if (!active) return
+
+        let initialExam = curExamId
+        let initialClass = curClassId
+        let initialSection = curSectionId
+        let initialSubject = curSubjectId
+
+        if (examsRes.success && examsRes.exams?.length > 0) {
+          setExamsList(examsRes.exams)
+          if (!initialExam) {
+            initialExam = examsRes.exams[0].id
+            setCurExamId(initialExam)
+          }
+        }
+
+        if (classesRes.success && classesRes.classes?.length > 0) {
+          setClassesList(classesRes.classes)
+          if (!initialClass) {
+            initialClass = classesRes.classes[0].id
+            setCurClassId(initialClass)
+            if (classesRes.classes[0].sections?.length > 0 && !initialSection) {
+              initialSection = classesRes.classes[0].sections[0].id
+              setCurSectionId(initialSection)
+            }
+          }
+        }
+
+        if (subjectsRes.success && subjectsRes.subjects?.length > 0) {
+          setSubjectsList(subjectsRes.subjects)
+          if (!initialSubject) {
+            initialSubject = subjectsRes.subjects[0].id
+            setCurSubjectId(initialSubject)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load score entry filters:', err)
+      } finally {
+        if (active) setLoadingMeta(false)
+      }
+    }
+
+    loadMetadata()
+    return () => {
+      active = false
+    }
+  }, [])
+
   // Check if current user is Admin
   const isAdmin = useMemo(() => {
     try {
@@ -89,17 +161,22 @@ export default function GradebookInterface({
 
   // Fetch sheet data
   const fetchGradebook = async () => {
+    if (!curClassId || !curSectionId || !curExamId) {
+      setSheetData([])
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
       const res = await apiSlice.get<{ success: boolean; sheet: StudentRow[] }>(
-        `${endpoints.teacher.gradebookSheet}?classId=${classId}&sectionId=${sectionId}&subjectId=${subjectId}&examId=${examId}`
+        `${endpoints.teacher.gradebookSheet}?classId=${curClassId}&sectionId=${curSectionId}&subjectId=${curSubjectId}&examId=${curExamId}`
       )
       if (res.success) {
-        setSheetData(res.sheet)
+        setSheetData(res.sheet || [])
         // Initialize local edit states
         const initialEdits: Record<number, { theoryMark: string; objectiveMark: string; absent: boolean }> = {}
-        res.sheet.forEach((row) => {
+        ;(res.sheet || []).forEach((row) => {
           initialEdits[row.studentId] = {
             theoryMark: row.theoryMark !== null ? String(row.theoryMark) : '',
             objectiveMark: row.objectiveMark !== null ? String(row.objectiveMark) : '0',
@@ -118,8 +195,22 @@ export default function GradebookInterface({
   }
 
   useEffect(() => {
-    fetchGradebook()
-  }, [classId, sectionId, subjectId, examId])
+    if (curClassId && curSectionId && curExamId) {
+      fetchGradebook()
+    }
+  }, [curClassId, curSectionId, curSubjectId, curExamId])
+
+  // Get active class sections
+  const activeClassSections = useMemo(() => {
+    const selected = classesList.find((c) => c.id === curClassId)
+    return selected?.sections || []
+  }, [classesList, curClassId])
+
+  // Derived labels
+  const activeExamName = useMemo(() => examsList.find((e) => e.id === curExamId)?.name || examName || 'Selected Exam', [examsList, curExamId, examName])
+  const activeClassName = useMemo(() => classesList.find((c) => c.id === curClassId)?.name || className || 'Selected Class', [classesList, curClassId, className])
+  const activeSectionName = useMemo(() => activeClassSections.find((s) => s.id === curSectionId)?.name || sectionName || 'Section', [activeClassSections, curSectionId, sectionName])
+  const activeSubjectName = useMemo(() => subjectsList.find((s) => s.id === curSubjectId)?.name || subjectName || 'Subject', [subjectsList, curSubjectId, subjectName])
 
   // Grading Threshold Helper
   const calculateGrade = (score: number) => {
@@ -202,10 +293,10 @@ export default function GradebookInterface({
       const res = await apiSlice.post<{ success: boolean; message: string }>(
         endpoints.teacher.gradebookSaveSingle,
         {
-          classId,
-          sectionId,
-          subjectId,
-          examId,
+          classId: curClassId,
+          sectionId: curSectionId,
+          subjectId: curSubjectId,
+          examId: curExamId,
           studentId: row.studentId,
           theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
           objectiveMark: edit.absent ? null : (edit.objectiveMark === '' ? null : Number(edit.objectiveMark)),
@@ -246,7 +337,7 @@ export default function GradebookInterface({
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.setAttribute('href', url)
-    link.setAttribute('download', `GradebookTemplate_${className}_${subjectName}_${examName}.csv`)
+    link.setAttribute('download', `GradebookTemplate_${activeClassName}_${activeSubjectName}_${activeExamName}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -339,10 +430,10 @@ export default function GradebookInterface({
       const res = await apiSlice.post<{ success: boolean; results: any }>(
         endpoints.teacher.gradebookCsvUpload,
         {
-          classId,
-          sectionId,
-          subjectId,
-          examId,
+          classId: curClassId,
+          sectionId: curSectionId,
+          subjectId: curSubjectId,
+          examId: curExamId,
           scores: payloadScores
         }
       )
@@ -363,6 +454,112 @@ export default function GradebookInterface({
 
   return (
     <div className="space-y-6">
+      {/* Dynamic Academic Selection Controls */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-xs">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-2">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <TrendingUp size={20} className="text-blue-600" />
+              Teacher Scores Entry & Gradebook
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Select examination term, class, section, and subject to record or sync student marks.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-200">
+              {sheetData.length} Students in Register
+            </span>
+          </div>
+        </div>
+
+        {/* Filter Dropdowns Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Exam Selector */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Examination / Assessment
+            </label>
+            <select
+              value={curExamId || ''}
+              onChange={(e) => setCurExamId(Number(e.target.value))}
+              className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs"
+            >
+              {examsList.length === 0 && <option value="">Loading Exams...</option>}
+              {examsList.map((exam) => (
+                <option key={exam.id} value={exam.id}>
+                  {exam.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Class Selector */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Class Grade
+            </label>
+            <select
+              value={curClassId || ''}
+              onChange={(e) => {
+                const newClassId = Number(e.target.value)
+                setCurClassId(newClassId)
+                const cls = classesList.find((c) => c.id === newClassId)
+                if (cls && cls.sections && cls.sections.length > 0) {
+                  setCurSectionId(cls.sections[0].id)
+                }
+              }}
+              className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs"
+            >
+              {classesList.length === 0 && <option value="">Loading Classes...</option>}
+              {classesList.map((cls) => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Section Selector */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Arm / Section
+            </label>
+            <select
+              value={curSectionId || ''}
+              onChange={(e) => setCurSectionId(Number(e.target.value))}
+              className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs"
+            >
+              {activeClassSections.length === 0 && <option value="">Main</option>}
+              {activeClassSections.map((sec) => (
+                <option key={sec.id} value={sec.id}>
+                  {sec.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Subject Selector */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Subject
+            </label>
+            <select
+              value={curSubjectId || ''}
+              onChange={(e) => setCurSubjectId(Number(e.target.value))}
+              className="w-full text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs"
+            >
+              {subjectsList.length === 0 && <option value="">Loading Subjects...</option>}
+              {subjectsList.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* 1. Class Stats Ribbon */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-blue-100 rounded-2xl p-5 flex items-center justify-between shadow-sm">
@@ -417,7 +614,7 @@ export default function GradebookInterface({
               Unified Grade sheet
             </h3>
             <p className="text-xs font-semibold text-slate-400 mt-1">
-              Class: <span className="text-slate-600">{className} ({sectionName})</span> | Subject: <span className="text-slate-600">{subjectName}</span> | Exam: <span className="text-slate-600">{examName}</span>
+              Class: <span className="text-slate-600">{activeClassName} ({activeSectionName})</span> | Subject: <span className="text-slate-600">{activeSubjectName}</span> | Exam: <span className="text-slate-600">{activeExamName}</span>
             </p>
           </div>
 
@@ -760,10 +957,10 @@ export default function GradebookInterface({
           fetchGradebook()
           setSuccess('Scores from scanned sheet committed successfully!')
         }}
-        classId={classId}
-        sectionId={sectionId}
-        examId={examId}
-        subjectId={subjectId}
+        classId={curClassId}
+        sectionId={curSectionId}
+        examId={curExamId}
+        subjectId={curSubjectId}
         students={sheetData.map(s => ({
           id: s.studentId,
           firstName: s.firstName,

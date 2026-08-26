@@ -63,27 +63,15 @@ export function CommunicationCenter() {
   const [searchQuery, setSearchQuery] = useState('')
   const [chatInput, setChatInput] = useState('')
 
-  // Sample Chat Threads
-  const [threads, setThreads] = useState<ChatMessage[]>([
-    { id: '1', sender: 'Mrs. Victoria Adams', role: 'Teacher (Primary 4)', avatarText: 'VA', time: '10:24 AM', lastMessage: 'The lesson notes for next week have been uploaded for review.', unread: true },
-    { id: '2', sender: 'Mr. Okafor (Parent)', role: 'Parent of Chinedu Okafor', avatarText: 'PO', time: '09:15 AM', lastMessage: 'Thank you for updating me regarding the upcoming STEM competition.', unread: true },
-    { id: '3', sender: 'Dr. Samuel Biobaku', role: 'HOD Science', avatarText: 'SB', time: 'Yesterday', lastMessage: 'Science Lab equipment requisition has been submitted to Bursary.', unread: false },
-    { id: '4', sender: 'Mrs. Bello (Parent)', role: 'Parent of Amina Bello', avatarText: 'PB', time: 'Yesterday', lastMessage: 'Received the 1st Term examination timetable, thank you!', unread: false },
-  ])
+  // Communication States
+  const [threads, setThreads] = useState<ChatMessage[]>([])
+  const [activeChatThread, setActiveChatThread] = useState<ChatMessage | null>(null)
 
-  const [activeChatThread, setActiveChatThread] = useState<ChatMessage>(threads[0])
+  // Announcements State
+  const [announcements, setAnnouncements] = useState<Array<{ id: string; title: string; target: string; date: string; pinned: boolean }>>([])
 
-  // Sample Announcements
-  const [announcements, setAnnouncements] = useState([
-    { id: 'ANN-01', title: 'Resumption Date & Mid-Term Break Schedule', target: 'All Parents & Staff', date: '2026-08-01', pinned: true },
-    { id: 'ANN-02', title: 'Inter-House Sports Competition Registration', target: 'Students & Parents', date: '2026-07-28', pinned: false },
-  ])
-
-  // Sample Events
-  const [events, setEvents] = useState([
-    { id: 'EV-101', title: 'Parent-Teacher Association (PTA) Meeting', date: '2026-08-12 10:00 AM', venue: 'Main Multipurpose Assembly Hall', rsvp: '142 Confirmed' },
-    { id: 'EV-102', title: 'Annual Inter-House Sports Festival', date: '2026-08-25 09:00 AM', venue: 'School Sports Complex', rsvp: '380 Confirmed' },
-  ])
+  // Events State
+  const [events, setEvents] = useState<Array<{ id: string; title: string; date: string; venue: string; rsvp: string }>>([])
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,74 +159,85 @@ export function CommunicationCenter() {
             </div>
 
             <div className="space-y-1.5">
-              {threads.map(t => (
-                <div
-                  key={t.id}
-                  onClick={() => setActiveChatThread(t)}
-                  className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
-                    activeChatThread.id === t.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-900 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
-                      activeChatThread.id === t.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
-                    }`}>
-                      {t.avatarText}
-                    </div>
-                    <div className="truncate">
-                      <p className="font-bold text-xs truncate">{t.sender}</p>
-                      <p className={`text-[10px] truncate ${activeChatThread.id === t.id ? 'text-indigo-100' : 'text-slate-500'}`}>{t.lastMessage}</p>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-mono shrink-0 ${activeChatThread.id === t.id ? 'text-indigo-200' : 'text-slate-400'}`}>{t.time}</span>
+              {threads.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 font-medium text-xs">
+                  No active conversation threads.
                 </div>
-              ))}
+              ) : (
+                threads.map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => setActiveChatThread(t)}
+                    className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                      activeChatThread?.id === t.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-900 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                        activeChatThread?.id === t.id ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
+                      }`}>
+                        {t.avatarText}
+                      </div>
+                      <div className="truncate">
+                        <p className="font-bold text-xs truncate">{t.sender}</p>
+                        <p className={`text-[10px] truncate ${activeChatThread?.id === t.id ? 'text-indigo-100' : 'text-slate-500'}`}>{t.lastMessage}</p>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-mono shrink-0 ${activeChatThread?.id === t.id ? 'text-indigo-200' : 'text-slate-400'}`}>{t.time}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           {/* Right Column: Chat Window */}
           <div className="lg:col-span-2 p-5 flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-800 font-black flex items-center justify-center text-sm">
-                  {activeChatThread.avatarText}
+            {activeChatThread ? (
+              <>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-800 font-black flex items-center justify-center text-sm">
+                      {activeChatThread.avatarText}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900">{activeChatThread.sender}</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">{activeChatThread.role}</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    ● EduChat Online
+                  </span>
                 </div>
-                <div>
-                  <h3 className="font-black text-sm text-slate-900">{activeChatThread.sender}</h3>
-                  <p className="text-[11px] text-slate-500 font-medium">{activeChatThread.role}</p>
+
+                {/* Chat Conversation Display */}
+                <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 max-w-md space-y-1">
+                    <p className="text-xs text-slate-800 font-medium">{activeChatThread.lastMessage}</p>
+                    <p className="text-[10px] text-slate-400 font-mono text-right">{activeChatThread.time}</p>
+                  </div>
                 </div>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                ● EduChat Online
-              </span>
-            </div>
 
-            {/* Chat Conversation Display */}
-            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 max-w-md space-y-1">
-                <p className="text-xs text-slate-800 font-medium">{activeChatThread.lastMessage}</p>
-                <p className="text-[10px] text-slate-400 font-mono text-right">{activeChatThread.time}</p>
+                {/* Send Message Input Form */}
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <input
+                    type="text"
+                    placeholder="Type your EduChat response..."
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-slate-50 font-medium"
+                  />
+                  <button type="submit" className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition">
+                    <Send size={14} /> Send
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                <MessageSquare className="text-slate-300 mb-2" size={40} />
+                <p className="text-sm font-bold text-slate-700">No Chat Selected</p>
+                <p className="text-xs text-slate-400 mt-1">Select a conversation thread or start a new broadcast to staff and parents.</p>
               </div>
-
-              <div className="p-3.5 bg-indigo-600 text-white rounded-2xl ml-auto max-w-md space-y-1">
-                <p className="text-xs font-medium">Thank you for your message. We have recorded your update on the portal.</p>
-                <p className="text-[10px] text-indigo-200 font-mono text-right">Just now</p>
-              </div>
-            </div>
-
-            {/* Send Message Input Form */}
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-2 border-t border-slate-100">
-              <input
-                type="text"
-                placeholder="Type your EduChat response..."
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-slate-50 font-medium"
-              />
-              <button type="submit" className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition">
-                <Send size={14} /> Send
-              </button>
-            </form>
+            )}
           </div>
         </div>
       )}
@@ -271,14 +270,22 @@ export function CommunicationCenter() {
           <Table>
             <TableHeader><TableRow><TableHead>Ref ID</TableHead><TableHead>Announcement Title</TableHead><TableHead>Target Audience</TableHead><TableHead>Date Pinned</TableHead></TableRow></TableHeader>
             <TableBody>
-              {announcements.map(a => (
-                <TableRow key={a.id}>
-                  <TableCell className="font-mono font-bold text-indigo-700">{a.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{a.title}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{a.target}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-500">{a.date}</TableCell>
+              {announcements.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No official school announcements posted yet.
+                  </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                announcements.map(a => (
+                  <TableRow key={a.id}>
+                    <TableCell className="font-mono font-bold text-indigo-700">{a.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{a.title}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{a.target}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-500">{a.date}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

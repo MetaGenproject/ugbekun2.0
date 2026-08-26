@@ -83,35 +83,10 @@ export function AcademicStructure() {
   const [subjCategory, setSubjCategory] = useState('STEM / Numeracy')
   const [subjPeriods, setSubjPeriods] = useState('5')
 
-  // Roster States
-  const [classes, setClasses] = useState<ClassItem[]>([
-    { id: 1, name: 'Primary 1', section: 'Primary Section', formTeacher: 'Mrs. Victoria Adams', armsCount: 3, capacity: 105, enrolled: 88 },
-    { id: 2, name: 'Primary 2', section: 'Primary Section', formTeacher: 'Mr. Christopher Williams', armsCount: 3, capacity: 105, enrolled: 92 },
-    { id: 3, name: 'Primary 3', section: 'Primary Section', formTeacher: 'Mrs. Florence Eze', armsCount: 2, capacity: 70, enrolled: 65 },
-    { id: 4, name: 'Primary 4', section: 'Primary Section', formTeacher: 'Dr. Samuel Biobaku', armsCount: 2, capacity: 70, enrolled: 68 },
-    { id: 5, name: 'JSS 1', section: 'Junior Secondary', formTeacher: 'Engr. Felix Ojo', armsCount: 3, capacity: 120, enrolled: 110 },
-    { id: 6, name: 'SSS 1', section: 'Senior Secondary', formTeacher: 'Mr. Gabriel Okoro', armsCount: 3, capacity: 120, enrolled: 104 },
-  ])
-
-  const [streams, setStreams] = useState<StreamItem[]>([
-    { id: 1, className: 'Primary 1', armName: 'Primary 1 Gold', leadTeacher: 'Mrs. Victoria Adams', capacity: 35, enrolled: 30 },
-    { id: 2, className: 'Primary 1', armName: 'Primary 1 Diamond', leadTeacher: 'Mr. John Okafor', capacity: 35, enrolled: 29 },
-    { id: 3, className: 'Primary 1', armName: 'Primary 1 Silver', leadTeacher: 'Miss Sarah Bio', capacity: 35, enrolled: 29 },
-    { id: 4, className: 'SSS 1', armName: 'SSS 1 Science A', leadTeacher: 'Dr. Samuel Biobaku', capacity: 40, enrolled: 38 },
-    { id: 5, className: 'SSS 1', armName: 'SSS 1 Commercial B', leadTeacher: 'Mr. Gabriel Okoro', capacity: 40, enrolled: 34 },
-    { id: 6, className: 'SSS 1', armName: 'SSS 1 Arts C', leadTeacher: 'Mrs. Florence Eze', capacity: 40, enrolled: 32 },
-  ])
-
-  const [subjects, setSubjects] = useState<SubjectItem[]>([
-    { id: 1, code: 'MTH 101', name: 'Mathematics', type: 'Core', category: 'STEM & Numeracy', weeklyPeriods: 5 },
-    { id: 2, code: 'ENG 101', name: 'English Language', type: 'Core', category: 'Languages', weeklyPeriods: 5 },
-    { id: 3, code: 'BSC 101', name: 'Basic Science & Technology', type: 'Core', category: 'Sciences', weeklyPeriods: 4 },
-    { id: 4, code: 'ICT 101', name: 'Computer Studies / ICT', type: 'Core', category: 'Technology', weeklyPeriods: 3 },
-    { id: 5, code: 'SOC 101', name: 'Social Studies & Civic Education', type: 'Core', category: 'Humanities', weeklyPeriods: 3 },
-    { id: 6, code: 'PHY 301', name: 'Physics', type: 'Elective', category: 'Senior Sciences', weeklyPeriods: 4 },
-    { id: 7, code: 'CHM 301', name: 'Chemistry', type: 'Elective', category: 'Senior Sciences', weeklyPeriods: 4 },
-    { id: 8, code: 'ACC 301', name: 'Financial Accounting', type: 'Elective', category: 'Commercials', weeklyPeriods: 4 },
-  ])
+  // Roster States (Clean 0-state for newly registered school branches)
+  const [classes, setClasses] = useState<ClassItem[]>([])
+  const [streams, setStreams] = useState<StreamItem[]>([])
+  const [subjects, setSubjects] = useState<SubjectItem[]>([])
 
   const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault()
@@ -321,18 +296,26 @@ export function AcademicStructure() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {classes.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-bold text-slate-900">{c.name}</TableCell>
-                    <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100">{c.section}</span></TableCell>
-                    <TableCell className="text-xs text-slate-700 font-medium">{c.formTeacher}</TableCell>
-                    <TableCell className="font-bold text-slate-800">{c.armsCount} Arms</TableCell>
-                    <TableCell className="font-mono text-xs font-bold text-slate-900">{c.enrolled} / {c.capacity}</TableCell>
-                    <TableCell className="text-right">
-                      <button onClick={() => alert(`Editing ${c.name}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                {classes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                      No academic classes created yet. Add your first class level or use the One-Click Setup seeder.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  classes.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-bold text-slate-900">{c.name}</TableCell>
+                      <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100">{c.section}</span></TableCell>
+                      <TableCell className="text-xs text-slate-700 font-medium">{c.formTeacher}</TableCell>
+                      <TableCell className="font-bold text-slate-800">{c.armsCount} Arms</TableCell>
+                      <TableCell className="font-mono text-xs font-bold text-slate-900">{c.enrolled} / {c.capacity}</TableCell>
+                      <TableCell className="text-right">
+                        <button onClick={() => alert(`Editing ${c.name}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -362,19 +345,27 @@ export function AcademicStructure() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {classes.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-bold text-slate-900">{c.name}</TableCell>
-                  <TableCell className="font-bold text-purple-900">{c.formTeacher}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-700">+234 803 111 2233</TableCell>
-                  <TableCell className="font-mono font-bold text-slate-800">{c.enrolled} Students</TableCell>
-                  <TableCell className="text-right">
-                    <button onClick={() => alert(`Reassigning teacher for ${c.name}`)} className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-lg transition">
-                      Change Teacher
-                    </button>
+              {classes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No classes available for teacher assignment.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                classes.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-bold text-slate-900">{c.name}</TableCell>
+                    <TableCell className="font-bold text-purple-900">{c.formTeacher}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-700">+234 800 000 0000</TableCell>
+                    <TableCell className="font-mono font-bold text-slate-800">{c.enrolled} Students</TableCell>
+                    <TableCell className="text-right">
+                      <button onClick={() => alert(`Reassigning teacher for ${c.name}`)} className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs rounded-lg transition">
+                        Change Teacher
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -396,7 +387,11 @@ export function AcademicStructure() {
                   onChange={e => setStreamClass(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-slate-50"
                 >
-                  {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  {classes.length === 0 ? (
+                    <option value="">No classes configured</option>
+                  ) : (
+                    classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                  )}
                 </select>
               </div>
 
@@ -447,17 +442,25 @@ export function AcademicStructure() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {streams.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-bold text-slate-900">{s.armName}</TableCell>
-                    <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{s.className}</span></TableCell>
-                    <TableCell className="text-xs text-slate-700 font-medium">{s.leadTeacher}</TableCell>
-                    <TableCell className="font-mono text-xs font-bold text-slate-900">{s.enrolled} / {s.capacity}</TableCell>
-                    <TableCell className="text-right">
-                      <button onClick={() => alert(`Editing ${s.armName}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                {streams.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-10 text-slate-400 font-medium text-xs">
+                      No class streams / arms configured yet.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  streams.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-bold text-slate-900">{s.armName}</TableCell>
+                      <TableCell><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{s.className}</span></TableCell>
+                      <TableCell className="text-xs text-slate-700 font-medium">{s.leadTeacher}</TableCell>
+                      <TableCell className="font-mono text-xs font-bold text-slate-900">{s.enrolled} / {s.capacity}</TableCell>
+                      <TableCell className="text-right">
+                        <button onClick={() => alert(`Editing ${s.armName}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -547,18 +550,26 @@ export function AcademicStructure() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subjects.map((sub) => (
-                  <TableRow key={sub.id}>
-                    <TableCell className="font-mono font-bold text-purple-700">{sub.code}</TableCell>
-                    <TableCell className="font-bold text-slate-900">{sub.name}</TableCell>
-                    <TableCell><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sub.type === 'Core' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>{sub.type}</span></TableCell>
-                    <TableCell className="text-xs text-slate-600">{sub.category}</TableCell>
-                    <TableCell className="font-mono font-bold text-slate-900">{sub.weeklyPeriods} Periods</TableCell>
-                    <TableCell className="text-right">
-                      <button onClick={() => alert(`Editing ${sub.name}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                {subjects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                      No academic subjects registered yet. Create subjects using the form on the left.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  subjects.map((sub) => (
+                    <TableRow key={sub.id}>
+                      <TableCell className="font-mono font-bold text-purple-700">{sub.code}</TableCell>
+                      <TableCell className="font-bold text-slate-900">{sub.name}</TableCell>
+                      <TableCell><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sub.type === 'Core' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>{sub.type}</span></TableCell>
+                      <TableCell className="text-xs text-slate-600">{sub.category}</TableCell>
+                      <TableCell className="font-mono font-bold text-slate-900">{sub.weeklyPeriods} Periods</TableCell>
+                      <TableCell className="text-right">
+                        <button onClick={() => alert(`Editing ${sub.name}`)} className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition">Edit</button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

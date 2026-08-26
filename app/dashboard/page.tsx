@@ -212,6 +212,7 @@ export default function DashboardPage() {
   const [branchStats, setBranchStats] = useState<BranchStats | null>(null)
   const [schoolInfo, setSchoolInfo] = useState<{
     schoolName: string
+    tagline?: string
     logoUrl: string | null
     academicSession: string
     currentTerm: string
@@ -252,7 +253,7 @@ export default function DashboardPage() {
       } else if (lower.includes('teacher') || lower.includes('staff') || lower.includes('lesson')) {
         aiReply += `${branchStats?.teachers || 96} active teachers and ${branchStats?.staff || 38} staff members are on record.`
       } else {
-        aiReply += `School administrative context updated and synchronized with ${schoolInfo?.schoolName || 'Greenfield International School'}.`
+        aiReply += `School administrative context updated and synchronized with ${schoolInfo?.schoolName || (user as any)?.branch?.name || 'School Campus'}.`
       }
 
       setOseChatHistory([...updatedHistory, { sender: 'ai', text: aiReply }])
@@ -271,6 +272,9 @@ export default function DashboardPage() {
         legacyUserId: authSession.user.legacyUserId ?? null,
         lastLogin: authSession.user.lastLogin ?? undefined,
       }
+      if (authSession.user.branch) {
+        ;(normalizedUser as any).branch = authSession.user.branch
+      }
 
       setUser(normalizedUser)
       setIsLoading(false)
@@ -286,6 +290,9 @@ export default function DashboardPage() {
         roleName: fallbackAuth.user.roleName,
         legacyUserId: fallbackAuth.user.legacyUserId ?? null,
         lastLogin: fallbackAuth.user.lastLogin ?? undefined,
+      }
+      if (fallbackAuth.user.branch) {
+        ;(normalizedUser as any).branch = fallbackAuth.user.branch
       }
 
       setAuthSession(fallbackAuth.token, fallbackAuth.user)
@@ -325,20 +332,29 @@ export default function DashboardPage() {
           if (!cancelled && res.data) {
             setBranchStats(res.data)
             setSchoolInfo({
-              schoolName: res.data.branchName || 'GREENFIELD INTERNATIONAL SCHOOL',
+              schoolName: res.data.branchName || 'School Dashboard',
+              tagline: res.data.settings?.tagline || 'Nurturing Excellence, Raising Leaders',
               logoUrl: res.data.settings?.logoUrl || null,
               academicSession: res.data.settings?.academicSession || '2025/2026',
               currentTerm: res.data.settings?.currentTerm || 'First Term',
             })
           }
         } else {
-          const res = await apiSlice.get<{ success: boolean; data: { schoolName: string; logoUrl: string | null; academicSession: string; currentTerm: string } }>(endpoints.admin.schoolInfo)
+          const res = await apiSlice.get<{ success: boolean; data: { schoolName: string; tagline?: string; logoUrl: string | null; academicSession: string; currentTerm: string } }>(endpoints.public.schoolInfo)
           if (!cancelled && res.data) {
             setSchoolInfo(res.data)
           }
         }
       } catch {
-        if (!cancelled) setSchoolInfo(null)
+        if (!cancelled && (user as any)?.branch) {
+          setSchoolInfo({
+            schoolName: (user as any).branch.name || 'School Dashboard',
+            tagline: 'Nurturing Excellence, Raising Leaders',
+            logoUrl: (user as any).branch.logo || null,
+            academicSession: '2025/2026',
+            currentTerm: 'First Term',
+          })
+        }
       }
     }
 
@@ -364,7 +380,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center gap-4 font-sans">
         <div className="w-12 h-12 border-4 border-rose-500/30 border-t-rose-600 rounded-full animate-spin" />
-        <p className="text-slate-400 text-sm font-semibold animate-pulse">Loading Greenfield Portal...</p>
+        <p className="text-slate-400 text-sm font-semibold animate-pulse">Loading School Portal...</p>
       </div>
     )
   }
@@ -381,8 +397,9 @@ export default function DashboardPage() {
     )
   }
 
-  const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl
-  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || 'GREENFIELD INTERNATIONAL SCHOOL'
+  const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl || (user as any)?.branch?.logo || null
+  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || (user as any)?.branch?.name || 'School Dashboard'
+  const displayTagline = schoolInfo?.tagline || branchStats?.settings?.tagline || 'Nurturing Excellence, Raising Leaders'
 
   const navLinks = getNavLinks(user.role, branchStats)
   const activeSection = selectedSection
@@ -452,8 +469,8 @@ export default function DashboardPage() {
                 <h2 className="font-extrabold text-white text-xs tracking-wider uppercase leading-tight truncate" title={displaySchoolName}>
                   {displaySchoolName}
                 </h2>
-                <p className="text-[10px] text-slate-300/80 font-medium tracking-tight truncate mt-0.5">
-                  Nurturing Excellence, Raising Leaders
+                <p className="text-[10px] text-slate-300/80 font-medium tracking-tight truncate mt-0.5" title={displayTagline}>
+                  {displayTagline}
                 </p>
               </div>
             </div>

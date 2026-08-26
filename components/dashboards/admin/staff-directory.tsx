@@ -141,27 +141,6 @@ export function StaffDirectory() {
   const [memoMessage, setMemoMessage] = useState('')
   const [isSendingMemo, setIsSendingMemo] = useState(false)
 
-  // Default Mock Teachers Array if API returns empty or fails in production/Vercel
-  const defaultTeachers: TeacherRow[] = [
-    { id: 101, firstName: 'Victoria', lastName: 'Adams', email: 'v.adams@greenfield.edu', mobileno: '+234 803 123 4567', qualification: 'B.Sc. Ed Mathematics', subjectSpecialization: 'Mathematics', allocatedClass: 'Primary 4 Gold', active: true },
-    { id: 102, firstName: 'Samuel', lastName: 'Biobaku', email: 's.biobaku@greenfield.edu', mobileno: '+234 802 234 5678', qualification: 'M.Sc Physics', subjectSpecialization: 'Physics', allocatedClass: 'SSS 1 Science', active: true },
-    { id: 103, firstName: 'Grace', lastName: 'Okon', email: 'g.okon@greenfield.edu', mobileno: '+234 805 345 6789', qualification: 'B.A. English', subjectSpecialization: 'English Language', allocatedClass: 'Primary 2 Silver', active: true },
-    { id: 104, firstName: 'Felix', lastName: 'Ojo', email: 'f.ojo@greenfield.edu', mobileno: '+234 807 456 7890', qualification: 'B.Tech Computer Science', subjectSpecialization: 'ICT & Computer Studies', allocatedClass: 'JSS 3 Gold', active: true },
-  ]
-
-  // Default Mock Non-Teaching Staff Array if API returns empty
-  const defaultNonTeachingStaff: StaffRow[] = [
-    { id: 201, name: 'Mr. Gabriel Okoro', role: 'Bursar', email: 'gabriel.bursar@greenfield.edu', mobileno: '+234 803 111 2233', department: 'Finance', status: 'active' },
-    { id: 202, name: 'Mrs. Patricia Alabi', role: 'Receptionist', email: 'reception@greenfield.edu', mobileno: '+234 802 222 3344', department: 'Front Desk', status: 'active' },
-    { id: 203, name: 'Mr. Emmanuel Vance', role: 'HR Officer', email: 'hr@greenfield.edu', mobileno: '+234 805 333 4455', department: 'Human Resources', status: 'active' },
-    { id: 204, name: 'Chief Usman Danjuma', role: 'Security Personnel', email: 'security@greenfield.edu', mobileno: '+234 807 444 5566', department: 'Security', status: 'active' },
-    { id: 205, name: 'Mr. Sunday Chukwu', role: 'Maintenance Officer', email: 'maintenance@greenfield.edu', mobileno: '+234 809 555 6677', department: 'Facilities', status: 'active' },
-    { id: 206, name: 'Mr. Ibrahim Sani', role: 'Driver', email: 'transport@greenfield.edu', mobileno: '+234 811 666 7788', department: 'Transport', status: 'active' },
-    { id: 207, name: 'Mrs. Janet Egbede', role: 'Librarian', email: 'library@greenfield.edu', mobileno: '+234 813 777 8899', department: 'Library', status: 'active' },
-    { id: 208, name: 'Dr. Samuel Biobaku', role: 'Laboratory Officer', email: 'lab@greenfield.edu', mobileno: '+234 815 888 9900', department: 'Sciences', status: 'active' },
-    { id: 209, name: 'Engr. Felix Ojo', role: 'ICT Officer', email: 'ict@greenfield.edu', mobileno: '+234 817 999 0011', department: 'ICT Support', status: 'active' },
-  ]
-
   const loadList = async () => {
     setIsLoading(true)
     setError(null)
@@ -171,10 +150,10 @@ export function StaffDirectory() {
         data: { teachers: TeacherRow[]; staff: StaffRow[] }
       }>(endpoints.admin.teachersStaff)
 
-      const fetchedTeachers = res.data.teachers || []
-      setTeachers(fetchedTeachers.length > 0 ? fetchedTeachers : defaultTeachers)
-      const loadedStaff = res.data.staff || []
-      setStaff(loadedStaff.length > 0 ? loadedStaff : defaultNonTeachingStaff)
+      const fetchedTeachers = res.data?.teachers || []
+      setTeachers(fetchedTeachers)
+      const loadedStaff = res.data?.staff || []
+      setStaff(loadedStaff)
 
       if (fetchedTeachers.length > 0) {
         setSelectedStaffForChat({
@@ -182,16 +161,20 @@ export function StaffDirectory() {
           name: `${fetchedTeachers[0].firstName} ${fetchedTeachers[0].lastName}`,
           role: 'Teacher'
         })
+      } else if (loadedStaff.length > 0) {
+        setSelectedStaffForChat({
+          id: loadedStaff[0].id,
+          name: loadedStaff[0].name,
+          role: loadedStaff[0].role
+        })
+      } else {
+        setSelectedStaffForChat(null)
       }
-    } catch (err) {
-      console.warn('Backend API unreachable or CORS restricted on Vercel deployment. Utilizing fallback demonstration dataset.', err)
-      setTeachers(defaultTeachers)
-      setStaff(defaultNonTeachingStaff)
-      setSelectedStaffForChat({
-        id: defaultTeachers[0].id,
-        name: `${defaultTeachers[0].firstName} ${defaultTeachers[0].lastName}`,
-        role: 'Teacher'
-      })
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load staff list.')
+      setTeachers([])
+      setStaff([])
+      setSelectedStaffForChat(null)
     } finally {
       setIsLoading(false)
     }

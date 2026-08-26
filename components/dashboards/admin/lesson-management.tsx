@@ -55,14 +55,8 @@ export function LessonManagement() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedNote, setGeneratedNote] = useState<string | null>(null)
 
-  // Lesson Notes Approval Roster State
-  const [lessonNotes, setLessonNotes] = useState<LessonNoteItem[]>([
-    { id: 'LSN-101', subject: 'Mathematics', classLevel: 'Primary 4', topic: 'Fractions & Decimals', teacherName: 'Mrs. Victoria Adams', submittedDate: '2026-08-01', status: 'approved' },
-    { id: 'LSN-102', subject: 'English Language', classLevel: 'Primary 5', topic: 'Nouns & Adjectives in Context', teacherName: 'Mr. Christopher Williams', submittedDate: '2026-08-01', status: 'pending' },
-    { id: 'LSN-103', subject: 'Basic Science', classLevel: 'Primary 3', topic: 'Living & Non-Living Things', teacherName: 'Mrs. Florence Eze', submittedDate: '2026-07-31', status: 'pending' },
-    { id: 'LSN-104', subject: 'Physics', classLevel: 'SSS 1', topic: 'Newtonian Laws of Motion', teacherName: 'Dr. Samuel Biobaku', submittedDate: '2026-07-30', status: 'approved' },
-    { id: 'LSN-105', subject: 'Financial Accounting', classLevel: 'SSS 2', topic: 'Trial Balance & Ledger Accounts', teacherName: 'Mr. Gabriel Okoro', submittedDate: '2026-07-29', status: 'revision' },
-  ])
+  // Lesson Notes Approval State
+  const [lessonNotes, setLessonNotes] = useState<LessonNoteItem[]>([])
 
   const handleGenerateAiNote = (e: React.FormEvent) => {
     e.preventDefault()
@@ -392,38 +386,46 @@ By the end of this lesson, pupils should be able to:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lessonNotes.map((note) => (
-                <TableRow key={note.id}>
-                  <TableCell className="font-mono font-bold text-slate-700">{note.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{note.teacherName}</TableCell>
-                  <TableCell className="text-xs font-semibold text-slate-700">{note.subject}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{note.classLevel}</TableCell>
-                  <TableCell className="font-semibold text-slate-800">{note.topic}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{note.submittedDate}</TableCell>
-                  <TableCell>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                      note.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                      note.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}>
-                      {note.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <button
-                      onClick={() => handleUpdateStatus(note.id, 'approved')}
-                      className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleUpdateStatus(note.id, 'revision')}
-                      className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition cursor-pointer"
-                    >
-                      Request Revision
-                    </button>
+              {lessonNotes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No teacher lesson notes submitted for review yet.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                lessonNotes.map((note) => (
+                  <TableRow key={note.id}>
+                    <TableCell className="font-mono font-bold text-slate-700">{note.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{note.teacherName}</TableCell>
+                    <TableCell className="text-xs font-semibold text-slate-700">{note.subject}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{note.classLevel}</TableCell>
+                    <TableCell className="font-semibold text-slate-800">{note.topic}</TableCell>
+                    <TableCell className="text-xs text-slate-500">{note.submittedDate}</TableCell>
+                    <TableCell>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                        note.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        note.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {note.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <button
+                        onClick={() => handleUpdateStatus(note.id, 'approved')}
+                        className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleUpdateStatus(note.id, 'revision')}
+                        className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition cursor-pointer"
+                      >
+                        Request Revision
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

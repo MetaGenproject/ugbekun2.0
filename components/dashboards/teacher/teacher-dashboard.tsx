@@ -566,7 +566,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
   // Render Sub-Views based on navigation tab
   if (activeSection === 'gradebook' || activeSection === 'grades') {
-    return <GradebookInterface />
+    return <GradebookInterface profile={profile} />
   }
 
   // MY STUDENTS / ROSTER SUB-VIEW

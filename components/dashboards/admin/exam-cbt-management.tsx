@@ -124,13 +124,7 @@ export function ExamCbtManagement() {
     loadData()
   }, [])
 
-  // CBT Mock Questions
-  const mockCbtQuestions = [
-    { id: 1, q: 'Solve for x: 3x + 15 = 45', options: ['x = 5', 'x = 10', 'x = 15', 'x = 20'], correct: 'x = 10' },
-    { id: 2, q: 'What is the square root of 144?', options: ['10', '11', '12', '14'], correct: '12' },
-    { id: 3, q: 'Simplify: 2/5 + 3/5', options: ['1/5', '1', '5/10', '6/25'], correct: '1' },
-    { id: 4, q: 'Calculate the perimeter of a rectangle with length 12cm and width 8cm.', options: ['40cm', '96cm', '20cm', '48cm'], correct: '40cm' },
-  ]
+  const [cbtSimulatorQuestions, setCbtSimulatorQuestions] = useState<Array<{ id: number; q: string; options: string[]; correct: string }>>([])
 
   const handleCreateExam = async (e: React.FormEvent, isCbt: boolean = false) => {
     e.preventDefault()
@@ -541,15 +535,20 @@ export function ExamCbtManagement() {
             </span>
           </div>
 
-          {!cbtSubmitted ? (
+          {cbtSimulatorQuestions.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-sm text-slate-500 font-medium">No CBT questions configured yet for live simulation.</p>
+              <p className="text-xs text-slate-400 mt-1">Create CBT exams or import question bundles from the Exams tab to simulate the live testing environment.</p>
+            </div>
+          ) : !cbtSubmitted ? (
             <div className="space-y-4 text-xs">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Question {currentCbtQ + 1} of {mockCbtQuestions.length}</span>
-                <p className="font-bold text-slate-900 text-sm mt-1">{mockCbtQuestions[currentCbtQ].q}</p>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Question {currentCbtQ + 1} of {cbtSimulatorQuestions.length}</span>
+                <p className="font-bold text-slate-900 text-sm mt-1">{cbtSimulatorQuestions[currentCbtQ]?.q}</p>
               </div>
 
               <div className="space-y-2">
-                {mockCbtQuestions[currentCbtQ].options.map((opt, idx) => (
+                {cbtSimulatorQuestions[currentCbtQ]?.options?.map((opt, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedAns({ ...selectedAns, [currentCbtQ]: opt })}
@@ -571,7 +570,7 @@ export function ExamCbtManagement() {
                   Previous
                 </button>
 
-                {currentCbtQ === mockCbtQuestions.length - 1 ? (
+                {currentCbtQ === cbtSimulatorQuestions.length - 1 ? (
                   <button
                     onClick={() => {
                       setCbtSubmitted(true)

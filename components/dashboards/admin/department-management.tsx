@@ -57,15 +57,8 @@ export function DepartmentManagement() {
   const [deptLocation, setDeptLocation] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Default Departments Roster
-  const [departments, setDepartments] = useState<Department[]>([
-    { id: 1, code: 'SCI', name: 'Department of Pure & Applied Sciences', headName: 'Dr. Samuel Biobaku', headEmail: 'samuel.biobaku@greenfield.edu', headPhone: '+234 803 111 2233', staffCount: 14, budget: '₦2,500,000', location: 'Science Block Lab 1', status: 'active' },
-    { id: 2, code: 'MATH', name: 'Department of Mathematics & Statistics', headName: 'Mrs. Victoria Adams', headEmail: 'victoria.adams@greenfield.edu', headPhone: '+234 802 222 3344', staffCount: 10, budget: '₦1,800,000', location: 'Block B Room 12', status: 'active' },
-    { id: 3, code: 'ENG', name: 'Department of Languages & Literature', headName: 'Mr. Christopher Williams', headEmail: 'chris.williams@greenfield.edu', headPhone: '+234 805 333 4455', staffCount: 12, budget: '₦1,500,000', location: 'Humanities Wing 4', status: 'active' },
-    { id: 4, code: 'ICT', name: 'Department of Computer Science & ICT', headName: 'Engr. Felix Ojo', headEmail: 'felix.ojo@greenfield.edu', headPhone: '+234 807 444 5566', staffCount: 8, budget: '₦4,200,000', location: 'ICT Center Hub', status: 'active' },
-    { id: 5, code: 'SOC', name: 'Department of Humanities & Social Sciences', headName: 'Mrs. Florence Eze', headEmail: 'florence.eze@greenfield.edu', headPhone: '+234 809 555 6677', staffCount: 9, budget: '₦1,200,000', location: 'Main Admin Block 3', status: 'active' },
-    { id: 6, code: 'FIN', name: 'Department of Finance & Accounts', headName: 'Mr. Gabriel Okoro', headEmail: 'gabriel.okoro@greenfield.edu', headPhone: '+234 811 666 7788', staffCount: 6, budget: '₦8,000,000', location: 'Bursary Office', status: 'active' },
-  ])
+  // Departments Roster (initialized empty for newly registered schools)
+  const [departments, setDepartments] = useState<Department[]>([])
 
   const handleCreateDepartment = (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,7 +71,7 @@ export function DepartmentManagement() {
         code: deptCode.toUpperCase(),
         name: deptName,
         headName: deptHead || 'Unassigned (TBD)',
-        headEmail: headEmail || 'dept@greenfield.edu',
+        headEmail: headEmail || 'hod@school.edu',
         headPhone: headPhone || '+234 800 000 0000',
         staffCount: 1,
         budget: deptBudget ? `₦${Number(deptBudget).toLocaleString()}` : '₦1,000,000',
@@ -88,7 +81,6 @@ export function DepartmentManagement() {
 
       setDepartments(prev => [newDept, ...prev])
       setIsSubmitting(false)
-      alert(`Department "${deptName}" created successfully!`)
       setDeptCode('')
       setDeptName('')
       setDeptHead('')
@@ -293,7 +285,7 @@ export function DepartmentManagement() {
                 <label className="text-xs font-bold text-slate-700 block mb-1">HOD Email</label>
                 <input
                   type="email"
-                  placeholder="hod@greenfield.edu"
+                  placeholder="hod@school.edu"
                   value={headEmail}
                   onChange={e => setHeadEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold bg-slate-50"

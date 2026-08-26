@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
 import {
   DollarSign,
   TrendingUp,
@@ -26,7 +27,8 @@ import {
   Filter,
   BarChart3,
   Calendar,
-  Wallet
+  Wallet,
+  Loader2
 } from 'lucide-react'
 import {
   Table,
@@ -54,29 +56,71 @@ type FinancialTab =
 export function FinancialRecordsManagement() {
   const [activeTab, setActiveTab] = useState<FinancialTab>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(false)
 
   // Financial Datasets
-  const [incomeEntries, setIncomeEntries] = useState([
-    { id: 'INC-101', category: 'School Hall Facility Rental', amount: 450000, payer: 'Lagos Event Planners Ltd', date: '2026-08-01', method: 'Bank Transfer (Zenith)' },
-    { id: 'INC-102', category: 'Alumni Association Donation', amount: 1250000, payer: 'Ugbekun Old Students Assoc.', date: '2026-07-28', method: 'Direct Deposit' },
-    { id: 'INC-103', category: 'Transcript & Certificate Issuance', amount: 85000, payer: 'Kelechi Nwosu (Alumnus)', date: '2026-07-25', method: 'POS Payment' },
-  ])
+  const [incomeEntries, setIncomeEntries] = useState<Array<{ id: string | number; category: string; amount: number; payer: string; date: string; method: string }>>([])
+  const [expenseEntries, setExpenseEntries] = useState<Array<{ id: string | number; voucher: string; category: string; amount: number; vendor: string; approvedBy: string; date: string; status: string }>>([])
+  const [bankAccounts, setBankAccounts] = useState<Array<{ id: string | number; bankName: string; accountNo: string; accountName: string; balance: number; type: string }>>([])
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string | number; action: string; user: string; timestamp: string; ip: string }>>([])
 
-  const [expenseEntries, setExpenseEntries] = useState([
-    { id: 'EXP-401', voucher: 'VCH-981', category: 'Diesel Fuel (100KVA Generator)', amount: 620000, vendor: 'TotalEnergies Ikeja', approvedBy: 'Principal', date: '2026-08-02', status: 'Paid' },
-    { id: 'EXP-402', voucher: 'VCH-982', category: 'Classroom Whiteboard Markers & Stationery', amount: 145000, vendor: 'Progressive Bookshop Ltd', approvedBy: 'Bursar', date: '2026-07-30', status: 'Paid' },
-    { id: 'EXP-403', voucher: 'VCH-983', category: 'High-Speed Fiber Optic Internet Sub', amount: 180000, vendor: 'MainOne Cable', approvedBy: 'Principal', date: '2026-07-27', status: 'Paid' },
-  ])
+  useEffect(() => {
+    async function loadLiveFinancials() {
+      setLoading(true)
+      try {
+        const [txsRes, bankRes] = await Promise.all([
+          apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.financesOfficeTransactions),
+          apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.financesBankSettings)
+        ])
 
-  const [bankAccounts, setBankAccounts] = useState([
-    { id: 'BNK-01', bankName: 'Zenith Bank PLC', accountNo: '1014829104', accountName: 'Ugbekun International Academy - Main', balance: 64200000, type: 'Current Operations' },
-    { id: 'BNK-02', bankName: 'First Bank of Nigeria', accountNo: '2039104820', accountName: 'Ugbekun Academy - Capital Reserve', balance: 34000000, type: 'Reserve Reserve Account' },
-  ])
+        if (txsRes.success && Array.isArray(txsRes.data)) {
+          const incomes = txsRes.data
+            .filter((t: any) => t.type === 'INCOME')
+            .map((t: any) => ({
+              id: t.id,
+              category: t.voucherHead?.name || 'School Revenue',
+              amount: Number(t.amount) || 0,
+              payer: t.description || 'Institutional Payer',
+              date: t.transactionDate ? new Date(t.transactionDate).toISOString().split('T')[0] : '',
+              method: t.paymentMethod || 'Bank Transfer'
+            }))
+          setIncomeEntries(incomes)
 
-  const [auditLogs, setAuditLogs] = useState([
-    { id: 'AUD-801', action: 'Approved Expense Voucher VCH-981 (₦620,000)', user: 'Principal (Dr. Adams)', timestamp: '2026-08-02 10:14 AM', ip: '197.210.42.12' },
-    { id: 'AUD-802', action: 'Posted Payroll Batch - July 2026 (₦13,365,000)', user: 'Bursar (Mr. Gabriel Okoro)', timestamp: '2026-07-31 04:30 PM', ip: '197.210.42.15' },
-  ])
+          const expenses = txsRes.data
+            .filter((t: any) => t.type === 'EXPENSE')
+            .map((t: any) => ({
+              id: t.id,
+              voucher: t.referenceNo || `VCH-${t.id}`,
+              category: t.voucherHead?.name || 'Operational Expense',
+              amount: Number(t.amount) || 0,
+              vendor: t.description || 'Vendor / Supplier',
+              approvedBy: 'Admin',
+              date: t.transactionDate ? new Date(t.transactionDate).toISOString().split('T')[0] : '',
+              status: 'Paid'
+            }))
+          setExpenseEntries(expenses)
+        }
+
+        if (bankRes.success && bankRes.data) {
+          const b = bankRes.data
+          setBankAccounts([{
+            id: b.id || 1,
+            bankName: b.bankName || 'Institutional Bank',
+            accountNo: b.accountNumber || '—',
+            accountName: b.accountName || 'School Main Account',
+            balance: Number(b.balance) || 0,
+            type: 'Operational Account'
+          }])
+        }
+      } catch (err) {
+        console.warn('Failed to load live financial records:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadLiveFinancials()
+  }, [])
 
   return (
     <div className="space-y-6">

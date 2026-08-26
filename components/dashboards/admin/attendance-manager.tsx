@@ -55,30 +55,12 @@ export function AttendanceManager() {
   const [selectedClass, setSelectedClass] = useState('Primary 4 Gold')
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0])
 
-  // Sample Gate Logs
-  const [gateLogs, setGateLogs] = useState<GateLog[]>([
-    { id: 'GT-001', personName: 'Chinedu Joseph Okafor', role: 'Student', idNumber: 'UG-2026-001', entryTime: '07:42 AM', exitTime: '—', gateLocation: 'Main Front Gate 1', status: 'Verified Entry' },
-    { id: 'GT-002', personName: 'Mrs. Victoria Adams', role: 'Staff', idNumber: 'STF-104', entryTime: '07:30 AM', exitTime: '—', gateLocation: 'Staff Gate 2', status: 'Verified Entry' },
-    { id: 'GT-003', personName: 'Amina Abubakar Bello', role: 'Student', idNumber: 'UG-2026-002', entryTime: '07:50 AM', exitTime: '—', gateLocation: 'Main Front Gate 1', status: 'Verified Entry' },
-    { id: 'GT-004', personName: 'David Oluwaseun Adeleke', role: 'Student', idNumber: 'UG-2026-003', entryTime: '08:15 AM', exitTime: '—', gateLocation: 'Main Front Gate 1', status: 'Flagged Gate Entry' },
-    { id: 'GT-005', personName: 'Engr. Felix Ojo', role: 'Staff', idNumber: 'STF-108', entryTime: '07:35 AM', exitTime: '—', gateLocation: 'Staff Gate 2', status: 'Verified Entry' },
-  ])
+  // Gate Logs State
+  const [gateLogs, setGateLogs] = useState<GateLog[]>([])
 
   // Roster States
-  const [studentRoster, setStudentRoster] = useState([
-    { id: 1, name: 'Chinedu Joseph Okafor', rollNo: '001', status: 'PRESENT' },
-    { id: 2, name: 'Amina Abubakar Bello', rollNo: '002', status: 'PRESENT' },
-    { id: 3, name: 'David Oluwaseun Adeleke', rollNo: '003', status: 'LATE' },
-    { id: 4, name: 'Emeka Victor Nnamdi', rollNo: '004', status: 'ABSENT' },
-    { id: 5, name: 'Zainab Ibrahim Sani', rollNo: '005', status: 'PRESENT' },
-  ])
-
-  const [staffRoster, setStaffRoster] = useState([
-    { id: 101, name: 'Mrs. Victoria Adams', role: 'Teacher', clockIn: '07:30 AM', status: 'PRESENT' },
-    { id: 102, name: 'Mr. Christopher Williams', role: 'Teacher', clockIn: '07:45 AM', status: 'PRESENT' },
-    { id: 103, name: 'Dr. Samuel Biobaku', role: 'HOD Science', clockIn: '08:05 AM', status: 'LATE' },
-    { id: 104, name: 'Mr. Gabriel Okoro', role: 'Bursar', clockIn: '07:25 AM', status: 'PRESENT' },
-  ])
+  const [studentRoster, setStudentRoster] = useState<Array<{ id: number; name: string; rollNo: string; status: string }>>([])
+  const [staffRoster, setStaffRoster] = useState<Array<{ id: number; name: string; role: string; clockIn: string; status: string }>>([])
 
   const handleStudentStatusToggle = (id: number, status: string) => {
     setStudentRoster(prev => prev.map(s => s.id === id ? { ...s, status } : s))
@@ -211,25 +193,33 @@ export function AttendanceManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {studentRoster.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono font-bold text-slate-700">{s.rollNo}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{s.name}</TableCell>
-                  <TableCell>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                      s.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                      s.status === 'LATE' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}>
-                      {s.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <button onClick={() => handleStudentStatusToggle(s.id, 'PRESENT')} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-[11px] rounded-lg">Present</button>
-                    <button onClick={() => handleStudentStatusToggle(s.id, 'LATE')} className="px-2.5 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold text-[11px] rounded-lg">Late</button>
-                    <button onClick={() => handleStudentStatusToggle(s.id, 'ABSENT')} className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] rounded-lg">Absent</button>
+              {studentRoster.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No student attendance records recorded yet for this class on {attendanceDate}.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                studentRoster.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-mono font-bold text-slate-700">{s.rollNo}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{s.name}</TableCell>
+                    <TableCell>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        s.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        s.status === 'LATE' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <button onClick={() => handleStudentStatusToggle(s.id, 'PRESENT')} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-[11px] rounded-lg">Present</button>
+                      <button onClick={() => handleStudentStatusToggle(s.id, 'LATE')} className="px-2.5 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold text-[11px] rounded-lg">Late</button>
+                      <button onClick={() => handleStudentStatusToggle(s.id, 'ABSENT')} className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[11px] rounded-lg">Absent</button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -258,23 +248,31 @@ export function AttendanceManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {staffRoster.map((st) => (
-                <TableRow key={st.id}>
-                  <TableCell className="font-bold text-slate-900">{st.name}</TableCell>
-                  <TableCell className="text-xs font-semibold text-slate-700">{st.role}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-800">{st.clockIn}</TableCell>
-                  <TableCell>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                      st.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                    }`}>
-                      {st.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <button onClick={() => alert(`Updating clock-in for ${st.name}`)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition">Edit Time</button>
+              {staffRoster.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No staff clock-in entries recorded for today.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                staffRoster.map((st) => (
+                  <TableRow key={st.id}>
+                    <TableCell className="font-bold text-slate-900">{st.name}</TableCell>
+                    <TableCell className="text-xs font-semibold text-slate-700">{st.role}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-800">{st.clockIn}</TableCell>
+                    <TableCell>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        st.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}>
+                        {st.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button onClick={() => alert(`Updating clock-in for ${st.name}`)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition">Edit Time</button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -378,23 +376,31 @@ export function AttendanceManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {gateLogs.map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell className="font-mono font-bold text-slate-800">{g.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{g.personName}</TableCell>
-                  <TableCell><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${g.role === 'Student' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{g.role}</span></TableCell>
-                  <TableCell className="font-mono text-xs text-slate-700">{g.idNumber}</TableCell>
-                  <TableCell className="font-mono font-bold text-slate-900">{g.entryTime}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{g.gateLocation}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                      g.status === 'Verified Entry' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                    }`}>
-                      {g.status}
-                    </span>
+              {gateLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No automated gate entries logged for today. Turnstiles and scanners are listening on network channels.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                gateLogs.map((g) => (
+                  <TableRow key={g.id}>
+                    <TableCell className="font-mono font-bold text-slate-800">{g.id}</TableCell>
+                    <TableCell className="font-bold text-slate-900">{g.personName}</TableCell>
+                    <TableCell><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${g.role === 'Student' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{g.role}</span></TableCell>
+                    <TableCell className="font-mono text-xs text-slate-700">{g.idNumber}</TableCell>
+                    <TableCell className="font-mono font-bold text-slate-900">{g.entryTime}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{g.gateLocation}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        g.status === 'Verified Entry' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {g.status}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

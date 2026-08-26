@@ -64,37 +64,13 @@ export function InventoryDashboard() {
   const [activeTab, setActiveTab] = useState<InventoryTab>('inventory-dashboard')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Asset Datasets
-  const [assets, setAssets] = useState([
-    { id: 'AST-001', name: 'School Bus (Toyota Coaster 32-Seater)', category: 'Vehicles', condition: 'Excellent', val: '₦45,000,000' },
-    { id: 'AST-002', name: 'Soundproof Generator 100KVA (Mikano)', category: 'Power', condition: 'Good', val: '₦18,500,000' },
-    { id: 'AST-003', name: 'Commercial Air Conditioners 5HP (x8)', category: 'HVAC', condition: 'Operational', val: '₦9,600,000' },
-  ])
-
-  const [ictItems, setIctItems] = useState([
-    { id: 'ICT-101', name: 'HP ProBook Laptops (x30)', location: 'ICT Lab 1', condition: 'Active', val: '₦13,500,000' },
-    { id: 'ICT-102', name: 'Epson Interactive Projectors (x5)', location: 'Smart Classrooms', condition: 'Active', val: '₦3,200,000' },
-  ])
-
-  const [books, setBooks] = useState([
-    { id: 'BK-01', title: 'New General Mathematics Primary 4', copies: 120, status: 'In Stock' },
-    { id: 'BK-02', title: 'Modular English for Secondary Schools', copies: 95, status: 'In Stock' },
-  ])
-
-  const [labItems, setLabItems] = useState([
-    { id: 'LAB-01', name: 'Compound Optical Microscopes (x15)', lab: 'Biology Lab', status: 'Operational' },
-    { id: 'LAB-02', name: 'Digital Analytical Weighing Balance', lab: 'Chemistry Lab', status: 'Calibrated' },
-  ])
-
-  const [suppliers, setSuppliers] = useState([
-    { id: 'SUP-01', company: 'Global EduTech & Books Nig Ltd', contact: 'Mr. Jude Nwosu', phone: '+234 803 111 2233', goods: 'Textbooks & Software' },
-    { id: 'SUP-02', company: 'Crown Office & Furniture Supplies', contact: 'Mrs. Funke Adebayo', phone: '+234 802 444 5566', goods: 'Desks & Whiteboards' },
-  ])
-
-  const [maintenanceLogs, setMaintenanceLogs] = useState([
-    { id: 'MNT-101', item: '100KVA Mikano Generator', issue: 'Scheduled 250hr Oil Filter Change', technician: 'Mikano Engineering', cost: '₦120,000', status: 'Completed' },
-    { id: 'MNT-102', item: 'ICT Lab 2 AC Unit', issue: 'Refrigerant Gas Refill', technician: 'CoolTech HVAC', cost: '₦45,000', status: 'Pending' },
-  ])
+  // Asset Datasets (initialized empty for live data)
+  const [assets, setAssets] = useState<Array<{ id: string; name: string; category: string; condition: string; val: string }>>([])
+  const [ictItems, setIctItems] = useState<Array<{ id: string; name: string; location: string; condition: string; val: string }>>([])
+  const [books, setBooks] = useState<Array<{ id: string; title: string; copies: number; status: string }>>([])
+  const [labItems, setLabItems] = useState<Array<{ id: string; name: string; lab: string; status: string }>>([])
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; company: string; contact: string; phone: string; goods: string }>>([])
+  const [maintenanceLogs, setMaintenanceLogs] = useState<Array<{ id: string; item: string; issue: string; technician: string; cost: string; status: string }>>([])
 
   return (
     <div className="space-y-6">

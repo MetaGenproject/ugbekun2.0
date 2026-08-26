@@ -246,12 +246,7 @@ export function ClassroomStudents() {
     ? `${selectedClassObj.name} - Section ${selectedSectionObj.name}`
     : ''
 
-  // Mock Alumni Data
-  const mockAlumni = [
-    { id: 101, regNo: 'ALM-2025-01', name: 'David Adeleke', gradYear: '2025', finalGrade: 'Distinction (4.8/5.0)', status: 'Graduated', university: 'University of Lagos' },
-    { id: 102, regNo: 'ALM-2025-02', name: 'Chidimma Nwosu', gradYear: '2025', finalGrade: 'First Class (4.9/5.0)', status: 'Graduated', university: 'Covenant University' },
-    { id: 103, regNo: 'ALM-2024-05', name: 'Kafayat Bello', gradYear: '2024', finalGrade: 'Distinction (4.7/5.0)', status: 'Graduated', university: 'Babcock University' },
-  ]
+  const [alumniRecords, setAlumniRecords] = useState<Array<{ id: number; regNo: string; name: string; gradYear: string; finalGrade: string; status: string; university: string }>>([])
 
   return (
     <div className="space-y-6">
@@ -838,20 +833,28 @@ export function ClassroomStudents() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockAlumni.map((alm) => (
-                <TableRow key={alm.id}>
-                  <TableCell className="font-mono font-bold text-slate-900">{alm.regNo}</TableCell>
-                  <TableCell className="font-bold text-slate-800">{alm.name}</TableCell>
-                  <TableCell><span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-xs">{alm.gradYear}</span></TableCell>
-                  <TableCell className="font-semibold text-slate-700">{alm.finalGrade}</TableCell>
-                  <TableCell className="font-medium text-slate-600">{alm.university}</TableCell>
-                  <TableCell className="text-right">
-                    <button onClick={() => alert(`Downloading exit transcript for ${alm.name}`)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition flex items-center gap-1.5 ml-auto">
-                      <Download size={13} /> Transcript
-                    </button>
+              {alumniRecords.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                    No graduated alumni records found for this school branch.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                alumniRecords.map((alm) => (
+                  <TableRow key={alm.id}>
+                    <TableCell className="font-mono font-bold text-slate-900">{alm.regNo}</TableCell>
+                    <TableCell className="font-bold text-slate-800">{alm.name}</TableCell>
+                    <TableCell><span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-xs">{alm.gradYear}</span></TableCell>
+                    <TableCell className="font-semibold text-slate-700">{alm.finalGrade}</TableCell>
+                    <TableCell className="font-medium text-slate-600">{alm.university}</TableCell>
+                    <TableCell className="text-right">
+                      <button onClick={() => alert(`Downloading exit transcript for ${alm.name}`)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition flex items-center gap-1.5 ml-auto">
+                        <Download size={13} /> Transcript
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

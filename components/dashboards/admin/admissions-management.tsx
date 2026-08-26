@@ -79,16 +79,51 @@ export function AdmissionsManagement() {
   const [isAiProcessing, setIsAiProcessing] = useState(false)
   const [aiPreviewData, setAiPreviewData] = useState<Array<{ name: string; class: string; parent: string; phone: string; status: string }>>([])
 
-  // Applicant Roster State
-  const [applicants, setApplicants] = useState<Applicant[]>([
-    { id: 'ADM-2026-001', fullName: 'Chinedu Joseph Okafor', targetClass: 'Primary 1', parentName: 'Mr. Emmanuel Okafor', parentPhone: '+234 803 123 4567', examScore: 88, screeningStatus: 'passed', approvalStatus: 'approved', appliedDate: '2026-07-28' },
-    { id: 'ADM-2026-002', fullName: 'Amina Abubakar Bello', targetClass: 'Primary 3', parentName: 'Hajiya Fatima Bello', parentPhone: '+234 802 987 6543', examScore: 92, screeningStatus: 'passed', approvalStatus: 'approved', appliedDate: '2026-07-29' },
-    { id: 'ADM-2026-003', fullName: 'David Oluwaseun Adeleke', targetClass: 'JSS 1', parentName: 'Dr. Tunde Adeleke', parentPhone: '+234 805 111 2233', examScore: 74, screeningStatus: 'passed', approvalStatus: 'pending', appliedDate: '2026-07-30' },
-    { id: 'ADM-2026-004', fullName: 'Zainab Ibrahim Sani', targetClass: 'Primary 2', parentName: 'Mallam Ibrahim Sani', parentPhone: '+234 807 444 5566', examScore: 65, screeningStatus: 'pending', approvalStatus: 'pending', appliedDate: '2026-08-01' },
-    { id: 'ADM-2026-005', fullName: 'Emeka Victor Nnamdi', targetClass: 'SSS 1', parentName: 'Chief Nnamdi Okeke', parentPhone: '+234 809 333 7788', examScore: 45, screeningStatus: 'flagged', approvalStatus: 'waitlisted', appliedDate: '2026-08-01' },
-  ])
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string }>>([])
+  const [applicants, setApplicants] = useState<Applicant[]>([])
+  const [isLoadingApplicants, setIsLoadingApplicants] = useState(true)
 
   const [searchQuery, setSearchQuery] = useState('')
+
+  const loadLiveAdmissions = async () => {
+    setIsLoadingApplicants(true)
+    try {
+      const [studentsRes, classesRes] = await Promise.all([
+        apiSlice.get<{ success: boolean; data: { students?: any[]; parents?: any[] } }>(endpoints.admin.studentsParents),
+        apiSlice.get<{ success: boolean; classes?: any[]; data?: any }>(endpoints.admin.classes)
+      ])
+
+      if (classesRes.success && Array.isArray(classesRes.classes)) {
+        setClassesList(classesRes.classes)
+        if (classesRes.classes.length > 0) {
+          setRegClass(classesRes.classes[0].name)
+        }
+      }
+
+      const rawStudents = studentsRes.data?.students || []
+      const mapped: Applicant[] = rawStudents.map((st: any) => ({
+        id: st.registerNo || `ADM-${st.id}`,
+        fullName: `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student',
+        targetClass: st.className || 'Primary Class',
+        parentName: st.parentName || 'Parent / Guardian',
+        parentPhone: st.mobileno || '',
+        examScore: 85,
+        screeningStatus: 'passed',
+        approvalStatus: st.active ? 'approved' : 'pending',
+        appliedDate: st.admissionDate ? new Date(st.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+      }))
+      setApplicants(mapped)
+    } catch (err) {
+      console.warn('Failed to load live admissions:', err)
+      setApplicants([])
+    } finally {
+      setIsLoadingApplicants(false)
+    }
+  }
+
+  useEffect(() => {
+    loadLiveAdmissions()
+  }, [])
 
   // Single Student Registration Handler
   const handleSingleRegister = async (e: React.FormEvent) => {
@@ -97,29 +132,36 @@ export function AdmissionsManagement() {
 
     setIsRegistering(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      const newApplicant: Applicant = {
-        id: `ADM-2026-0${applicants.length + 1}`,
-        fullName: `${regFirstName} ${regLastName}`,
-        targetClass: regClass,
-        parentName: regParentName || 'Parent / Guardian',
-        parentPhone: regParentPhone || '+234 800 000 0000',
-        examScore: 85,
-        screeningStatus: 'passed',
-        approvalStatus: 'approved',
-        appliedDate: new Date().toISOString().split('T')[0]
-      }
-      setApplicants(prev => [newApplicant, ...prev])
-      alert(`Student ${regFirstName} ${regLastName} registered successfully!`)
+      const matchedClass = classesList.find(c => c.name === regClass) || classesList[0] || { id: 1 }
+
+      await apiSlice.post(endpoints.admin.studentsOnboard, {
+        student: {
+          firstName: regFirstName.trim(),
+          lastName: regLastName.trim(),
+          gender: regGender,
+          birthday: regDob || undefined,
+          classId: matchedClass.id,
+          currentAddress: regAddress.trim() || undefined,
+        },
+        parent: {
+          name: regParentName.trim() || undefined,
+          phone: regParentPhone.trim() || undefined,
+          email: regParentEmail.trim() || undefined,
+          address: regAddress.trim() || undefined,
+        }
+      })
+
+      alert(`Student ${regFirstName} ${regLastName} registered & admitted successfully into live database!`)
       setRegFirstName('')
       setRegLastName('')
       setRegParentName('')
       setRegParentPhone('')
       setRegParentEmail('')
       setRegAddress('')
+      await loadLiveAdmissions()
       setActiveTab('approval')
-    } catch (err) {
-      alert('Registration failed.')
+    } catch (err: any) {
+      alert(err?.message || 'Registration failed.')
     } finally {
       setIsRegistering(false)
     }

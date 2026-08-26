@@ -111,8 +111,8 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     const loadSubjectsAndClasses = async () => {
       try {
         const [subRes, clsRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
-          apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections),
+          apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.teacher.subjects),
+          apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.teacher.classesSections),
         ])
         if (subRes.success && subRes.subjects) {
           setSubjects(subRes.subjects)
@@ -137,7 +137,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     setError(null)
     try {
       const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[] }>(
-        endpoints.admin.cbtQuestionBank()
+        endpoints.teacher.questionBank()
       )
       if (res.success && res.items) {
         setQuestions(res.items)
@@ -186,7 +186,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       }
 
       const res = await apiSlice.post<{ success: boolean; item: QuestionBankItem }>(
-        endpoints.admin.cbtQuestionBank(),
+        endpoints.teacher.questionBank(),
         payload
       )
 
@@ -215,7 +215,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     setIsImporting(true)
     try {
       const res = await apiSlice.post<{ success: boolean; count: number; message: string }>(
-        endpoints.admin.cbtQuestionBankImport,
+        endpoints.teacher.questionBankImport,
         {
           format: importFormat,
           data: importText,
@@ -248,7 +248,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     setIsGeneratingAi(true)
     try {
       const res = await apiSlice.post<{ success: boolean; count: number; message: string }>(
-        endpoints.admin.cbtQuestionBankAiGenerate,
+        endpoints.teacher.questionBankAiGenerate,
         {
           subjectId: aiSubjectId,
           topic: aiTopic.trim(),
@@ -275,7 +275,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const handleDeleteQuestion = async (id: number) => {
     if (!confirm('Are you sure you want to delete this question from the Question Bank?')) return
     try {
-      const res = await apiSlice.delete<{ success: boolean }>(endpoints.admin.cbtQuestionBankItem(id))
+      const res = await apiSlice.delete<{ success: boolean }>(endpoints.teacher.questionBankItem(id))
       if (res.success) {
         setQuestions(questions.filter((q) => q.id !== id))
         showNotification('Question deleted.')

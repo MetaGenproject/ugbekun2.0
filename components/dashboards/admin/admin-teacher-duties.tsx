@@ -68,7 +68,7 @@ export function AdminTeacherDuties({ user }: { user: { id: number; username: str
   }
 
   if (selectedTeacherId) {
-    const fakeTeacherUser = {
+    const impersonatedTeacherUser = {
       id: selectedTeacherId,
       username: selectedTeacherName,
       role: 3 // treat as teacher
@@ -126,7 +126,7 @@ export function AdminTeacherDuties({ user }: { user: { id: number; username: str
 
         {/* Embedded Teacher Dashboard */}
         <div className="bg-slate-50/50 rounded-2xl border border-slate-200/50 p-1">
-          <TeacherDashboard user={fakeTeacherUser} activeSection={teacherActiveTab} />
+          <TeacherDashboard user={impersonatedTeacherUser} activeSection={teacherActiveTab} />
         </div>
       </div>
     )
