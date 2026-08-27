@@ -134,7 +134,7 @@ export function AdmissionsManagement() {
     try {
       const matchedClass = classesList.find(c => c.name === regClass) || classesList[0] || { id: 1 }
 
-      await apiSlice.post(endpoints.admin.studentsOnboard, {
+      await apiSlice.post(endpoints.admin.onboardStudent, {
         student: {
           firstName: regFirstName.trim(),
           lastName: regLastName.trim(),
