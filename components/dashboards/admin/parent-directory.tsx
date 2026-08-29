@@ -100,7 +100,7 @@ export function ParentDirectory() {
           studentCount: p.studentCount || p._count?.students || (p.students ? p.students.length : 1),
           occupation: p.occupation || 'Guardian',
           address: p.address || p.city || '',
-          status: p.active === false ? 'inactive' : 'active'
+          status: p.active === false ? 'suspended' : 'active'
         }))
 
         setParents(formatted)

@@ -165,7 +165,7 @@ export function StaffDirectory() {
         setSelectedStaffForChat({
           id: loadedStaff[0].id,
           name: loadedStaff[0].name,
-          role: loadedStaff[0].role
+          role: String(loadedStaff[0].roleLabel || loadedStaff[0].role || 'Staff')
         })
       } else {
         setSelectedStaffForChat(null)

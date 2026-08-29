@@ -69,8 +69,8 @@ export function FinancialRecordsManagement() {
       setLoading(true)
       try {
         const [txsRes, bankRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.financesOfficeTransactions),
-          apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.financesBankSettings)
+          apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.officeTransactions).catch(() => ({ success: false, data: [] })),
+          apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.schoolBank).catch(() => ({ success: false, data: null }))
         ])
 
         if (txsRes.success && Array.isArray(txsRes.data)) {

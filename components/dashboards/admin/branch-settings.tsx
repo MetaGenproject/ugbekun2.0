@@ -45,6 +45,8 @@ import {
 } from '@/components/ui/table'
 import { DomainSettingsTab } from './domain-settings-tab'
 
+import { apiSlice, endpoints } from '@/lib/apiSlice'
+
 type SettingsTab = 
   | 'school-info' 
   | 'branding' 
@@ -66,14 +68,14 @@ export function BranchSettings() {
   const [isSaving, setIsSaving] = useState(false)
 
   // School Info Form
-  const [schoolName, setSchoolName] = useState('Ugbekun International Academy')
-  const [address, setAddress] = useState('Plot 12, Education City Boulevard, Ikeja, Lagos')
-  const [phone, setPhone] = useState('+234 800 UGBEKUN')
-  const [email, setEmail] = useState('admin@ugbekunschools.edu.ng')
+  const [schoolName, setSchoolName] = useState('')
+  const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
 
   // Academic Session
   const [session, setSession] = useState('2025/2026')
-  const [term, setTerm] = useState('1st Term')
+  const [term, setTerm] = useState('First Term')
 
   // Payment Gateway Keys
   const [paystackKey, setPaystackKey] = useState('pk_live_9482910482018402')
@@ -93,17 +95,51 @@ export function BranchSettings() {
 
   // Audit Logs Sample
   const [auditLogs, setAuditLogs] = useState([
-    { id: 'LOG-001', user: 'Admin (Ebuka)', action: 'Updated School Fee Schedule', ip: '197.210.65.12', date: '2026-08-02 14:15' },
-    { id: 'LOG-002', user: 'Admin (Ebuka)', action: 'Published 1st Term Results', ip: '197.210.65.12', date: '2026-08-01 16:40' },
+    { id: 'LOG-001', user: 'Admin', action: 'System Provisioned & Active', ip: '127.0.0.1', date: new Date().toISOString().slice(0, 16).replace('T', ' ') },
   ])
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.systemSettings)
+        if (res?.data) {
+          if (res.data.schoolName) setSchoolName(res.data.schoolName)
+          if (res.data.address) setAddress(res.data.address)
+          if (res.data.phone) setPhone(res.data.phone)
+          if (res.data.email) setEmail(res.data.email)
+          if (res.data.academicSession) setSession(res.data.academicSession)
+          if (res.data.currentTerm) setTerm(res.data.currentTerm)
+          if (res.data.aiAssistanceEnabled !== undefined) setAiAutoComment(res.data.aiAssistanceEnabled)
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err)
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const handleSaveSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     setIsSaving(true)
-    setTimeout(() => {
-      setIsSaving(false)
+    try {
+      await apiSlice.post(endpoints.admin.systemSettings, {
+        schoolName,
+        address,
+        phone,
+        email,
+        academicSession: session,
+        currentTerm: term,
+        aiAssistanceEnabled: aiAutoComment,
+      })
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('branch-settings-updated'))
+      }
       alert('System Settings saved & synchronized successfully!')
-    }, 800)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save settings.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (

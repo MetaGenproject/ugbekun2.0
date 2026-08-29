@@ -291,8 +291,8 @@ export default function DashboardPage() {
         legacyUserId: fallbackAuth.user.legacyUserId ?? null,
         lastLogin: fallbackAuth.user.lastLogin ?? undefined,
       }
-      if (fallbackAuth.user.branch) {
-        ;(normalizedUser as any).branch = fallbackAuth.user.branch
+      if ((fallbackAuth.user as any).branch) {
+        ;(normalizedUser as any).branch = (fallbackAuth.user as any).branch
       }
 
       setAuthSession(fallbackAuth.token, fallbackAuth.user)

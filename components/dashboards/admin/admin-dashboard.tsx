@@ -89,6 +89,7 @@ export interface BranchStats {
     academicSession?: string
     currentTerm?: string
     schoolName?: string
+    tagline?: string
     logoUrl?: string
     principalSignatureUrl?: string
     currencySymbol?: string
@@ -609,14 +610,6 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
 
   if (activeSection === 'departments' || activeSection === 'department-management') {
     return <DepartmentManagement />
-  }
-
-  if (activeSection === 'admissions') {
-    return <AdmissionsManagement />
-  }
-
-  if (activeSection === 'curriculum' || activeSection === 'academics' || activeSection === 'academic-structure') {
-    return <AcademicStructure />
   }
 
   if (activeSection === 'lesson-management' || activeSection === 'lessons') {

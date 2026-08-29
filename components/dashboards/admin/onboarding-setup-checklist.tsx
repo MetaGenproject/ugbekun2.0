@@ -67,7 +67,16 @@ export function OnboardingSetupChecklist({ stats, onNavigateTab }: OnboardingSet
         console.error('Error inspecting setup checklist state:', err)
       }
     }
+
     inspectOnboardingState()
+
+    const handleRefresh = () => {
+      inspectOnboardingState()
+    }
+    window.addEventListener('branch-settings-updated', handleRefresh)
+    return () => {
+      window.removeEventListener('branch-settings-updated', handleRefresh)
+    }
   }, [stats])
 
   const checklistSteps: ChecklistStep[] = [

@@ -143,6 +143,13 @@ export function SchoolSubscriptionForm() {
         logoFileName = logoFile.name
       }
 
+      let signatureBase64: string | undefined
+      let signatureFileName: string | undefined
+      if (signatureFile) {
+        signatureBase64 = await fileToBase64(signatureFile)
+        signatureFileName = signatureFile.name
+      }
+
       const data = await apiSlice.post<{
         success: boolean
         message: string
@@ -168,6 +175,8 @@ export function SchoolSubscriptionForm() {
         termsAccepted: true,
         logoBase64,
         logoFileName,
+        signatureBase64,
+        signatureFileName,
       })
 
       if (data.token && data.user) {

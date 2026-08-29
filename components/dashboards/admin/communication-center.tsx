@@ -75,7 +75,7 @@ export function CommunicationCenter() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!chatInput.trim()) return
+    if (!chatInput.trim() || !activeChatThread) return
     alert(`Message sent to ${activeChatThread.sender}: "${chatInput}"`)
     setChatInput('')
   }
