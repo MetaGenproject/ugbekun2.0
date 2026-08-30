@@ -38,6 +38,7 @@ import {
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { getAvatarUrl } from '@/lib/avatar'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
+import { SchoolHeader } from '../school-header'
 
 interface DashboardProps {
   user: {
@@ -825,6 +826,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
 
   return (
     <div className="space-y-6 pb-12 font-sans">
+      <SchoolHeader />
 
       {/* Top Welcome Hero Banner */}
       <div className="relative rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-600 p-6 sm:p-8 text-white shadow-xl overflow-hidden">

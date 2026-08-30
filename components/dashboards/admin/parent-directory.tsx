@@ -1,7 +1,6 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { UserCredentialModal } from './user-credential-modal'
 import {
   Users,
   Search,
@@ -23,6 +22,7 @@ import {
   Bell,
   MapPin,
   Briefcase,
+  KeyRound,
   PhoneCall
 } from 'lucide-react'
 import {
@@ -63,6 +63,9 @@ export function ParentDirectory() {
   // Edit Parent Modal State
   const [editingParent, setEditingParent] = useState<ParentRecord | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  // Manage User Credentials State
+  const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
 
   // EduChat State
   const [selectedParentForChat, setSelectedParentForChat] = useState<ParentRecord | null>(null)
@@ -298,6 +301,13 @@ export function ParentDirectory() {
                         <TableCell className="text-xs text-slate-600">{parent.email || '—'}</TableCell>
                         <TableCell className="text-xs text-slate-500">{parent.address || '—'}</TableCell>
                         <TableCell className="text-right space-x-1">
+                          <button
+                            onClick={() => setManageUserCredentials({ userId: (parent as any).userId || parent.id, name: parent.name, role: 'Parent' })}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                            title="View / Reset Password"
+                          >
+                            <KeyRound size={13} /> Credentials
+                          </button>
                           <button
                             onClick={() => {
                               setSelectedParentForChat(parent)
@@ -594,6 +604,15 @@ export function ParentDirectory() {
           </div>
         </div>
       )}
+
+      {/* MANAGE USER CREDENTIALS MODAL */}
+      <UserCredentialModal
+        userId={manageUserCredentials?.userId || null}
+        userName={manageUserCredentials?.name || ''}
+        roleName={manageUserCredentials?.role}
+        isOpen={Boolean(manageUserCredentials)}
+        onClose={() => setManageUserCredentials(null)}
+      />
     </div>
   )
 }

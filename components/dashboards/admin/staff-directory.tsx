@@ -1,7 +1,6 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { UserCredentialModal } from './user-credential-modal'
 import {
   Users,
   Search,
@@ -28,6 +27,7 @@ import {
   Plus,
   Camera,
   Upload,
+  KeyRound,
   ImageIcon,
   Eye,
   Check,
@@ -109,6 +109,9 @@ export function StaffDirectory() {
   const [photoFile, setPhotoFile] = useState<string | null>(null)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [previewEnlargePhoto, setPreviewEnlargePhoto] = useState<{ url: string; name: string } | null>(null)
+
+  // Manage User Credentials State
+  const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
 
   const handleSaveQuickPhoto = async () => {
     if (!photoUploadTarget || !photoFile) return
@@ -444,6 +447,13 @@ export function StaffDirectory() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => setManageUserCredentials({ userId: (t as any).userId || t.id, name: teacherDisplayName, role: 'Teacher' })}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                                title="View / Reset Password"
+                              >
+                                <KeyRound size={12} /> Credentials
+                              </button>
                               <button
                                 onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
                                 className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
@@ -994,6 +1004,15 @@ export function StaffDirectory() {
           </div>
         </div>
       )}
+
+      {/* MANAGE USER CREDENTIALS MODAL */}
+      <UserCredentialModal
+        userId={manageUserCredentials?.userId || null}
+        userName={manageUserCredentials?.name || ''}
+        roleName={manageUserCredentials?.role}
+        isOpen={Boolean(manageUserCredentials)}
+        onClose={() => setManageUserCredentials(null)}
+      />
     </div>
   )
 }

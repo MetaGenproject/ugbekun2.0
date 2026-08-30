@@ -50,6 +50,7 @@ import {
 import { SuperAdminDashboard } from '@/components/dashboards/superadmin/superadmin-dashboard'
 import { AdminDashboard, type BranchStats } from '@/components/dashboards/admin/admin-dashboard'
 import { OSeAiAssistant } from '@/components/ai/ose-ai-assistant'
+import { SchoolFooter } from '@/components/shared/school-footer'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashboard'
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
@@ -657,6 +658,7 @@ export default function DashboardPage() {
         {/* Main Section Content Area */}
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6">
           {renderDashboardContent()}
+          <SchoolFooter />
         </div>
       </main>
 

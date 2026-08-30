@@ -1,7 +1,6 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { UserCredentialModal } from './user-credential-modal'
 import {
   Search,
   School,
@@ -23,6 +22,7 @@ import {
   ArrowLeftRight,
   Eye,
   CheckCircle2,
+  KeyRound,
   Download,
   Phone,
   Mail,
@@ -191,6 +191,7 @@ export function ClassroomStudents() {
   }
 
   const [togglingStatusId, setTogglingStatusId] = useState<number | null>(null)
+  const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
 
   const handleToggleStudentStatus = async (studentId: number) => {
     setTogglingStatusId(studentId)
@@ -578,6 +579,13 @@ export function ClassroomStudents() {
                             </TableCell>
                             <TableCell className="text-right space-x-1">
                               <button
+                                onClick={() => setManageUserCredentials({ userId: (student as any).userId || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                                title="View / Reset Password"
+                              >
+                                <KeyRound size={13} /> Credentials
+                              </button>
+                              <button
                                 onClick={() => {
                                   setSelectedStudentForProfile(student)
                                   setActiveTab('profile')
@@ -962,6 +970,15 @@ export function ClassroomStudents() {
           setEditingStudentId(null)
         }}
         onSuccess={() => { handleSearch(); }}
+      />
+
+      {/* MANAGE USER CREDENTIALS MODAL */}
+      <UserCredentialModal
+        userId={manageUserCredentials?.userId || null}
+        userName={manageUserCredentials?.name || ''}
+        roleName={manageUserCredentials?.role}
+        isOpen={Boolean(manageUserCredentials)}
+        onClose={() => setManageUserCredentials(null)}
       />
     </div>
   )
