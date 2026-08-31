@@ -561,8 +561,8 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-rose-600 text-white flex items-center justify-center text-[9px] font-extrabold">M</span>
-                <span className="text-[10px] text-slate-400 font-medium">Powered by Metagen Project</span>
+                <span className="w-3.5 h-3.5 rounded bg-cyan-600 text-white flex items-center justify-center text-[9px] font-extrabold">U</span>
+                <span className="text-[10px] text-slate-300 font-medium">Powered by Ugbekun 2.0</span>
               </div>
             </div>
           </div>
@@ -570,7 +570,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Panel Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-y-auto">
         {/* Top Header Bar matching Reference Image */}
         <header className="h-16 border-b border-slate-200/90 bg-white px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-xl">
@@ -656,10 +656,12 @@ export default function DashboardPage() {
         </header>
 
         {/* Main Section Content Area */}
-        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6 flex-1">
           {renderDashboardContent()}
-          <SchoolFooter />
         </div>
+
+        {/* Full-width Static Dark Navy Footer at page bottom */}
+        <SchoolFooter />
       </main>
 
       {/* Global Unified OSe AI Assistant */}

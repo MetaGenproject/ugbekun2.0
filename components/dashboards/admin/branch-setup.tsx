@@ -13,7 +13,11 @@ import {
   Loader2, 
   BookMarked,
   Info,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react'
 
 interface ClassData {
@@ -83,6 +87,22 @@ export function BranchSetup() {
   const [isSubmittingSection, setIsSubmittingSection] = useState(false)
   const [isSeedingPreset, setIsSeedingPreset] = useState(false)
 
+  // Modals & Editing states
+  const [editingClass, setEditingClass] = useState<ClassData | null>(null)
+  const [deletingClassId, setDeletingClassId] = useState<number | null>(null)
+
+  const [editingSection, setEditingSection] = useState<SectionData | null>(null)
+  const [deletingSectionId, setDeletingSectionId] = useState<number | null>(null)
+
+  const [editingSubject, setEditingSubject] = useState<SubjectData | null>(null)
+  const [deletingSubjectId, setDeletingSubjectId] = useState<number | null>(null)
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState<number | null>(null)
+
+  const [editingExam, setEditingExam] = useState<ExamData | null>(null)
+  const [deletingExamId, setDeletingExamId] = useState<number | null>(null)
+
+  const [isActionLoading, setIsActionLoading] = useState(false)
+
   const handleSeedPreset = async (category: 'nursery_primary' | 'secondary_only' | 'combined_k12') => {
     try {
       setIsSeedingPreset(true)
@@ -131,7 +151,6 @@ export function BranchSetup() {
   // Subject assignment form state
   const [assignClassId, setAssignClassId] = useState('')
   const [assignSectionId, setAssignSectionId] = useState('')
-  const [assignSubjectId, setAssignSubjectId] = useState('')
   const [assignTeacherId, setAssignTeacherId] = useState('')
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false)
 
@@ -148,6 +167,10 @@ export function BranchSetup() {
   const [newExamDist, setNewExamDist] = useState<string[]>([])
   const [distInput, setDistInput] = useState('')
   const [isSubmittingExam, setIsSubmittingExam] = useState(false)
+
+  // Exam Edit State Distributions
+  const [editExamDist, setEditExamDist] = useState<string[]>([])
+  const [editDistInput, setEditDistInput] = useState('')
 
   // Global notifications
   const [notify, setNotify] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -172,7 +195,7 @@ export function BranchSetup() {
       const tRes = await apiSlice.get<{ success: boolean; data: { teachers: Teacher[] } }>(
         endpoints.admin.teachersStaff
       )
-      setTeachers(tRes.data.teachers)
+      setTeachers(tRes.data.teachers || [])
     } catch (err) {
       setClassError(err instanceof Error ? err.message : 'Failed to load branch configuration.')
     } finally {
@@ -186,8 +209,8 @@ export function BranchSetup() {
       const res = await apiSlice.get<{ success: boolean; subjects: SubjectData[]; assignments: SubjectAssignment[] }>(
         endpoints.admin.subjects
       )
-      setSubjects(res.subjects)
-      setAssignments(res.assignments)
+      setSubjects(res.subjects || [])
+      setAssignments(res.assignments || [])
     } catch (err) {
       showNotification('error', 'Failed to load curriculum subjects.')
     }
@@ -199,7 +222,7 @@ export function BranchSetup() {
       const res = await apiSlice.get<{ success: boolean; exams: ExamData[] }>(
         endpoints.admin.exams
       )
-      setExams(res.exams)
+      setExams(res.exams || [])
     } catch (err) {
       showNotification('error', 'Failed to load exams matrix.')
     }
@@ -241,6 +264,44 @@ export function BranchSetup() {
     }
   }
 
+  // Update Class
+  const handleUpdateClass = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingClass) return
+
+    setIsActionLoading(true)
+    try {
+      await apiSlice.put(endpoints.admin.classDetail(editingClass.id), {
+        name: editingClass.name,
+        nameNumeric: editingClass.nameNumeric,
+        isEcd: editingClass.isEcd,
+      })
+      showNotification('success', 'Class updated successfully!')
+      setEditingClass(null)
+      await loadClassrooms()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to update class.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
+  // Delete Class
+  const handleDeleteClass = async (id: number) => {
+    setIsActionLoading(true)
+    try {
+      await apiSlice.delete(endpoints.admin.classDetail(id))
+      showNotification('success', 'Class deleted successfully!')
+      setDeletingClassId(null)
+      if (selectedClassId === id) setSelectedClassId(null)
+      await loadClassrooms()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to delete class.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
   // Create Section
   const handleCreateSection = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -263,6 +324,42 @@ export function BranchSetup() {
     }
   }
 
+  // Update Section
+  const handleUpdateSection = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingSection) return
+
+    setIsActionLoading(true)
+    try {
+      await apiSlice.put(endpoints.admin.sectionDetail(editingSection.id), {
+        name: editingSection.name,
+        capacity: editingSection.capacity,
+      })
+      showNotification('success', 'Section updated successfully!')
+      setEditingSection(null)
+      await loadClassrooms()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to update section.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
+  // Delete Section
+  const handleDeleteSection = async (id: number) => {
+    setIsActionLoading(true)
+    try {
+      await apiSlice.delete(endpoints.admin.sectionDetail(id))
+      showNotification('success', 'Section deleted successfully!')
+      setDeletingSectionId(null)
+      await loadClassrooms()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to delete section.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
   // Handle Class Click for allocation
   const handleSelectClass = (cls: ClassData) => {
     setSelectedClassId(cls.id)
@@ -276,12 +373,10 @@ export function BranchSetup() {
 
     setIsSubmittingAllocation(true)
     try {
-      // Save sections allocation
       await apiSlice.post(endpoints.admin.allocateSections, {
         classId: selectedClassId,
         sectionIds: selectedSectionIds,
       })
-      // Save class ECD status toggle
       await apiSlice.post(endpoints.admin.toggleEcdClass, {
         classId: selectedClassId,
         isEcd: selectedClassIsEcd,
@@ -322,6 +417,59 @@ export function BranchSetup() {
     }
   }
 
+  // Update Subject
+  const handleUpdateSubject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingSubject) return
+
+    setIsActionLoading(true)
+    try {
+      await apiSlice.put(endpoints.admin.subjectDetail(editingSubject.id), {
+        name: editingSubject.name,
+        subjectCode: editingSubject.subjectCode,
+        subjectType: editingSubject.subjectType,
+        subjectAuthor: editingSubject.subjectAuthor,
+      })
+      showNotification('success', 'Subject updated successfully!')
+      setEditingSubject(null)
+      await loadSubjects()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to update subject.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
+  // Delete Subject
+  const handleDeleteSubject = async (id: number) => {
+    setIsActionLoading(true)
+    try {
+      await apiSlice.delete(endpoints.admin.subjectDetail(id))
+      showNotification('success', 'Subject deleted successfully!')
+      setDeletingSubjectId(null)
+      await loadSubjects()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to delete subject.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
+  // Delete Assignment
+  const handleDeleteAssignment = async (id: number) => {
+    setIsActionLoading(true)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteSubjectAssign(id))
+      showNotification('success', 'Course assignment unlinked successfully!')
+      setDeletingAssignmentId(null)
+      await loadSubjects()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to remove assignment.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
   // Assign Subjects to Class/Section (Bulk)
   const handleAssignSubject = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -335,7 +483,6 @@ export function BranchSetup() {
       return
     }
 
-    // Verify all selected subjects have a teacher assigned
     const assignmentsList = []
     for (const subId of selectedSubjectIds) {
       const teacherId = subjectTeacherOverrides[subId] || defaultTeacherId
@@ -396,12 +543,56 @@ export function BranchSetup() {
     }
   }
 
+  // Update Exam
+  const handleUpdateExam = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingExam) return
+
+    setIsActionLoading(true)
+    try {
+      await apiSlice.put(endpoints.admin.examDetail(editingExam.id), {
+        name: editingExam.name,
+        remark: editingExam.remark,
+        markDistribution: editExamDist,
+      })
+      showNotification('success', 'Exam matrix updated successfully!')
+      setEditingExam(null)
+      await loadExams()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to update exam.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
+  // Delete Exam
+  const handleDeleteExam = async (id: number) => {
+    setIsActionLoading(true)
+    try {
+      await apiSlice.delete(endpoints.admin.examDetail(id))
+      showNotification('success', 'Exam matrix deleted successfully!')
+      setDeletingExamId(null)
+      await loadExams()
+    } catch (err) {
+      showNotification('error', err instanceof Error ? err.message : 'Failed to delete exam.')
+    } finally {
+      setIsActionLoading(false)
+    }
+  }
+
   // Add Distribution Chip
   const addDistChip = () => {
     if (!distInput.trim()) return
     if (newExamDist.includes(distInput.trim())) return
     setNewExamDist([...newExamDist, distInput.trim()])
     setDistInput('')
+  }
+
+  const addEditDistChip = () => {
+    if (!editDistInput.trim()) return
+    if (editExamDist.includes(editDistInput.trim())) return
+    setEditExamDist([...editExamDist, editDistInput.trim()])
+    setEditDistInput('')
   }
 
   const filteredSubjects = subjects.filter(sub => 
@@ -555,217 +746,291 @@ export function BranchSetup() {
               </div>
 
               <div className="grid lg:grid-cols-3 gap-6">
-              {/* Class & Section Creation Forms */}
-              <div className="space-y-6 lg:col-span-1">
-                {/* Create Class Card */}
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Plus size={16} className="text-blue-600" /> Create New Class
-                  </h3>
-                  <form onSubmit={handleCreateClass} className="space-y-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Class Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Primary 1, Nursery 2" 
-                        value={newClassName}
-                        onChange={e => setNewClassName(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      />
+                {/* Class & Section Creation Forms & Sections Management */}
+                <div className="space-y-6 lg:col-span-1">
+                  {/* Create Class Card */}
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <Plus size={16} className="text-blue-600" /> Create New Class
+                    </h3>
+                    <form onSubmit={handleCreateClass} className="space-y-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Class Name</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Primary 1, Nursery 2" 
+                          value={newClassName}
+                          onChange={e => setNewClassName(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Numeric Value</label>
+                        <input 
+                          type="number" 
+                          placeholder="e.g. 1, 2" 
+                          value={newClassNumeric}
+                          onChange={e => setNewClassNumeric(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 py-1">
+                        <input 
+                          type="checkbox" 
+                          id="newClassIsEcd"
+                          checked={newClassIsEcd}
+                          onChange={e => setNewClassIsEcd(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                        <label htmlFor="newClassIsEcd" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                          ECD / Montessori Class
+                        </label>
+                      </div>
+                      <button 
+                        type="submit" 
+                        disabled={isSubmittingClass}
+                        className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/10"
+                      >
+                        {isSubmittingClass ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        Save Class
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Sections Desk Card (Create, Read, Edit, Delete Sections) */}
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Plus size={16} className="text-amber-600" /> Sections Desk
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        {sections.length} Active
+                      </span>
+                    </h3>
+                    <form onSubmit={handleCreateSection} className="space-y-3 pb-2 border-b border-slate-100">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Section Name</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Gold, A, Silver" 
+                          value={newSectionName}
+                          onChange={e => setNewSectionName(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">Capacity</label>
+                        <input 
+                          type="number" 
+                          placeholder="e.g. 40" 
+                          value={newSectionCapacity}
+                          onChange={e => setNewSectionCapacity(e.target.value)}
+                          className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                        />
+                      </div>
+                      <button 
+                        type="submit" 
+                        disabled={isSubmittingSection}
+                        className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                      >
+                        {isSubmittingSection ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        Save Section
+                      </button>
+                    </form>
+
+                    {/* Section List with Edit & Delete */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-500 block">Existing Sections:</span>
+                      {sections.length === 0 ? (
+                        <p className="text-xs text-slate-400 font-semibold italic">No sections created yet.</p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {sections.map(sec => (
+                            <div key={sec.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition text-xs">
+                              <div>
+                                <span className="font-bold text-slate-800">{sec.name}</span>
+                                {sec.capacity && <span className="text-[10px] text-slate-400 font-semibold ml-2">(Cap: {sec.capacity})</span>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSection(sec)}
+                                  className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-white transition cursor-pointer"
+                                  title="Edit Section"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingSectionId(sec.id)}
+                                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition cursor-pointer"
+                                  title="Delete Section"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Numeric Value</label>
-                      <input 
-                        type="number" 
-                        placeholder="e.g. 1, 2" 
-                        value={newClassNumeric}
-                        onChange={e => setNewClassNumeric(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 py-1">
-                      <input 
-                        type="checkbox" 
-                        id="newClassIsEcd"
-                        checked={newClassIsEcd}
-                        onChange={e => setNewClassIsEcd(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
-                      />
-                      <label htmlFor="newClassIsEcd" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
-                        ECD / Montessori Class
-                      </label>
-                    </div>
-                    <button 
-                      type="submit" 
-                      disabled={isSubmittingClass}
-                      className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/10"
-                    >
-                      {isSubmittingClass ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                      Save Class
-                    </button>
-                  </form>
+                  </div>
                 </div>
 
-                {/* Create Section Card */}
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Plus size={16} className="text-amber-600" /> Create New Section
-                  </h3>
-                  <form onSubmit={handleCreateSection} className="space-y-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Section Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Gold, A, Silver" 
-                        value={newSectionName}
-                        onChange={e => setNewSectionName(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Capacity</label>
-                      <input 
-                        type="number" 
-                        placeholder="e.g. 40" 
-                        value={newSectionCapacity}
-                        onChange={e => setNewSectionCapacity(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                      />
-                    </div>
-                    <button 
-                      type="submit" 
-                      disabled={isSubmittingSection}
-                      className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
-                    >
-                      {isSubmittingSection ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                      Save Section
-                    </button>
-                  </form>
-                </div>
-              </div>
+                {/* Class & Section Listing Workspace */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Settings size={16} className="text-blue-600" /> Classrooms Allocation Map
+                      </span>
+                      <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        {classes.length} Classes Registered
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium">Click on a Class below to manage and allocate sections to it, or use the Edit/Delete actions.</p>
+                    
+                    {classes.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-sm font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        No classes configured yet. Create one on the left panel or use the One-Click Seeder.
+                      </div>
+                    ) : (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        {classes.map(cls => (
+                          <div 
+                            key={cls.id}
+                            className={`p-4 rounded-xl border transition duration-200 flex flex-col justify-between min-h-32 hover:shadow-md ${selectedClassId === cls.id ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500' : 'border-slate-200 hover:border-slate-300 bg-white'}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div onClick={() => handleSelectClass(cls)} className="cursor-pointer flex-1">
+                                <span className="text-xs font-bold text-slate-400">Class ID #{cls.id}</span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <h4 className="font-extrabold text-slate-800 text-base">{cls.name}</h4>
+                                  {cls.isEcd && (
+                                    <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-full font-bold uppercase">ECD</span>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Edit & Delete Class Buttons */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setEditingClass(cls)
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition cursor-pointer"
+                                  title="Edit Class"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeletingClassId(cls.id)
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition cursor-pointer"
+                                  title="Delete Class"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
 
-              {/* Class & Section Listing Workspace */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Settings size={16} className="text-blue-600" /> Classrooms Allocation Map
-                  </h3>
-                  <p className="text-xs text-slate-400 font-medium">Click on a Class below to manage and allocate sections to it.</p>
-                  
-                  {classes.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 text-sm font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                      No classes configured yet. Create one on the left panel.
-                    </div>
-                  ) : (
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {classes.map(cls => (
-                        <div 
-                          key={cls.id}
-                          onClick={() => handleSelectClass(cls)}
-                          className={`p-4 rounded-xl border transition duration-200 cursor-pointer flex flex-col justify-between h-28 hover:shadow-md ${selectedClassId === cls.id ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500' : 'border-slate-200 hover:border-slate-300 bg-white'}`}
-                        >
-                          <div>
-                            <span className="text-xs font-bold text-slate-400">Class ID #{cls.id}</span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <h4 className="font-extrabold text-slate-800 text-base">{cls.name}</h4>
-                              {cls.isEcd && (
-                                <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-full font-bold uppercase">ECD</span>
+                            <div onClick={() => handleSelectClass(cls)} className="cursor-pointer flex flex-wrap gap-1 mt-3">
+                              {cls.sections.length === 0 ? (
+                                <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-md font-bold uppercase">No sections allocated</span>
+                              ) : (
+                                cls.sections.map(s => (
+                                  <span key={s.section.id} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md font-bold uppercase">
+                                    Section {s.section.name}
+                                  </span>
+                                ))
                               )}
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            {cls.sections.length === 0 ? (
-                              <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-md font-bold uppercase">No sections allocated</span>
-                            ) : (
-                              cls.sections.map(s => (
-                                <span key={s.section.id} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md font-bold uppercase">
-                                  Section {s.section.name}
-                                </span>
-                              ))
-                            )}
-                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section Allocation Overlay */}
+                  {selectedClassId !== null && (
+                    <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-extrabold text-slate-900 text-sm">
+                          Allocate Sections for: <span className="text-blue-600">{classes.find(c => c.id === selectedClassId)?.name}</span>
+                        </h4>
+                        <button 
+                          onClick={() => setSelectedClassId(null)}
+                          className="text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer flex items-center gap-1"
+                        >
+                          <X size={14} /> Cancel
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        {sections.map(sec => {
+                          const isSelected = selectedSectionIds.includes(sec.id)
+                          return (
+                            <div
+                              key={sec.id}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedSectionIds(selectedSectionIds.filter(id => id !== sec.id))
+                                } else {
+                                  setSelectedSectionIds([...selectedSectionIds, sec.id])
+                                }
+                              }}
+                              className={`p-3 rounded-lg border text-center transition cursor-pointer font-bold text-xs flex flex-col justify-center gap-1 ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                            >
+                              <span>{sec.name}</span>
+                              {sec.capacity && <span className={`text-[10px] font-semibold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>Max {sec.capacity}</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <input 
+                          type="checkbox" 
+                          id="selectedClassIsEcd"
+                          checked={selectedClassIsEcd}
+                          onChange={e => setSelectedClassIsEcd(e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <div className="space-y-0.5">
+                          <label htmlFor="selectedClassIsEcd" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                            Designate as ECD / Montessori Class
+                          </label>
+                          <p className="text-[10px] text-slate-400 font-medium leading-normal">
+                            ECD classes reject numerical grading and enable the qualitative descriptive assessment rubric.
+                          </p>
                         </div>
-                      ))}
+                      </div>
+
+                      <button
+                        onClick={handleSaveAllocation}
+                        disabled={isSubmittingAllocation}
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                      >
+                        {isSubmittingAllocation ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Save Allocations
+                      </button>
                     </div>
                   )}
                 </div>
-
-                {/* Section Allocation Overlay */}
-                {selectedClassId !== null && (
-                  <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-extrabold text-slate-900 text-sm">
-                        Allocate Sections for: <span className="text-blue-600">{classes.find(c => c.id === selectedClassId)?.name}</span>
-                      </h4>
-                      <button 
-                        onClick={() => setSelectedClassId(null)}
-                        className="text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                      {sections.map(sec => {
-                        const isSelected = selectedSectionIds.includes(sec.id)
-                        return (
-                          <div
-                            key={sec.id}
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedSectionIds(selectedSectionIds.filter(id => id !== sec.id))
-                              } else {
-                                setSelectedSectionIds([...selectedSectionIds, sec.id])
-                              }
-                            }}
-                            className={`p-3 rounded-lg border text-center transition cursor-pointer font-bold text-xs flex flex-col justify-center gap-1 ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
-                          >
-                            <span>{sec.name}</span>
-                            {sec.capacity && <span className={`text-[10px] font-semibold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>Max {sec.capacity}</span>}
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                      <input 
-                        type="checkbox" 
-                        id="selectedClassIsEcd"
-                        checked={selectedClassIsEcd}
-                        onChange={e => setSelectedClassIsEcd(e.target.checked)}
-                        className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <div className="space-y-0.5">
-                        <label htmlFor="selectedClassIsEcd" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
-                          Designate as ECD / Montessori Class
-                        </label>
-                        <p className="text-[10px] text-slate-400 font-medium leading-normal">
-                          ECD classes reject numerical grading and enable the qualitative descriptive assessment rubric.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleSaveAllocation}
-                      disabled={isSubmittingAllocation}
-                      className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
-                    >
-                      {isSubmittingAllocation ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                      Save Allocations
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
           {/* CURRICULUM TAB */}
           {activeTab === 'subjects' && (
             <div className="grid lg:grid-cols-3 gap-6">
-              {/* Forms side */}
+              {/* Forms side & Subjects CRUD list */}
               <div className="space-y-6 lg:col-span-1">
                 {/* Create Subject Card */}
                 <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
@@ -827,6 +1092,54 @@ export function BranchSetup() {
                   </form>
                 </div>
 
+                {/* Manage Existing Subjects Desk */}
+                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <BookOpen size={16} className="text-indigo-600" /> Registered Subjects
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                      {subjects.length} Total
+                    </span>
+                  </h3>
+                  {subjects.length === 0 ? (
+                    <p className="text-xs text-slate-400 font-semibold italic">No subjects created yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {subjects.map(sub => (
+                        <div key={sub.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition text-xs">
+                          <div>
+                            <div className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                              {sub.name}
+                              <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-bold uppercase">{sub.subjectCode}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              Type: {sub.subjectType} {sub.subjectAuthor ? `| Author: ${sub.subjectAuthor}` : ''}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingSubject(sub)}
+                              className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-white transition cursor-pointer"
+                              title="Edit Subject"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingSubjectId(sub.id)}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition cursor-pointer"
+                              title="Delete Subject"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Assignments List view */}
@@ -922,7 +1235,7 @@ export function BranchSetup() {
                         ) : (
                           filteredSubjects.map(sub => {
                             const isChecked = selectedSubjectIds.includes(sub.id)
-                            const isOptional = sub.subjectType?.toLowerCase() === 'optional'
+                            const isOptional = sub.subjectType?.toLowerCase() === 'optional' || sub.subjectType?.toLowerCase() === 'elective'
 
                             return (
                               <div key={sub.id} className={`flex items-center justify-between p-3 transition ${isChecked ? 'bg-blue-50/20' : 'hover:bg-slate-50/50'}`}>
@@ -997,7 +1310,7 @@ export function BranchSetup() {
                   </h3>
                   {assignments.length === 0 ? (
                     <div className="p-8 text-center text-slate-500 text-sm font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                      No subjects assigned to any class-sections yet. Complete the assignment form on the left.
+                      No subjects assigned to any class-sections yet. Complete the assignment form above.
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -1007,20 +1320,31 @@ export function BranchSetup() {
                             <th className="pb-3">Class/Section</th>
                             <th className="pb-3">Subject Details</th>
                             <th className="pb-3">Assigned Faculty</th>
+                            <th className="pb-3 text-right">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                           {assignments.map(a => (
                             <tr key={a.id} className="hover:bg-slate-50/50">
                               <td className="py-3.5">
-                                <span className="text-slate-950 font-bold">{a.class.name}</span>
-                                <span className="text-xs text-slate-400 ml-1.5 bg-slate-100 px-1.5 py-0.5 rounded-md font-bold uppercase">Sec {a.section.name}</span>
+                                <span className="text-slate-950 font-bold">{a.class?.name || 'Class'}</span>
+                                <span className="text-xs text-slate-400 ml-1.5 bg-slate-100 px-1.5 py-0.5 rounded-md font-bold uppercase">Sec {a.section?.name || 'A'}</span>
                               </td>
                               <td className="py-3.5">
-                                <div className="text-slate-950 font-extrabold">{a.subject.name}</div>
-                                <div className="text-[10px] text-slate-400 uppercase font-black">{a.subject.subjectCode}</div>
+                                <div className="text-slate-950 font-extrabold">{a.subject?.name || 'Subject'}</div>
+                                <div className="text-[10px] text-slate-400 uppercase font-black">{a.subject?.subjectCode || ''}</div>
                               </td>
-                              <td className="py-3.5 text-blue-600 font-bold">{a.teacher.name}</td>
+                              <td className="py-3.5 text-blue-600 font-bold">{a.teacher?.name || 'Unassigned'}</td>
+                              <td className="py-3.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingAssignmentId(a.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="Unlink Assignment"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1113,8 +1437,13 @@ export function BranchSetup() {
               {/* Exam listing workspace */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Award size={16} className="text-blue-600" /> Active Evaluation Matrices
+                  <h3 className="text-sm font-black text-slate-900 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Award size={16} className="text-blue-600" /> Active Evaluation Matrices
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                      {exams.length} Matrices
+                    </span>
                   </h3>
                   {exams.length === 0 ? (
                     <div className="p-8 text-center text-slate-500 text-sm font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
@@ -1132,13 +1461,38 @@ export function BranchSetup() {
                         return (
                           <div 
                             key={ex.id}
-                            className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col justify-between h-32 hover:shadow-sm"
+                            className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col justify-between min-h-36 hover:shadow-sm"
                           >
-                            <div>
-                              <span className="text-xs font-bold text-slate-400">Exam ID #{ex.id}</span>
-                              <h4 className="font-extrabold text-slate-800 text-base mt-0.5">{ex.name}</h4>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-xs font-bold text-slate-400">Exam ID #{ex.id}</span>
+                                <h4 className="font-extrabold text-slate-800 text-base mt-0.5">{ex.name}</h4>
+                                {ex.remark && <p className="text-[11px] text-slate-500 mt-1">{ex.remark}</p>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingExam(ex)
+                                    setEditExamDist(parsedDist)
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition cursor-pointer"
+                                  title="Edit Exam"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingExamId(ex.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition cursor-pointer"
+                                  title="Delete Exam"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             </div>
-                            <div className="space-y-1.5">
+
+                            <div className="space-y-1.5 mt-3">
                               <span className="text-[9px] text-slate-400 font-bold uppercase block">Grading Columns Bound:</span>
                               <div className="flex flex-wrap gap-1">
                                 {parsedDist.length === 0 ? (
@@ -1162,6 +1516,449 @@ export function BranchSetup() {
             </div>
           )}
         </>
+      )}
+
+      {/* EDIT CLASS MODAL */}
+      {editingClass && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" /> Edit Class #{editingClass.id}
+              </h3>
+              <button onClick={() => setEditingClass(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateClass} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Class Name</label>
+                <input 
+                  type="text" 
+                  value={editingClass.name}
+                  onChange={e => setEditingClass({ ...editingClass, name: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Numeric Value</label>
+                <input 
+                  type="number" 
+                  value={editingClass.nameNumeric || ''}
+                  onChange={e => setEditingClass({ ...editingClass, nameNumeric: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                />
+              </div>
+              <div className="flex items-center gap-2 py-1">
+                <input 
+                  type="checkbox" 
+                  id="editClassIsEcd"
+                  checked={editingClass.isEcd}
+                  onChange={e => setEditingClass({ ...editingClass, isEcd: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="editClassIsEcd" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                  ECD / Montessori Class
+                </label>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingClass(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActionLoading}
+                  className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Update Class
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CLASS MODAL */}
+      {deletingClassId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl space-y-4 text-center animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Delete Academic Class?</h3>
+              <p className="text-xs text-slate-500 mt-1">This will permanently delete the class and unallocate linked sections and subjects.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingClassId(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteClass(deletingClassId)}
+                disabled={isActionLoading}
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT SECTION MODAL */}
+      {editingSection && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                <Pencil size={18} className="text-amber-600" /> Edit Section #{editingSection.id}
+              </h3>
+              <button onClick={() => setEditingSection(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateSection} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Section Name</label>
+                <input 
+                  type="text" 
+                  value={editingSection.name}
+                  onChange={e => setEditingSection({ ...editingSection, name: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Capacity</label>
+                <input 
+                  type="number" 
+                  value={editingSection.capacity || ''}
+                  onChange={e => setEditingSection({ ...editingSection, capacity: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSection(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActionLoading}
+                  className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Update Section
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE SECTION MODAL */}
+      {deletingSectionId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl space-y-4 text-center animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Delete Section?</h3>
+              <p className="text-xs text-slate-500 mt-1">This will delete the section and remove its allocations from classes.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingSectionId(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSection(deletingSectionId)}
+                disabled={isActionLoading}
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT SUBJECT MODAL */}
+      {editingSubject && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" /> Edit Subject #{editingSubject.id}
+              </h3>
+              <button onClick={() => setEditingSubject(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateSubject} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Subject Name</label>
+                <input 
+                  type="text" 
+                  value={editingSubject.name}
+                  onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Subject Code</label>
+                <input 
+                  type="text" 
+                  value={editingSubject.subjectCode}
+                  onChange={e => setEditingSubject({ ...editingSubject, subjectCode: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Subject Type</label>
+                <select 
+                  value={editingSubject.subjectType}
+                  onChange={e => setEditingSubject({ ...editingSubject, subjectType: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                >
+                  <option value="Mandatory">Mandatory</option>
+                  <option value="Elective">Elective</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Author / Textbook</label>
+                <input 
+                  type="text" 
+                  value={editingSubject.subjectAuthor || ''}
+                  onChange={e => setEditingSubject({ ...editingSubject, subjectAuthor: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSubject(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActionLoading}
+                  className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Update Subject
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE SUBJECT MODAL */}
+      {deletingSubjectId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl space-y-4 text-center animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Delete Subject?</h3>
+              <p className="text-xs text-slate-500 mt-1">This will permanently delete the subject and remove all its curriculum assignments.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingSubjectId(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSubject(deletingSubjectId)}
+                disabled={isActionLoading}
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ASSIGNMENT MODAL */}
+      {deletingAssignmentId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl space-y-4 text-center animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Unlink Course Assignment?</h3>
+              <p className="text-xs text-slate-500 mt-1">This will remove this subject allocation from the selected class and section.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingAssignmentId(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteAssignment(deletingAssignmentId)}
+                disabled={isActionLoading}
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Unlink Course
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT EXAM MODAL */}
+      {editingExam && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" /> Edit Exam Matrix #{editingExam.id}
+              </h3>
+              <button onClick={() => setEditingExam(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateExam} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Exam Name</label>
+                <input 
+                  type="text" 
+                  value={editingExam.name}
+                  onChange={e => setEditingExam({ ...editingExam, name: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 font-semibold"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Mark Evaluation Metrics (Distributions)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Classwork, Exam" 
+                    value={editDistInput}
+                    onChange={e => setEditDistInput(e.target.value)}
+                    className="flex-1 text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                  />
+                  <button 
+                    type="button"
+                    onClick={addEditDistChip}
+                    className="px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-extrabold text-xs cursor-pointer"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {editExamDist.map((chip, idx) => (
+                    <span 
+                      key={idx} 
+                      onClick={() => setEditExamDist(editExamDist.filter((_, i) => i !== idx))}
+                      className="text-[10px] bg-blue-50 border border-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer hover:bg-rose-50 hover:border-rose-100 hover:text-rose-600 transition"
+                    >
+                      {chip} <span className="font-extrabold">×</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Remarks / Description</label>
+                <textarea 
+                  value={editingExam.remark || ''}
+                  onChange={e => setEditingExam({ ...editingExam, remark: e.target.value })}
+                  className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-20 resize-none font-semibold"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingExam(null)}
+                  className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActionLoading}
+                  className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Update Matrix
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE EXAM MODAL */}
+      {deletingExamId !== null && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl space-y-4 text-center animate-scale-up">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Delete Exam Matrix?</h3>
+              <p className="text-xs text-slate-500 mt-1">This will permanently delete this academic examination structure.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingExamId(null)}
+                className="flex-1 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteExam(deletingExamId)}
+                disabled={isActionLoading}
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

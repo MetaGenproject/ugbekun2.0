@@ -520,7 +520,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <TimetableManager />
   }
 
-  if (activeSection === 'curriculum' || activeSection === 'classes' || activeSection === 'sections' || activeSection === 'subjects' || activeSection === 'academics' || activeSection === 'academic-structure') {
+  if (activeSection === 'curriculum' || activeSection === 'classes' || activeSection === 'sections' || activeSection === 'subjects' || activeSection === 'academics' || activeSection === 'academic-structure' || activeSection === 'branch-setup') {
     return <BranchSetup />
   }
 
@@ -592,7 +592,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <InventoryDashboard />
   }
 
-  if (activeSection === 'settings' || activeSection === 'branch-settings' || activeSection === 'branch-setup') {
+  if (activeSection === 'settings' || activeSection === 'branch-settings') {
     return <BranchSettings />
   }
 
