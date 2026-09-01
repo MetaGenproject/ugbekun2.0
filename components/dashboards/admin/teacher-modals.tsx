@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { toast } from 'sonner'
 import {
   X,
   Loader2,
@@ -40,8 +41,81 @@ interface EditTeacherModalProps {
   onSuccess: () => void
 }
 
-export function DeactivateTeacherModal({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void } = {}) {
-  return null
+interface DeactivateTeacherModalProps {
+  isOpen: boolean
+  teacher: any
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export function DeactivateTeacherModal({ isOpen, teacher, onClose, onSuccess }: DeactivateTeacherModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!isOpen || !teacher) return null
+
+  const teacherName = teacher.name || [teacher.firstName, teacher.lastName].filter(Boolean).join(' ') || 'Teacher'
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    setError(null)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteTeacher(teacher.id))
+      toast.success(`Teacher "${teacherName}" record deleted successfully.`)
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete teacher record.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 text-rose-600">
+            <Trash2 size={20} />
+            <h3 className="font-black text-base text-slate-900">Delete Teacher Record</h3>
+          </div>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+          Are you sure you want to delete <strong className="text-slate-900">{teacherName}</strong>? This action will remove the teacher's profile, unassign them from allocated classes/subjects, and remove user login credentials.
+        </p>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+          >
+            {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Delete Teacher
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface OnboardResponse {
@@ -985,8 +1059,47 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
   const [accountName, setAccountName] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
 
+  const [isClassTeacher, setIsClassTeacher] = useState(false)
+  const [classTeacherClassId, setClassTeacherClassId] = useState('')
+  const [classTeacherSectionId, setClassTeacherSectionId] = useState('')
+  const [isSubjectTeacher, setIsSubjectTeacher] = useState(false)
+  const [subjectTeacherClassId, setSubjectTeacherClassId] = useState('')
+  const [subjectTeacherSectionId, setSubjectTeacherSectionId] = useState('')
+  const [subjectTeacherSubjectId, setSubjectTeacherSubjectId] = useState('')
+  const [weeklyPeriods, setWeeklyPeriods] = useState<number | string>(18)
+
+  const [subjectAssignList, setSubjectAssignList] = useState<
+    Array<{ subjectId: number; subjectName: string; classId: number; className: string; sectionId: number; sectionName: string }>
+  >([])
+
+  const [classes, setClasses] = useState<ClassData[]>([])
+  const [subjects, setSubjects] = useState<SubjectData[]>([])
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSetupData()
+    }
+  }, [isOpen])
+
+  const loadSetupData = async () => {
+    try {
+      const [classRes, subjectRes] = await Promise.all([
+        apiSlice.get<{ success: boolean; classes: ClassData[] }>(endpoints.admin.classesSections),
+        apiSlice.get<{ success: boolean; subjects: SubjectData[] }>(endpoints.admin.subjects),
+      ])
+      if (classRes.success && classRes.classes) {
+        setClasses(classRes.classes)
+      }
+      if (subjectRes.success && subjectRes.subjects) {
+        setSubjects(subjectRes.subjects)
+      }
+    } catch (err) {
+      console.error('Failed to load classes or subjects:', err)
+    }
+  }
 
   // Populate data when teacher changes
   useEffect(() => {
@@ -1001,9 +1114,80 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
       setAccountNumber(teacher.accountNumber || '')
       setAccountName(teacher.accountName || '')
       setPhoto(teacher.photo || null)
+      setWeeklyPeriods(teacher.weeklyPeriods || 18)
+
+      const hasClassAlloc = Boolean(teacher.isClassTeacher || teacher.allocatedClassId)
+      setIsClassTeacher(hasClassAlloc)
+      setClassTeacherClassId(teacher.allocatedClassId ? String(teacher.allocatedClassId) : '')
+      setClassTeacherSectionId(teacher.allocatedSectionId ? String(teacher.allocatedSectionId) : '')
+
+      if (teacher.subjectAssignsList && teacher.subjectAssignsList.length > 0) {
+        setSubjectAssignList(teacher.subjectAssignsList)
+        setIsSubjectTeacher(true)
+      } else if (teacher.assignedSubjectId && teacher.assignedSubjectClassId && teacher.assignedSubjectSectionId) {
+        const subObj = subjects.find(s => String(s.id) === String(teacher.assignedSubjectId))
+        const clsObj = classes.find(c => String(c.id) === String(teacher.assignedSubjectClassId))
+        const secObj = clsObj?.sections.find(sec => String(sec.section.id) === String(teacher.assignedSubjectSectionId))
+        setSubjectAssignList([{
+          subjectId: Number(teacher.assignedSubjectId),
+          subjectName: subObj?.name || teacher.subjectSpecialization || 'Subject',
+          classId: Number(teacher.assignedSubjectClassId),
+          className: clsObj?.name || 'Class',
+          sectionId: Number(teacher.assignedSubjectSectionId),
+          sectionName: secObj?.section.name || 'Section',
+        }])
+        setIsSubjectTeacher(true)
+      } else {
+        setSubjectAssignList([])
+        setIsSubjectTeacher(Boolean(teacher.isSubjectTeacher))
+      }
+
       setErrorMsg(null)
     }
-  }, [teacher])
+  }, [teacher, subjects, classes])
+
+  const handleAddSubjectAssign = () => {
+    if (!subjectTeacherSubjectId || !subjectTeacherClassId || !subjectTeacherSectionId) return
+
+    const subObj = subjects.find(s => String(s.id) === String(subjectTeacherSubjectId))
+    const clsObj = classes.find(c => String(c.id) === String(subjectTeacherClassId))
+    const secObj = clsObj?.sections.find(sec => String(sec.section.id) === String(subjectTeacherSectionId))
+
+    if (!subObj || !clsObj || !secObj) return
+
+    const subIdNum = Number(subjectTeacherSubjectId)
+    const clsIdNum = Number(subjectTeacherClassId)
+    const secIdNum = Number(subjectTeacherSectionId)
+
+    const isDuplicate = subjectAssignList.some(
+      s => s.subjectId === subIdNum && s.classId === clsIdNum && s.sectionId === secIdNum
+    )
+
+    if (isDuplicate) {
+      toast.error(`This teacher is already assigned to teach ${subObj.name} for ${clsObj.name} (${secObj.section.name}).`)
+      return
+    }
+
+    setSubjectAssignList(prev => [
+      ...prev,
+      {
+        subjectId: subIdNum,
+        subjectName: subObj.name,
+        classId: clsIdNum,
+        className: clsObj.name,
+        sectionId: secIdNum,
+        sectionName: secObj.section.name,
+      }
+    ])
+
+    setSubjectTeacherSubjectId('')
+    setSubjectTeacherClassId('')
+    setSubjectTeacherSectionId('')
+  }
+
+  const handleRemoveSubjectAssign = (index: number) => {
+    setSubjectAssignList(prev => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1013,17 +1197,32 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
     setIsSubmitting(true)
 
     try {
+      const selectedSubjObj = subjects.find(s => String(s.id) === subjectTeacherSubjectId)
+
       const payload: any = {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
         qualifications: qualifications.trim() || undefined,
         houseAddress: houseAddress.trim() || undefined,
-        department: department.trim() || undefined,
+        department: department.trim() || (subjectAssignList.length > 0 ? subjectAssignList[0].subjectName : undefined),
         bankName: bankName.trim() || undefined,
         accountNumber: accountNumber.trim() || undefined,
         accountName: accountName.trim() || undefined,
         photo: photo || undefined,
+        isClassTeacher,
+        classTeacherClassId: isClassTeacher ? classTeacherClassId : undefined,
+        classTeacherSectionId: isClassTeacher ? classTeacherSectionId : undefined,
+        isSubjectTeacher: isSubjectTeacher || subjectAssignList.length > 0,
+        subjectAssignments: isSubjectTeacher || subjectAssignList.length > 0 ? subjectAssignList.map(s => ({
+          subjectId: s.subjectId,
+          classId: s.classId,
+          sectionId: s.sectionId,
+        })) : [],
+        subjectSpecialization: subjectAssignList.length > 0
+          ? subjectAssignList.map(s => s.subjectName).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+          : selectedSubjObj?.name,
+        weeklyPeriods: Number(weeklyPeriods) || 18,
       }
 
       await apiSlice.put(
@@ -1042,6 +1241,9 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
 
   if (!isOpen || !teacher) return null
 
+  const selectedClassForFormTeacher = classes.find((c) => String(c.id) === classTeacherClassId)
+  const selectedClassForSubjectTeacher = classes.find((c) => String(c.id) === subjectTeacherClassId)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="relative bg-white rounded-2xl shadow-xl border border-slate-100 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -1049,7 +1251,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
           <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Edit className="text-[#0063a6]" size={18} /> Edit Staff Details
+            <Edit className="text-[#0063a6]" size={18} /> Edit Teacher Details
           </h2>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition">
             <X size={18} />
@@ -1057,7 +1259,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             {errorMsg && (
               <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl">
@@ -1126,6 +1328,216 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                   className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-sm text-slate-800 outline-none focus:border-[#0063a6] transition"
                 />
               </div>
+            </div>
+
+            {/* CLASS ALLOCATION SECTION */}
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="editIsClassTeacher"
+                  checked={isClassTeacher}
+                  onChange={(e) => {
+                    setIsClassTeacher(e.target.checked)
+                    if (!e.target.checked) {
+                      setClassTeacherClassId('')
+                      setClassTeacherSectionId('')
+                    }
+                  }}
+                  className="w-4 h-4 text-[#0063a6] rounded focus:ring-0 cursor-pointer"
+                />
+                <label htmlFor="editIsClassTeacher" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                  Class Allocation (Form / Class Teacher)
+                </label>
+              </div>
+
+              {isClassTeacher && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 block uppercase">Class</label>
+                    <select
+                      value={classTeacherClassId}
+                      onChange={(e) => {
+                        setClassTeacherClassId(e.target.value)
+                        setClassTeacherSectionId('')
+                      }}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none"
+                    >
+                      <option value="">Select Class</option>
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={String(cls.id)}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 block uppercase">Section / Arm</label>
+                    <select
+                      value={classTeacherSectionId}
+                      onChange={(e) => setClassTeacherSectionId(e.target.value)}
+                      disabled={!classTeacherClassId}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none disabled:opacity-50"
+                    >
+                      <option value="">Select Section</option>
+                      {selectedClassForFormTeacher?.sections.map((sec) => (
+                        <option key={sec.section.id} value={String(sec.section.id)}>
+                          {sec.section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SUBJECT SPECIALIZATION SECTION */}
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="editIsSubjectTeacher"
+                  checked={isSubjectTeacher}
+                  onChange={(e) => {
+                    setIsSubjectTeacher(e.target.checked)
+                    if (!e.target.checked) {
+                      setSubjectTeacherSubjectId('')
+                      setSubjectTeacherClassId('')
+                      setSubjectTeacherSectionId('')
+                    }
+                  }}
+                  className="w-4 h-4 text-[#0063a6] rounded focus:ring-0 cursor-pointer"
+                />
+                <label htmlFor="editIsSubjectTeacher" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                  Subject Specialization & Subject Teacher Assignment
+                </label>
+              </div>
+
+              {isSubjectTeacher && (
+                <div className="space-y-3 pt-1">
+                  {/* LIST OF CURRENTLY ASSIGNED SUBJECTS */}
+                  {subjectAssignList.length > 0 ? (
+                    <div className="space-y-2 pb-2 border-b border-slate-200/80">
+                      <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                        Assigned Subjects & Target Classes ({subjectAssignList.length})
+                      </label>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {subjectAssignList.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-2 px-3 py-2 bg-blue-50/90 border border-blue-200/80 text-blue-950 rounded-xl text-xs font-medium"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">{item.subjectName}</span>
+                              <span className="text-slate-400 font-normal">→</span>
+                              <span className="text-slate-700 font-bold">{item.className} ({item.sectionName})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSubjectAssign(idx)}
+                              className="text-slate-400 hover:text-rose-600 font-bold p-1 rounded-lg hover:bg-rose-50 transition cursor-pointer flex-shrink-0"
+                              title="Remove this subject assignment"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-xl font-medium border border-amber-200/70">
+                      No subjects currently assigned. Use the form below to select a subject and target class.
+                    </div>
+                  )}
+
+                  {/* ADD NEW SUBJECT ALLOCATION CONTROLS */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-3 shadow-2xs">
+                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Plus size={14} className="text-[#0063a6]" />
+                      <span>Add Subject & Target Class Assignment</span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 block uppercase">Specialization Subject</label>
+                        <select
+                          value={subjectTeacherSubjectId}
+                          onChange={(e) => setSubjectTeacherSubjectId(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-[#0063a6]"
+                        >
+                          <option value="">Select Subject</option>
+                          {subjects.map((sub) => (
+                            <option key={sub.id} value={String(sub.id)}>
+                              {sub.name} ({sub.subjectCode})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 block uppercase">Target Class</label>
+                          <select
+                            value={subjectTeacherClassId}
+                            onChange={(e) => {
+                              setSubjectTeacherClassId(e.target.value)
+                              setSubjectTeacherSectionId('')
+                            }}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-[#0063a6]"
+                          >
+                            <option value="">Select Class</option>
+                            {classes.map((cls) => (
+                              <option key={cls.id} value={String(cls.id)}>
+                                {cls.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 block uppercase">Section / Arm</label>
+                          <select
+                            value={subjectTeacherSectionId}
+                            onChange={(e) => setSubjectTeacherSectionId(e.target.value)}
+                            disabled={!subjectTeacherClassId}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 outline-none disabled:opacity-50 focus:border-[#0063a6]"
+                          >
+                            <option value="">Select Section</option>
+                            {selectedClassForSubjectTeacher?.sections.map((sec) => (
+                              <option key={sec.section.id} value={String(sec.section.id)}>
+                                {sec.section.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleAddSubjectAssign}
+                        disabled={!subjectTeacherSubjectId || !subjectTeacherClassId || !subjectTeacherSectionId}
+                        className="w-full py-1.5 bg-[#0063a6] hover:bg-[#003da5] disabled:opacity-40 text-white font-bold text-xs rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Plus size={14} /> Add Subject Assignment
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 block uppercase">Weekly Teaching Periods (Periods / Wk)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={weeklyPeriods}
+                      onChange={(e) => setWeeklyPeriods(e.target.value)}
+                      placeholder="e.g. 18"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none font-semibold text-slate-800"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">

@@ -31,6 +31,8 @@ import {
   ImageIcon,
   Eye,
   Check,
+  Trash2,
+  ChevronDown,
 } from 'lucide-react'
 import {
   Table,
@@ -41,6 +43,13 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { TeacherOnboardingModal, EditTeacherModal, DeactivateTeacherModal } from './teacher-modals'
 
 interface TeacherRow {
@@ -56,6 +65,9 @@ interface TeacherRow {
   qualifications?: string | null
   subjectSpecialization?: string | null
   allocatedClass?: string | null
+  weeklyPeriods?: number | null
+  allocationsList?: Array<{ id?: number; classId: number; className: string; sectionId: number; sectionName: string }>
+  subjectAssignsList?: Array<{ id?: number; subjectId: number; subjectName: string; classId: number; className: string; sectionId: number; sectionName: string }>
   classCount?: number
   department?: string | null
   bankName?: string | null
@@ -97,6 +109,7 @@ export function StaffDirectory() {
   // Modal States
   const [isOnboardOpen, setIsOnboardOpen] = useState(false)
   const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null)
+  const [deletingTeacher, setDeletingTeacher] = useState<TeacherRow | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
@@ -343,15 +356,23 @@ export function StaffDirectory() {
                 <p className="text-xs text-slate-400 font-medium">All classroom teachers registered to this school branch. Click "Edit" to make corrections.</p>
               </div>
 
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input
-                  type="text"
-                  placeholder="Filter teachers by name or email..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
-                />
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  onClick={() => setIsOnboardOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                >
+                  <UserPlus size={14} /> Add New Teacher
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Filter teachers by name or email..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                  />
+                </div>
               </div>
             </div>
 
@@ -379,12 +400,12 @@ export function StaffDirectory() {
                       <TableHead className="w-12">Photo</TableHead>
                       <TableHead>Teacher Name</TableHead>
                       <TableHead>Qualification</TableHead>
-                      <TableHead>Specialization</TableHead>
+                      <TableHead className="min-w-[140px] max-w-[180px]">Specialization</TableHead>
                       <TableHead>Contact Phone</TableHead>
                       <TableHead>Email Address</TableHead>
-                      <TableHead>Class Allocation</TableHead>
+                      <TableHead className="min-w-[130px] max-w-[170px]">Class Allocation</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right w-28">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -423,14 +444,16 @@ export function StaffDirectory() {
                             {teacherDisplayName}
                           </TableCell>
                           <TableCell className="text-xs font-medium text-slate-700">{t.qualification || t.qualifications || 'B.Ed / B.Sc'}</TableCell>
-                          <TableCell>
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                          <TableCell className="max-w-[180px] whitespace-normal break-words">
+                            <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 whitespace-normal break-words leading-tight">
                               {t.subjectSpecialization || 'General Subject'}
                             </span>
                           </TableCell>
                           <TableCell className="font-mono text-xs text-slate-700">{t.mobileno || t.phone || '—'}</TableCell>
                           <TableCell className="text-xs text-slate-600">{t.email || '—'}</TableCell>
-                          <TableCell className="font-semibold text-slate-800">{t.allocatedClass || 'Unassigned'}</TableCell>
+                          <TableCell className="max-w-[170px] whitespace-normal break-words font-semibold text-slate-800 text-xs leading-tight">
+                            {t.allocatedClass || 'Unassigned'}
+                          </TableCell>
                           <TableCell>
                             <button
                               onClick={() => handleToggleTeacherStatus(t.id)}
@@ -446,31 +469,52 @@ export function StaffDirectory() {
                             </button>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              <button
-                                onClick={() => setManageUserCredentials({ userId: (t as any).userId || t.id, name: teacherDisplayName, role: 'Teacher' })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
-                                title="View / Reset Password"
-                              >
-                                <KeyRound size={12} /> Credentials
-                              </button>
-                              <button
-                                onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
-                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
-                                title="Upload or change photograph"
-                              >
-                                <Camera size={12} /> Photo
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingTeacher(t)
-                                  setIsEditModalOpen(true)
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
-                              >
-                                <Edit3 size={12} /> Edit
-                              </button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 shadow-2xs transition cursor-pointer active:scale-95">
+                                  <span>Actions</span>
+                                  <ChevronDown size={13} className="text-slate-500" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-slate-200 bg-white">
+                                <DropdownMenuItem
+                                  onClick={() => setManageUserCredentials({ userId: (t as any).userId || t.id, name: teacherDisplayName, role: 'Teacher' })}
+                                  className="flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-slate-700 hover:text-amber-700 hover:bg-amber-50 rounded-lg cursor-pointer transition"
+                                >
+                                  <KeyRound size={14} className="text-amber-600" />
+                                  <span>Credentials Slip</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
+                                  className="flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-slate-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg cursor-pointer transition"
+                                >
+                                  <Camera size={14} className="text-blue-600" />
+                                  <span>Upload Photo</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingTeacher(t)
+                                    setIsEditModalOpen(true)
+                                  }}
+                                  className="flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-slate-700 hover:text-[#0063a6] hover:bg-sky-50 rounded-lg cursor-pointer transition"
+                                >
+                                  <Edit3 size={14} className="text-[#0063a6]" />
+                                  <span>Edit Details</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator className="my-1 border-slate-100" />
+
+                                <DropdownMenuItem
+                                  onClick={() => setDeletingTeacher(t)}
+                                  className="flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition"
+                                >
+                                  <Trash2 size={14} className="text-rose-600" />
+                                  <span>Delete Teacher</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       )
@@ -500,36 +544,44 @@ export function StaffDirectory() {
             <TableHeader>
               <TableRow>
                 <TableHead>Teacher Name</TableHead>
-                <TableHead>Subject Assigned</TableHead>
-                <TableHead>Target Classes</TableHead>
+                <TableHead className="min-w-[140px] max-w-[200px]">Subject Assigned</TableHead>
+                <TableHead className="min-w-[130px] max-w-[170px]">Target Classes</TableHead>
                 <TableHead>Weekly Periods</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {teachers.slice(0, 8).map((t, idx) => (
-                <TableRow key={t.id || idx}>
-                  <TableCell className="font-bold text-slate-900">{t.firstName} {t.lastName}</TableCell>
-                  <TableCell>
-                    <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 font-extrabold text-xs">
-                      {t.subjectSpecialization || ['Mathematics', 'English Language', 'Basic Science', 'Social Studies', 'Computer Studies'][idx % 5]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-semibold text-slate-700">Primary 1 - Primary 6</TableCell>
-                  <TableCell className="font-mono font-bold text-slate-800">18 Periods / wk</TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      onClick={() => {
-                        setEditingTeacher(t)
-                        setIsEditModalOpen(true)
-                      }}
-                      className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition"
-                    >
-                      Edit Allocation
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {teachers.map((t, idx) => {
+                const teacherDisplayName = [t.firstName, t.lastName].filter(Boolean).join(' ') || t.name || 'Teacher'
+                return (
+                  <TableRow key={t.id || idx} className="hover:bg-slate-50/50">
+                    <TableCell className="font-bold text-slate-900">{teacherDisplayName}</TableCell>
+                    <TableCell className="max-w-[200px] whitespace-normal break-words">
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 font-extrabold text-xs whitespace-normal break-words leading-tight">
+                        {t.subjectSpecialization || 'General Subject'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="max-w-[170px] whitespace-normal break-words font-semibold text-slate-700 text-xs leading-tight">
+                      {t.allocatedClass || 'Unassigned'}
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-slate-800 text-xs">
+                      {t.weeklyPeriods || 18} Periods / wk
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={() => {
+                          setEditingTeacher(t)
+                          setIsEditModalOpen(true)
+                        }}
+                        className="px-3 py-1.5 bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer active:scale-95 inline-flex items-center gap-1.5"
+                      >
+                        <Edit3 size={13} />
+                        <span>Edit Allocation</span>
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
@@ -890,6 +942,17 @@ export function StaffDirectory() {
         onSuccess={() => {
           setIsEditModalOpen(false)
           setEditingTeacher(null)
+          loadList()
+        }}
+      />
+
+      {/* DEACTIVATE / DELETE TEACHER MODAL */}
+      <DeactivateTeacherModal
+        isOpen={Boolean(deletingTeacher)}
+        teacher={deletingTeacher}
+        onClose={() => setDeletingTeacher(null)}
+        onSuccess={() => {
+          setDeletingTeacher(null)
           loadList()
         }}
       />
