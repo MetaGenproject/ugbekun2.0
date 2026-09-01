@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { toast } from 'sonner'
 import { UserCredentialModal } from './user-credential-modal'
 import {
   Users,
@@ -94,6 +95,14 @@ interface StaffRow {
 
 type StaffTab = 'teachers' | 'subject-teachers' | 'non-teaching' | 'communication'
 type NonTeachingCategory = 'All' | 'Bursars' | 'Receptionists' | 'HR Officers' | 'Security Personnel' | 'Maintenance Officers' | 'Drivers' | 'Librarians' | 'Laboratory Officers' | 'ICT Officers'
+
+const STAFF_ROLE_MAP: Record<number | string, string> = {
+  4: 'Bursar',
+  8: 'Receptionist',
+  9: 'HR Officer',
+  12: 'Librarian',
+  13: 'Staff',
+}
 
 export function StaffDirectory() {
   const [activeTab, setActiveTab] = useState<StaffTab>('teachers')
@@ -218,23 +227,59 @@ export function StaffDirectory() {
 
     setIsSavingEdit(true)
     try {
-      setStaff(prev => prev.map(s => s.id === editingStaff.id ? editingStaff : s))
+      await apiSlice.put(endpoints.admin.updateStaff(editingStaff.id), {
+        name: editingStaff.name || editingStaff.username,
+        email: editingStaff.email || undefined,
+        phone: editingStaff.phone || editingStaff.mobileno || undefined,
+        department: editingStaff.department || undefined,
+        roleLabel: editingStaff.roleLabel,
+      })
+      toast.success('Non-teaching staff record updated successfully!')
       setEditingStaff(null)
-      alert('Staff record updated successfully!')
-    } catch (err) {
-      alert('Failed to save staff record.')
+      loadList()
+    } catch (err: any) {
+      alert(err?.message || 'Failed to save staff record.')
     } finally {
       setIsSavingEdit(false)
     }
   }
 
-  const handleSendChatMessage = (e?: React.FormEvent) => {
+  const loadChatMessages = async (recipientId?: number) => {
+    try {
+      const res = await apiSlice.get(endpoints.admin.staffMessages(recipientId))
+      if (res?.messages) {
+        const formatted = res.messages.map((m: any) => ({
+          id: m.id,
+          sender: m.senderType || 'admin',
+          text: m.subject ? `[MEMO: ${m.subject}] ${m.message}` : m.message,
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }))
+        setChatMessages(formatted)
+      }
+    } catch (err) {
+      console.error('Failed to load chat messages:', err)
+    }
+  }
+
+  const handleSendChatMessage = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!chatInput.trim() || !selectedStaffForChat) return
 
+    const text = chatInput.trim()
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    setChatMessages(prev => [...prev, { sender: 'admin', text: chatInput, time: now }])
+    setChatMessages(prev => [...prev, { sender: 'admin', text, time: now }])
     setChatInput('')
+
+    try {
+      await apiSlice.post(endpoints.admin.sendStaffMessage, {
+        recipientId: selectedStaffForChat.id,
+        message: text,
+        isMemo: false,
+      })
+      loadChatMessages(selectedStaffForChat.id)
+    } catch (err) {
+      toast.error('Failed to send chat message.')
+    }
   }
 
   const handleSendMemo = async (e: React.FormEvent) => {
@@ -243,12 +288,20 @@ export function StaffDirectory() {
 
     setIsSendingMemo(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      alert(`Official Memo ("${memoSubject}") dispatched via EduChat to ${memoDepartment}!`)
+      await apiSlice.post(endpoints.admin.sendStaffMessage, {
+        targetDepartment: memoDepartment,
+        subject: memoSubject,
+        message: memoMessage,
+        isMemo: true,
+      })
+      toast.success(`Official Memo ("${memoSubject}") dispatched via EduChat to ${memoDepartment}!`)
       setMemoSubject('')
       setMemoMessage('')
-    } catch (err) {
-      alert('Failed to send memo.')
+      if (selectedStaffForChat) {
+        loadChatMessages(selectedStaffForChat.id)
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to send memo.')
     } finally {
       setIsSendingMemo(false)
     }
@@ -272,6 +325,46 @@ export function StaffDirectory() {
     const catLower = nonTeachingCategory.toLowerCase().replace(' personnel', '').replace(' officers', '')
     return matchesQuery && roleStr.includes(catLower)
   })
+
+  const teacherChannels = teachers.map(t => {
+    const name = [t.firstName, t.lastName].filter(Boolean).join(' ') || t.name || 'Teacher'
+    return {
+      id: t.id,
+      name,
+      roleText: 'Academic Teacher',
+      subText: t.allocatedClass || t.subjectSpecialization || 'Staff',
+      type: 'teacher' as const,
+    }
+  })
+
+  const nonTeachingChannels = staff.map(s => {
+    const name = s.name || (s as any).username || 'Staff Member'
+    const roleText = String(s.roleLabel || (typeof s.role === 'string' ? s.role : 'Staff'))
+    return {
+      id: s.id,
+      name,
+      roleText,
+      subText: s.department || 'General Administration',
+      type: 'staff' as const,
+    }
+  })
+
+  const allChannels = [...teacherChannels, ...nonTeachingChannels]
+
+  useEffect(() => {
+    if (activeTab === 'communication' && allChannels.length > 0) {
+      if (!selectedStaffForChat) {
+        setSelectedStaffForChat({
+          id: allChannels[0].id,
+          name: allChannels[0].name,
+          role: allChannels[0].roleText,
+        })
+        loadChatMessages(allChannels[0].id)
+      } else {
+        loadChatMessages(selectedStaffForChat.id)
+      }
+    }
+  }, [activeTab, selectedStaffForChat?.id, teachers.length, staff.length])
 
   return (
     <div className="space-y-6">
@@ -628,15 +721,19 @@ export function StaffDirectory() {
                   <TableHead>Official Role</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead>Contact Phone</TableHead>
-                  <TableHead>Email Address</TableHead>
+                  <TableHead className="min-w-[150px] max-w-[200px]">Email Address</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredNonTeaching.map((s) => {
                   const staffDisplayName = s.name || (s as any).username || 'Staff Member'
+                  const displayRoleText = String(s.roleLabel || (typeof s.role === 'string' ? s.role : 'Staff'))
+                  const contactPhoneText = s.phone || s.mobileno || '—'
+                  const emailAddressText = s.email || '—'
+
                   return (
-                    <TableRow key={s.id}>
+                    <TableRow key={s.id} className="hover:bg-slate-50/50">
                       <TableCell className="w-12">
                         <div className="relative group/avatar w-10 h-10">
                           {s.photo ? (
@@ -667,12 +764,12 @@ export function StaffDirectory() {
                       <TableCell className="font-bold text-slate-900">{staffDisplayName}</TableCell>
                       <TableCell>
                         <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-xs">
-                          {String((s as any).roleLabel || (typeof s.role === 'string' ? s.role : 'Staff'))}
+                          {displayRoleText}
                         </span>
                       </TableCell>
                       <TableCell className="font-semibold text-slate-700">{s.department || 'General Administration'}</TableCell>
-                      <TableCell className="font-mono text-xs text-slate-700">{s.mobileno || s.phone || '—'}</TableCell>
-                      <TableCell className="text-xs text-slate-600">{s.email || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-slate-800">{contactPhoneText}</TableCell>
+                      <TableCell className="max-w-[200px] whitespace-normal break-all text-xs font-semibold text-slate-700">{emailAddressText}</TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-1.5">
                           <button
@@ -683,7 +780,15 @@ export function StaffDirectory() {
                             <Camera size={12} /> Photo
                           </button>
                           <button
-                            onClick={() => setEditingStaff(s)}
+                            onClick={() => setEditingStaff({
+                              ...s,
+                              name: s.name || (s as any).username || '',
+                              phone: s.phone || s.mobileno || '',
+                              mobileno: s.mobileno || s.phone || '',
+                              email: s.email || '',
+                              department: s.department || 'General Administration',
+                              roleLabel: String((s as any).roleLabel || STAFF_ROLE_MAP[s.role] || (typeof s.role === 'string' ? s.role : 'Staff')),
+                            })}
                             className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
                           >
                             <Edit3 size={12} /> Edit
@@ -708,23 +813,29 @@ export function StaffDirectory() {
               <MessageSquare size={14} className="text-blue-600" /> Staff Communication Channels
             </h3>
             <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
-              {teachers.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedStaffForChat({ id: t.id, name: `${t.firstName} ${t.lastName}`, role: 'Teacher' })}
-                  className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border ${
-                    selectedStaffForChat?.id === t.id
-                      ? 'bg-blue-50 border-blue-200 text-blue-950 font-bold shadow-2xs'
-                      : 'bg-slate-50/60 border-slate-100 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold truncate">{t.firstName} {t.lastName}</h4>
-                    <p className="text-[10px] text-slate-400 truncate">Teacher • {t.allocatedClass || 'Staff'}</p>
-                  </div>
-                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                </button>
-              ))}
+              {allChannels.map(ch => {
+                const isSelected = selectedStaffForChat?.id === ch.id
+                return (
+                  <button
+                    key={`${ch.type}-${ch.id}`}
+                    onClick={() => {
+                      setSelectedStaffForChat({ id: ch.id, name: ch.name, role: ch.roleText })
+                      loadChatMessages(ch.id)
+                    }}
+                    className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-50 border-blue-200 text-blue-950 font-bold shadow-2xs'
+                        : 'bg-slate-50/60 border-slate-100 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-slate-900 truncate">{ch.name}</h4>
+                      <p className="text-[10px] text-slate-500 font-semibold truncate">{ch.roleText} • {ch.subText}</p>
+                    </div>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -851,7 +962,7 @@ export function StaffDirectory() {
                 <label className="text-xs font-bold text-slate-700 block mb-1">Full Name</label>
                 <input
                   type="text"
-                  value={editingStaff.name}
+                  value={editingStaff.name || (editingStaff as any).username || ''}
                   onChange={e => setEditingStaff({ ...editingStaff, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
                   required
@@ -861,13 +972,22 @@ export function StaffDirectory() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Official Role</label>
-                  <input
-                    type="text"
-                    value={editingStaff.role}
-                    onChange={e => setEditingStaff({ ...editingStaff, role: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                    required
-                  />
+                  <select
+                    value={editingStaff.roleLabel || STAFF_ROLE_MAP[editingStaff.role] || (typeof editingStaff.role === 'string' ? editingStaff.role : 'Staff')}
+                    onChange={e => setEditingStaff({ ...editingStaff, roleLabel: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white outline-none focus:border-blue-600 cursor-pointer"
+                  >
+                    <option value="Bursar">Bursar / Accountant</option>
+                    <option value="Receptionist">Receptionist</option>
+                    <option value="HR Officer">HR Officer</option>
+                    <option value="Security Personnel">Security Personnel</option>
+                    <option value="Maintenance Officer">Maintenance Officer</option>
+                    <option value="Driver">Driver</option>
+                    <option value="Librarian">Librarian</option>
+                    <option value="Laboratory Officer">Laboratory Officer</option>
+                    <option value="ICT Officer">ICT Officer</option>
+                    <option value="Staff">Staff</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Department</label>
@@ -884,8 +1004,8 @@ export function StaffDirectory() {
                 <label className="text-xs font-bold text-slate-700 block mb-1">Phone Number</label>
                 <input
                   type="text"
-                  value={editingStaff.mobileno || ''}
-                  onChange={e => setEditingStaff({ ...editingStaff, mobileno: e.target.value })}
+                  value={editingStaff.phone || editingStaff.mobileno || ''}
+                  onChange={e => setEditingStaff({ ...editingStaff, phone: e.target.value, mobileno: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold font-mono"
                 />
               </div>
