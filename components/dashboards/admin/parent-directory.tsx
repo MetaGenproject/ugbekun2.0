@@ -31,6 +31,7 @@ import {
   Trash2,
   RefreshCw,
   Check,
+  CheckCheck,
 } from 'lucide-react'
 import {
   Table,
@@ -774,9 +775,19 @@ export function ParentDirectory() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1 mt-1 px-1 text-[9px] font-semibold text-slate-400">
+                        <div className="flex items-center gap-1.5 mt-1 px-1 text-[9px] font-semibold text-slate-400">
                           <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           {msg.updatedAt && <span className="text-amber-600 font-bold">• Edited</span>}
+                          {isAdmin ? (
+                            <span className="flex items-center gap-1 text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200/80">
+                              <CheckCheck size={11} className={msg.isRead ? "text-blue-600" : "text-emerald-600"} />
+                              <span className={msg.isRead ? "text-blue-700" : "text-emerald-700"}>
+                                {msg.isRead ? 'Delivered & Read' : 'Delivered'}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-semibold text-slate-400">• Received</span>
+                          )}
                         </div>
                       </div>
                     )
