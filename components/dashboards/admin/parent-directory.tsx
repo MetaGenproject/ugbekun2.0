@@ -29,6 +29,8 @@ import {
   ChevronRight,
   MoreVertical,
   Trash2,
+  RefreshCw,
+  Check,
 } from 'lucide-react'
 import {
   Table,
@@ -73,6 +75,18 @@ interface ParentRecord {
 
 type ParentTab = 'directory' | 'educhat' | 'emergency'
 
+interface ChatMessage {
+  id: number
+  parentId: number
+  senderType: 'ADMIN' | 'PARENT' | 'TEACHER'
+  recipientRole?: string
+  subject?: string
+  message: string
+  isRead?: boolean
+  createdAt: string
+  updatedAt?: string
+}
+
 export function ParentDirectory() {
   const [activeTab, setActiveTab] = useState<ParentTab>('directory')
 
@@ -103,11 +117,18 @@ export function ParentDirectory() {
 
   // EduChat State
   const [selectedParentForChat, setSelectedParentForChat] = useState<ParentRecord | null>(null)
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'admin' | 'parent'; text: string; time: string }>>([
-    { sender: 'parent', text: 'Good morning Admin, please when are the 1st Term exam results coming out?', time: '08:30 AM' },
-    { sender: 'admin', text: 'Hello! 1st Term report cards will be released online this Friday at 12:00 PM via Ugbekun portal.', time: '08:32 AM' }
-  ])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [isLoadingChat, setIsLoadingChat] = useState(false)
   const [chatInput, setChatInput] = useState('')
+  const [isSendingChat, setIsSendingChat] = useState(false)
+  const [chatSearchQuery, setChatSearchQuery] = useState('')
+
+  // Message Edit / Delete States (CRUD)
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
+  const [editingMessageText, setEditingMessageText] = useState('')
+  const [isUpdatingMessage, setIsUpdatingMessage] = useState(false)
+
+  // Broadcast State
   const [broadcastTarget, setBroadcastTarget] = useState('all')
   const [broadcastMessage, setBroadcastMessage] = useState('')
   const [isBroadcasting, setIsBroadcasting] = useState(false)
@@ -137,7 +158,7 @@ export function ParentDirectory() {
           state: p.state || '',
           studentCount: p.studentCount || p._count?.students || (p.students ? p.students.length : 0),
           students: p.students || [],
-          occupation: p.occupation || 'Guardian',
+          occupation: p.occupation || '',
           address: p.address || [p.city, p.state].filter(Boolean).join(', ') || '',
           status: p.active === false ? 'suspended' : 'active'
         }))
@@ -160,6 +181,32 @@ export function ParentDirectory() {
 
     loadParents()
   }, [])
+
+  // Load EduChat message thread for selected parent
+  const loadChatMessages = async (parentId: number) => {
+    setIsLoadingChat(true)
+    try {
+      const res = await apiSlice.get<{ success: boolean; data: ChatMessage[] }>(
+        endpoints.admin.parentMessages(parentId)
+      )
+      if (res?.data) {
+        setChatMessages(res.data)
+      } else {
+        setChatMessages([])
+      }
+    } catch (err) {
+      console.error('Failed to load chat messages for parent:', err)
+      setChatMessages([])
+    } finally {
+      setIsLoadingChat(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedParentForChat?.id) {
+      loadChatMessages(selectedParentForChat.id)
+    }
+  }, [selectedParentForChat?.id])
 
   const handleSaveParentEdit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,13 +248,60 @@ export function ParentDirectory() {
     }
   }
 
-  const handleSendChatMessage = (e?: React.FormEvent) => {
+  const handleSendChatMessage = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!chatInput.trim() || !selectedParentForChat) return
 
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    setChatMessages(prev => [...prev, { sender: 'admin', text: chatInput, time: now }])
+    const textToSend = chatInput.trim()
     setChatInput('')
+    setIsSendingChat(true)
+
+    try {
+      const res = await apiSlice.post<{ success: boolean; data: ChatMessage }>(
+        endpoints.admin.sendParentMessage(selectedParentForChat.id),
+        { message: textToSend }
+      )
+      if (res?.data) {
+        setChatMessages(prev => [...prev, res.data])
+      } else {
+        await loadChatMessages(selectedParentForChat.id)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to send message via EduChat.')
+    } finally {
+      setIsSendingChat(false)
+    }
+  }
+
+  const handleUpdateChatMessage = async (messageId: number) => {
+    if (!editingMessageText.trim()) return
+
+    setIsUpdatingMessage(true)
+    try {
+      await apiSlice.put(endpoints.admin.updateParentMessage(messageId), {
+        message: editingMessageText.trim(),
+      })
+      setChatMessages(prev =>
+        prev.map(m => (m.id === messageId ? { ...m, message: editingMessageText.trim(), updatedAt: new Date().toISOString() } : m))
+      )
+      setEditingMessageId(null)
+      setEditingMessageText('')
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update message.')
+    } finally {
+      setIsUpdatingMessage(false)
+    }
+  }
+
+  const handleDeleteChatMessage = async (messageId: number) => {
+    if (!confirm('Are you sure you want to delete this message?')) return
+
+    try {
+      await apiSlice.delete(endpoints.admin.deleteParentMessage(messageId))
+      setChatMessages(prev => prev.filter(m => m.id !== messageId))
+    } catch (err: any) {
+      alert(err?.message || 'Failed to delete message.')
+    }
   }
 
   const handleSendBroadcast = async (e: React.FormEvent) => {
@@ -216,11 +310,17 @@ export function ParentDirectory() {
 
     setIsBroadcasting(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      alert(`Broadcast notification dispatched via EduChat to ${broadcastTarget === 'all' ? 'All Parents' : 'Selected Class Parents'}!`)
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.sendParentBroadcast,
+        { target: broadcastTarget, message: broadcastMessage }
+      )
+      alert(res?.message || 'Broadcast notification dispatched via EduChat!')
       setBroadcastMessage('')
-    } catch (err) {
-      alert('Broadcast failed.')
+      if (selectedParentForChat) {
+        loadChatMessages(selectedParentForChat.id)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Broadcast failed.')
     } finally {
       setIsBroadcasting(false)
     }
@@ -515,64 +615,173 @@ export function ParentDirectory() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left 1/3: Parent Chat Selector */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
-            <h3 className="font-black text-xs text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-              <MessageSquare size={14} className="text-emerald-600" /> EduChat Parent Channels
-            </h3>
-            <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
-              {parents.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedParentForChat(p)}
-                  className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border ${
-                    selectedParentForChat?.id === p.id
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold shadow-2xs'
-                      : 'bg-slate-50/60 border-slate-100 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold truncate">{p.name}</h4>
-                    <p className="text-[10px] text-slate-400 truncate">{p.relation} • {p.mobileno || 'No phone'}</p>
-                  </div>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                </button>
-              ))}
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-xs text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <MessageSquare size={14} className="text-emerald-600" /> EduChat Channels
+              </h3>
+              <span className="text-[10px] font-bold text-slate-400">{parents.length} Parents</span>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+              <input
+                type="text"
+                placeholder="Filter parent chat channel..."
+                value={chatSearchQuery}
+                onChange={e => setChatSearchQuery(e.target.value)}
+                className="w-full pl-7 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="space-y-1.5 max-h-[440px] overflow-y-auto pr-1">
+              {parents
+                .filter(p => !chatSearchQuery || p.name.toLowerCase().includes(chatSearchQuery.toLowerCase()) || p.relation.toLowerCase().includes(chatSearchQuery.toLowerCase()))
+                .map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedParentForChat(p)}
+                    className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between border cursor-pointer ${
+                      selectedParentForChat?.id === p.id
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold shadow-2xs'
+                        : 'bg-slate-50/60 border-slate-100 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="text-xs font-bold truncate">{p.name}</h4>
+                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded uppercase">
+                          {p.relation}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{p.mobileno || p.email || 'No contact info'}</p>
+                    </div>
+                  </button>
+                ))}
             </div>
           </div>
 
           {/* Right 2/3: Live EduChat Window & Broadcast Box */}
           <div className="lg:col-span-2 space-y-6">
             {/* Live Chat Box */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col h-[420px]">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col h-[460px]">
               {/* Chat Header */}
               <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white font-black flex items-center justify-center text-sm shadow-xs">
                     {selectedParentForChat?.name?.[0] || 'P'}
                   </div>
                   <div>
-                    <h4 className="font-bold text-xs text-white">{selectedParentForChat?.name || 'Select a Parent'}</h4>
-                    <p className="text-[10px] text-emerald-300 font-semibold">EduChat Direct Channel • Active Now</p>
+                    <h4 className="font-bold text-xs text-white flex items-center gap-2">
+                      {selectedParentForChat?.name || 'Select a Parent'}
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                    </h4>
+                    <p className="text-[10px] text-emerald-300 font-semibold">
+                      EduChat Channel • {selectedParentForChat?.relation || 'Parent'} ({selectedParentForChat?.mobileno || 'Online'})
+                    </p>
                   </div>
                 </div>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
-                  Powered by EduChat
-                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => selectedParentForChat && loadChatMessages(selectedParentForChat.id)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                    title="Refresh conversation"
+                  >
+                    <RefreshCw size={13} className={isLoadingChat ? 'animate-spin' : ''} />
+                  </button>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    EduChat Direct
+                  </span>
+                </div>
               </div>
 
               {/* Chat Messages Body */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50">
-                {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : 'items-start'}`}>
-                    <div className={`p-3 rounded-2xl text-xs max-w-[75%] leading-relaxed ${
-                      msg.sender === 'admin'
-                        ? 'bg-emerald-600 text-white rounded-br-none shadow-2xs'
-                        : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-none shadow-2xs'
-                    }`}>
-                      {msg.text}
-                    </div>
-                    <span className="text-[9px] font-semibold text-slate-400 mt-1 px-1">{msg.time} • Delivered</span>
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/60">
+                {isLoadingChat ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 gap-2 text-slate-400">
+                    <Loader2 className="animate-spin text-emerald-600" size={24} />
+                    <p className="text-xs font-semibold">Loading EduChat thread...</p>
                   </div>
-                ))}
+                ) : chatMessages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-12 gap-2 text-slate-400 text-center">
+                    <MessageSquare size={28} className="text-slate-300" />
+                    <p className="text-xs font-bold text-slate-600">No previous messages with {selectedParentForChat?.name || 'this parent'}.</p>
+                    <p className="text-[11px] text-slate-400">Type a message below to start live conversation.</p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const isAdmin = msg.senderType === 'ADMIN'
+                    const isEditing = editingMessageId === msg.id
+
+                    return (
+                      <div key={msg.id} className={`flex flex-col group ${isAdmin ? 'items-end' : 'items-start'}`}>
+                        <div className="relative max-w-[80%]">
+                          {isEditing ? (
+                            <div className="p-2.5 bg-white border border-emerald-300 rounded-2xl shadow-md space-y-2">
+                              <textarea
+                                rows={2}
+                                value={editingMessageText}
+                                onChange={e => setEditingMessageText(e.target.value)}
+                                className="w-full text-xs p-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                              />
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setEditingMessageId(null)}
+                                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateChatMessage(msg.id)}
+                                  disabled={isUpdatingMessage}
+                                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"
+                                >
+                                  {isUpdatingMessage ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />} Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`p-3 rounded-2xl text-xs leading-relaxed transition shadow-2xs ${
+                              isAdmin
+                                ? 'bg-emerald-600 text-white rounded-br-none'
+                                : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-none'
+                            }`}>
+                              {msg.message}
+
+                              {/* CRUD Actions Bar on Hover */}
+                              <div className={`absolute top-1 ${isAdmin ? '-left-16' : '-right-16'} opacity-0 group-hover:opacity-100 transition flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-md z-10`}>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingMessageId(msg.id)
+                                      setEditingMessageText(msg.message)
+                                    }}
+                                    className="p-1 text-slate-500 hover:text-blue-600 rounded cursor-pointer"
+                                    title="Edit message"
+                                  >
+                                    <Edit3 size={12} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteChatMessage(msg.id)}
+                                  className="p-1 text-slate-500 hover:text-rose-600 rounded cursor-pointer"
+                                  title="Delete message"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 mt-1 px-1 text-[9px] font-semibold text-slate-400">
+                          <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {msg.updatedAt && <span className="text-amber-600 font-bold">• Edited</span>}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
 
               {/* Chat Input Bar */}
@@ -583,12 +792,14 @@ export function ParentDirectory() {
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:border-emerald-500 bg-slate-50"
+                  disabled={!selectedParentForChat || isSendingChat}
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  disabled={!selectedParentForChat || isSendingChat || !chatInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
                 >
-                  <Send size={13} /> Send
+                  {isSendingChat ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Send
                 </button>
               </form>
             </div>
@@ -605,7 +816,7 @@ export function ParentDirectory() {
                     <select
                       value={broadcastTarget}
                       onChange={e => setBroadcastTarget(e.target.value)}
-                      className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 font-semibold bg-slate-50"
+                      className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 font-semibold bg-slate-50 cursor-pointer"
                     >
                       <option value="all">All School Parents</option>
                       <option value="primary">Primary Section Parents</option>
@@ -615,9 +826,9 @@ export function ParentDirectory() {
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">Dispatch Channels</label>
                     <div className="flex items-center gap-3 pt-1 text-xs font-bold text-slate-700">
-                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked /> EduChat</label>
-                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked /> SMS</label>
-                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked /> Email</label>
+                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked readOnly /> EduChat</label>
+                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked readOnly /> SMS</label>
+                      <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" defaultChecked readOnly /> Email</label>
                     </div>
                   </div>
                 </div>
