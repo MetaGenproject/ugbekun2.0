@@ -15,10 +15,15 @@ import {
   Wallet,
   Calendar,
   BookOpen,
-  CheckSquare
+  CheckSquare,
+  KeyRound,
+  ChevronDown,
+  Edit3,
+  MessageSquare
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherOnboardingModal, EditTeacherModal } from './teacher-modals'
+import { UserCredentialModal } from './user-credential-modal'
 import {
   Table,
   TableHeader,
@@ -28,6 +33,13 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { BranchSetup } from './branch-setup'
 import { OnboardingSetupChecklist } from './onboarding-setup-checklist'
 import { StudentOnboarding } from './student-onboarding'
@@ -123,14 +135,17 @@ interface StudentRow {
 
 interface ParentRow {
   id: number
+  userId?: number
   name: string | null
   relation: string | null
   email: string | null
   mobileno: string | null
   city: string | null
   state: string | null
+  address?: string | null
   studentCount: number
   active?: boolean
+  students?: Array<{ id: number; name?: string; firstName?: string; lastName?: string; className?: string; sectionName?: string }>
 }
 
 interface TeacherRow {
@@ -203,6 +218,9 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [listError, setListError] = useState<string | null>(null)
   const [isLoadingList, setIsLoadingList] = useState(false)
+
+  // User credentials modal state
+  const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
 
   // Student promotion trigger state
   const [promotingStudent, setPromotingStudent] = useState<{ id: number; name: string; currentClass: string } | null>(null)
@@ -458,7 +476,15 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm overflow-hidden">
-          <h3 className="text-base font-extrabold text-slate-900 px-2 py-2">Parents / Guardians</h3>
+          <div className="flex items-center justify-between px-2 py-2">
+            <h3 className="text-base font-extrabold text-slate-900">Parents / Guardians</h3>
+            <button
+              onClick={() => onNavigate?.('parents')}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition cursor-pointer"
+            >
+              Open Full Directory →
+            </button>
+          </div>
           {isLoadingList ? (
             <div className="p-8 text-center text-slate-500">Loading parents...</div>
           ) : parents.length === 0 ? (
@@ -466,31 +492,100 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Relation</TableHead>
-                  <TableHead>Children</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Location</TableHead>
+                <TableRow className="bg-slate-50/80">
+                  <TableHead className="font-extrabold text-slate-800">Parent / Guardian</TableHead>
+                  <TableHead className="font-extrabold text-slate-800">Relation</TableHead>
+                  <TableHead className="font-extrabold text-slate-800 min-w-[200px] max-w-[280px]">Linked Children</TableHead>
+                  <TableHead className="font-extrabold text-slate-800">Phone</TableHead>
+                  <TableHead className="font-extrabold text-slate-800 min-w-[160px] max-w-[220px]">Email</TableHead>
+                  <TableHead className="font-extrabold text-slate-800 min-w-[160px] max-w-[240px]">Location</TableHead>
+                  <TableHead className="font-extrabold text-slate-800 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {parents.map((parent) => (
-                  <TableRow key={parent.id}>
-                    <TableCell>{parent.name || '—'}</TableCell>
-                    <TableCell>{parent.relation || '—'}</TableCell>
-                    <TableCell>{parent.studentCount}</TableCell>
-                    <TableCell>{parent.mobileno || '—'}</TableCell>
-                    <TableCell>{parent.email || '—'}</TableCell>
-                    <TableCell>{[parent.city, parent.state].filter(Boolean).join(', ') || '—'}</TableCell>
-                  </TableRow>
-                ))}
+                {parents.map((parent) => {
+                  const locationParts = [parent.address, parent.city, parent.state].filter(Boolean)
+                  const locationText = locationParts.length > 0 ? Array.from(new Set(locationParts)).join(', ') : '—'
+
+                  return (
+                    <TableRow key={parent.id} className="hover:bg-slate-50/80 transition-colors">
+                      <TableCell className="font-bold text-slate-900 py-3">{parent.name || '—'}</TableCell>
+                      <TableCell className="py-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
+                          {parent.relation || 'Parent'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="max-w-[280px] whitespace-normal break-words py-3">
+                        {parent.students && parent.students.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {parent.students.map((st: any) => {
+                              const stName = st.name || [st.firstName, st.lastName].filter(Boolean).join(' ') || `Child #${st.id}`
+                              const classTag = [st.className, st.sectionName].filter(Boolean).join(' ')
+                              return (
+                                <span
+                                  key={st.id}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-950 border border-blue-200/80 text-[11px] font-bold shadow-2xs"
+                                >
+                                  <span className="truncate max-w-[160px]">{stName}</span>
+                                  {classTag && (
+                                    <span className="text-[9px] font-black text-blue-700 bg-blue-100/90 border border-blue-200/50 px-1 py-0.2 rounded-md">
+                                      {classTag}
+                                    </span>
+                                  )}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <span className="font-bold text-slate-500 text-xs italic">
+                            {parent.studentCount > 0 ? `${parent.studentCount} Child${parent.studentCount === 1 ? '' : 'ren'}` : 'No linked children'}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-slate-800 py-3">{parent.mobileno || '—'}</TableCell>
+                      <TableCell className="max-w-[220px] whitespace-normal break-all text-xs font-semibold text-slate-700 py-3">{parent.email || '—'}</TableCell>
+                      <TableCell className="max-w-[240px] whitespace-normal break-words text-xs font-medium text-slate-600 py-3">{locationText}</TableCell>
+                      <TableCell className="text-right py-3">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs transition cursor-pointer">
+                              Actions <ChevronDown size={13} className="text-slate-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl border-slate-200 bg-white z-50">
+                            <DropdownMenuItem
+                              onClick={() => setManageUserCredentials({ userId: parent.userId || parent.id, name: parent.name || 'Parent', role: 'Parent' })}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-amber-800 rounded-xl hover:bg-amber-50 cursor-pointer"
+                            >
+                              <KeyRound size={14} className="text-amber-600" /> Credentials
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onNavigate?.('parents')}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-800 rounded-xl hover:bg-emerald-50 cursor-pointer"
+                            >
+                              <Users size={14} className="text-emerald-600" /> View Directory
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
               <TableCaption>{parents.length} parent{parents.length === 1 ? '' : 's'} in this branch.</TableCaption>
             </Table>
           )}
         </div>
+
+        {manageUserCredentials && (
+          <UserCredentialModal
+            isOpen={true}
+            userId={manageUserCredentials.userId}
+            userName={manageUserCredentials.name}
+            roleName={manageUserCredentials.role}
+            onClose={() => setManageUserCredentials(null)}
+          />
+        )}
 
         {promotingStudent && (
           <StudentPromotionModal

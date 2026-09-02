@@ -23,7 +23,12 @@ import {
   MapPin,
   Briefcase,
   KeyRound,
-  PhoneCall
+  PhoneCall,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react'
 import {
   Table,
@@ -34,9 +39,25 @@ import {
   TableCell,
   TableCaption,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+
+interface LinkedStudent {
+  id: number
+  name: string
+  registerNo?: string
+  className?: string
+  sectionName?: string
+}
 
 interface ParentRecord {
   id: number
+  userId?: number
   name: string
   relation: string
   mobileno: string | null
@@ -44,6 +65,7 @@ interface ParentRecord {
   city: string | null
   state: string | null
   studentCount: number
+  students?: LinkedStudent[]
   occupation?: string
   address?: string
   status?: 'active' | 'suspended'
@@ -60,9 +82,21 @@ export function ParentDirectory() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, pageSize])
+
   // Edit Parent Modal State
   const [editingParent, setEditingParent] = useState<ParentRecord | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  // Delete Parent Modal State
+  const [deletingParent, setDeletingParent] = useState<ParentRecord | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Manage User Credentials State
   const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
@@ -94,15 +128,17 @@ export function ParentDirectory() {
 
         const formatted: ParentRecord[] = rawList.map((p: any) => ({
           id: p.id,
+          userId: p.userId || p.id,
           name: p.name || `${p.fatherName || ''} ${p.motherName || ''}`.trim() || 'Parent/Guardian',
           relation: p.relation || 'Parent',
           mobileno: p.mobileno || p.phone || '',
           email: p.email || '',
           city: p.city || '',
           state: p.state || '',
-          studentCount: p.studentCount || p._count?.students || (p.students ? p.students.length : 1),
+          studentCount: p.studentCount || p._count?.students || (p.students ? p.students.length : 0),
+          students: p.students || [],
           occupation: p.occupation || 'Guardian',
-          address: p.address || p.city || '',
+          address: p.address || [p.city, p.state].filter(Boolean).join(', ') || '',
           status: p.active === false ? 'suspended' : 'active'
         }))
 
@@ -131,14 +167,37 @@ export function ParentDirectory() {
 
     setIsSavingEdit(true)
     try {
-      // Update local state for instant responsiveness
+      await apiSlice.put(endpoints.admin.updateParent(editingParent.id), {
+        name: editingParent.name,
+        relation: editingParent.relation,
+        mobileno: editingParent.mobileno,
+        email: editingParent.email,
+        occupation: editingParent.occupation,
+        address: editingParent.address,
+      })
       setParents(prev => prev.map(p => p.id === editingParent.id ? editingParent : p))
       setEditingParent(null)
-      alert('Parent information updated successfully!')
-    } catch (err) {
-      alert('Failed to save parent details.')
+      alert('Parent details updated successfully!')
+    } catch (err: any) {
+      alert(err?.message || 'Failed to save parent details.')
     } finally {
       setIsSavingEdit(false)
+    }
+  }
+
+  const handleDeleteParent = async () => {
+    if (!deletingParent) return
+
+    setIsDeleting(true)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteParent(deletingParent.id))
+      setParents(prev => prev.filter(p => p.id !== deletingParent.id))
+      setDeletingParent(null)
+      alert('Parent record deleted successfully.')
+    } catch (err: any) {
+      alert(err?.message || 'Failed to delete parent record.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -169,13 +228,23 @@ export function ParentDirectory() {
 
   const filteredParents = parents.filter(p => {
     const query = searchQuery.toLowerCase()
+    const childrenNames = p.students?.map(s => `${s.name} ${s.className || ''}`).join(' ').toLowerCase() || ''
     return (
       p.name?.toLowerCase().includes(query) ||
       p.email?.toLowerCase().includes(query) ||
       p.mobileno?.toLowerCase().includes(query) ||
-      p.relation?.toLowerCase().includes(query)
+      p.relation?.toLowerCase().includes(query) ||
+      p.address?.toLowerCase().includes(query) ||
+      p.city?.toLowerCase().includes(query) ||
+      childrenNames.includes(query)
     )
   })
+
+  const totalItems = filteredParents.length
+  const totalPages = Math.ceil(totalItems / pageSize) || 1
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, totalItems)
+  const paginatedParents = filteredParents.slice(startIndex, endIndex)
 
   return (
     <div className="space-y-6">
@@ -269,68 +338,172 @@ export function ParentDirectory() {
                 No parent records match your search filter.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Parent / Guardian</TableHead>
-                      <TableHead>Relation</TableHead>
-                      <TableHead>Linked Children</TableHead>
-                      <TableHead>Phone Number</TableHead>
-                      <TableHead>Email Address</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredParents.map((parent) => (
-                      <TableRow key={parent.id} className="hover:bg-slate-50/50">
-                        <TableCell className="font-bold text-slate-900">
-                          <div>{parent.name || '—'}</div>
-                          {parent.occupation && (
-                            <div className="text-[10px] text-slate-400 font-normal">{parent.occupation}</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase">
-                            {parent.relation || 'Parent'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-bold text-slate-800">{parent.studentCount} Child{parent.studentCount === 1 ? '' : 'ren'}</TableCell>
-                        <TableCell className="font-mono text-xs text-slate-700">{parent.mobileno || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-600">{parent.email || '—'}</TableCell>
-                        <TableCell className="text-xs text-slate-500">{parent.address || '—'}</TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <button
-                            onClick={() => setManageUserCredentials({ userId: (parent as any).userId || parent.id, name: parent.name, role: 'Parent' })}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
-                            title="View / Reset Password"
-                          >
-                            <KeyRound size={13} /> Credentials
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedParentForChat(parent)
-                              setActiveTab('educhat')
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
-                            title="Chat with Parent via EduChat"
-                          >
-                            <MessageSquare size={13} /> Chat
-                          </button>
-                          <button
-                            onClick={() => setEditingParent(parent)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
-                            title="Edit Parent Details"
-                          >
-                            <Edit3 size={13} /> Edit
-                          </button>
-                        </TableCell>
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/80">
+                        <TableHead className="font-extrabold text-slate-800">Parent / Guardian</TableHead>
+                        <TableHead className="font-extrabold text-slate-800">Relation</TableHead>
+                        <TableHead className="font-extrabold text-slate-800 min-w-[200px] max-w-[280px]">Linked Children</TableHead>
+                        <TableHead className="font-extrabold text-slate-800">Phone Number</TableHead>
+                        <TableHead className="font-extrabold text-slate-800 min-w-[160px] max-w-[220px]">Email Address</TableHead>
+                        <TableHead className="font-extrabold text-slate-800 min-w-[160px] max-w-[240px]">Location</TableHead>
+                        <TableHead className="font-extrabold text-slate-800 text-right min-w-[120px]">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                  <TableCaption>Showing {filteredParents.length} parent record{filteredParents.length === 1 ? '' : 's'}.</TableCaption>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedParents.map((parent) => {
+                        const locationParts = [parent.address, parent.city, parent.state].filter(Boolean)
+                        const locationText = locationParts.length > 0 ? Array.from(new Set(locationParts)).join(', ') : '—'
+
+                        return (
+                          <TableRow key={parent.id} className="hover:bg-slate-50/80 transition-colors">
+                            <TableCell className="font-bold text-slate-900 py-3.5">
+                              <div className="text-xs font-bold text-slate-900">{parent.name || '—'}</div>
+                              {parent.occupation && (
+                                <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{parent.occupation}</div>
+                              )}
+                            </TableCell>
+
+                            <TableCell className="py-3.5">
+                              <span className="px-2.5 py-1 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
+                                {parent.relation || 'Parent'}
+                              </span>
+                            </TableCell>
+
+                            {/* LINKED CHILDREN (WRAPPED & DISPLAYED) */}
+                            <TableCell className="max-w-[280px] whitespace-normal break-words py-3.5">
+                              {parent.students && parent.students.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {parent.students.map((st: any) => {
+                                    const stName = st.name || [st.firstName, st.lastName].filter(Boolean).join(' ') || `Child #${st.id}`
+                                    const classTag = [st.className, st.sectionName].filter(Boolean).join(' ')
+                                    return (
+                                      <span
+                                        key={st.id}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-950 border border-blue-200/80 text-[11px] font-bold shadow-2xs hover:bg-blue-100 transition"
+                                      >
+                                        <span className="truncate max-w-[180px]">{stName}</span>
+                                        {classTag && (
+                                          <span className="text-[9px] font-black text-blue-700 bg-blue-100/90 border border-blue-200/50 px-1.5 py-0.2 rounded-md">
+                                            {classTag}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="font-bold text-slate-500 text-xs italic">
+                                  {parent.studentCount > 0 ? `${parent.studentCount} Child${parent.studentCount === 1 ? '' : 'ren'}` : 'No linked children'}
+                                </span>
+                              )}
+                            </TableCell>
+
+                            <TableCell className="font-mono text-xs font-semibold text-slate-800 py-3.5">
+                              {parent.mobileno || '—'}
+                            </TableCell>
+
+                            {/* EMAIL ADDRESS (WRAPPED EXPLICITLY) */}
+                            <TableCell className="max-w-[220px] min-w-[150px] whitespace-normal break-all text-xs font-semibold text-slate-700 py-3.5 leading-snug">
+                              {parent.email || '—'}
+                            </TableCell>
+
+                            {/* LOCATION (WRAPPED EXPLICITLY) */}
+                            <TableCell className="max-w-[240px] min-w-[150px] whitespace-normal break-words text-xs font-medium text-slate-600 py-3.5 leading-snug">
+                              {locationText}
+                            </TableCell>
+
+                            {/* ACTIONS DROPDOWN MENU */}
+                            <TableCell className="text-right py-3.5">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 shadow-2xs transition cursor-pointer">
+                                    Actions <ChevronDown size={13} className="text-slate-500" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-2xl shadow-xl border-slate-200 bg-white z-50">
+                                  <DropdownMenuItem
+                                    onClick={() => setManageUserCredentials({ userId: (parent as any).userId || parent.id, name: parent.name, role: 'Parent' })}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-amber-800 rounded-xl hover:bg-amber-50 cursor-pointer"
+                                  >
+                                    <KeyRound size={14} className="text-amber-600" /> Credentials
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedParentForChat(parent)
+                                      setActiveTab('educhat')
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-800 rounded-xl hover:bg-emerald-50 cursor-pointer"
+                                  >
+                                    <MessageSquare size={14} className="text-emerald-600" /> Chat via EduChat
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="my-1 border-slate-100" />
+                                  <DropdownMenuItem
+                                    onClick={() => setEditingParent(parent)}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-blue-800 rounded-xl hover:bg-blue-50 cursor-pointer"
+                                  >
+                                    <Edit3 size={14} className="text-blue-600" /> Edit Record
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setDeletingParent(parent)}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-700 rounded-xl hover:bg-rose-50 cursor-pointer"
+                                  >
+                                    <Trash2 size={14} className="text-rose-600" /> Delete Record
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* PAGINATION CONTROLS */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100 px-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <span>Rows per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={e => setPageSize(Number(e.target.value))}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-bold focus:outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="text-slate-300">|</span>
+                    <span>
+                      Showing <strong className="text-slate-900">{totalItems === 0 ? 0 : startIndex + 1}</strong> to <strong className="text-slate-900">{endIndex}</strong> of <strong className="text-slate-900">{totalItems}</strong> parent records
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-2xs"
+                    >
+                      <ChevronLeft size={14} /> Previous
+                    </button>
+                    
+                    <div className="px-3.5 py-1.5 text-xs font-black text-slate-800 bg-slate-100 rounded-xl border border-slate-200/60">
+                      Page {currentPage} of {totalPages}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-2xs"
+                    >
+                      Next <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -534,13 +707,38 @@ export function ParentDirectory() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Relationship</label>
-                  <input
-                    type="text"
-                    value={editingParent.relation}
-                    onChange={e => setEditingParent({ ...editingParent, relation: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                    required
-                  />
+                  <select
+                    value={['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '') ? editingParent.relation : 'Other'}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val !== 'Other') {
+                        setEditingParent({ ...editingParent, relation: val })
+                      } else if (['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) {
+                        setEditingParent({ ...editingParent, relation: '' })
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white cursor-pointer mb-1.5"
+                  >
+                    <option value="Father">Father</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Guardian">Guardian</option>
+                    <option value="Uncle">Uncle</option>
+                    <option value="Aunt">Aunt</option>
+                    <option value="Grandparent">Grandparent</option>
+                    <option value="Sponsor">Sponsor</option>
+                    <option value="Other">Other (Type below)</option>
+                  </select>
+
+                  {(!['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) && (
+                    <input
+                      type="text"
+                      placeholder="Specify custom relationship (e.g. Stepfather, Next of kin...)"
+                      value={editingParent.relation || ''}
+                      onChange={e => setEditingParent({ ...editingParent, relation: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
+                      required
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Phone Number</label>
@@ -601,6 +799,45 @@ export function ParentDirectory() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PARENT CONFIRMATION MODAL */}
+      {deletingParent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 font-bold">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="font-black text-sm text-slate-900">Delete Parent Record</h3>
+                <p className="text-xs text-slate-500 font-medium">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 font-medium leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100">
+              Are you sure you want to permanently delete parent record for <strong className="text-slate-900">{deletingParent.name}</strong>? Any linked students will be unlinked.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeletingParent(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteParent}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Confirm Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

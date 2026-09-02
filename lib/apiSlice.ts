@@ -89,6 +89,8 @@ export const endpoints = {
   admin: {
     stats: `${BASE_URL}/admin/stats`,
     studentsParents: `${BASE_URL}/admin/students-parents`,
+    deleteParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}`,
+    updateParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}`,
     teachersStaff: `${BASE_URL}/admin/teachers-staff`,
     classesSections: `${BASE_URL}/admin/classes-sections`,
     classroomStudents: (classId: number, sectionId: number) => `${BASE_URL}/admin/classroom-students?classId=${classId}&sectionId=${sectionId}`,
