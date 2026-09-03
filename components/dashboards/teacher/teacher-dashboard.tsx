@@ -61,6 +61,7 @@ import { LiveClassroomHub } from './live-classroom-hub'
 import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
 import { QuestionBankManager } from './question-bank-manager'
+import { TeacherSubjectsHub } from './teacher-subjects-hub'
 import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
 
@@ -284,7 +285,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [hwClassId, setHwClassId] = useState<string>('')
   const [hwSubjectId, setHwSubjectId] = useState<string>('')
   const [hwDueDate, setHwDueDate] = useState<string>('')
+  const [hwQuestions, setHwQuestions] = useState<any[]>([])
   const [publishingHw, setPublishingHw] = useState<boolean>(false)
+
+  // Master Question Bank Import Modal State
+  const [showQBankImportModal, setShowQBankImportModal] = useState<boolean>(false)
+  const [qBankItems, setQBankItems] = useState<any[]>([])
+  const [loadingQBank, setLoadingQBank] = useState<boolean>(false)
+  const [selectedQBankIds, setSelectedQBankIds] = useState<number[]>([])
 
   // Submissions Drawer/Modal State
   const [selectedHwForSubmissions, setSelectedHwForSubmissions] = useState<any | null>(null)
@@ -472,6 +480,52 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
     }
   }
 
+  const handleFetchQuestionBank = async () => {
+    setShowQBankImportModal(true)
+    setLoadingQBank(true)
+    setSelectedQBankIds([])
+    try {
+      let query = ''
+      const params = new URLSearchParams()
+      if (hwSubjectId) params.append('subjectId', hwSubjectId)
+      if (hwClassId) params.append('classId', hwClassId)
+      if (params.toString()) query = `?${params.toString()}`
+
+      const res = await apiSlice.get<{ success: boolean; items?: any[] }>(endpoints.teacher.questionBank(query))
+      if (res.success && res.items) {
+        setQBankItems(res.items)
+      } else {
+        setQBankItems([])
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch Question Bank:', err)
+      showSystemStatus(resolveHttpStatus(500, 'Unable to load Question Bank items.'))
+    } finally {
+      setLoadingQBank(false)
+    }
+  }
+
+  const handleImportSelectedQuestions = () => {
+    const selected = qBankItems.filter((q) => selectedQBankIds.includes(q.id))
+    const formattedNew = selected.map((q) => ({
+      id: q.id || `q_${Date.now()}_${Math.random()}`,
+      questionText: q.questionText,
+      type: q.questionType === 'mcq' ? 'MCQ' : 'THEORY',
+      options: Array.isArray(q.options) ? q.options : [],
+      correctAnswer: q.correctOption || '',
+      points: q.marks || 1,
+    }))
+
+    setHwQuestions((prev) => [...prev, ...formattedNew])
+    setShowQBankImportModal(false)
+    setSelectedQBankIds([])
+    showSystemStatus({
+      type: 'ACTION_SUCCESS',
+      title: 'Import Successful',
+      message: `Imported ${formattedNew.length} question(s) from Master Question Bank!`,
+    })
+  }
+
   const handleCreateHomework = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hwTitle.trim() || !hwClassId || !hwSubjectId || !hwDueDate) return
@@ -482,7 +536,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         description: hwDescription.trim(),
         classId: Number(hwClassId),
         subjectId: Number(hwSubjectId),
-        dueDate: hwDueDate
+        dueDate: hwDueDate,
+        questions: hwQuestions,
       })
       if (res.success && res.homework) {
         setHomeworksList(prev => [res.homework, ...prev])
@@ -491,6 +546,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         setHwClassId('')
         setHwSubjectId('')
         setHwDueDate('')
+        setHwQuestions([])
         setShowCreateHwModal(false)
         showSystemStatus({
           type: 'ACTION_SUCCESS',
@@ -869,12 +925,12 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                     >
                       <option value="">Select Class</option>
                       {profile.formAllocations.map((fa) => (
-                        <option key={fa.classId} value={fa.classId}>
+                        <option key={`fa-${fa.classId}-${fa.sectionId || ''}`} value={fa.classId}>
                           {fa.className} ({fa.sectionName})
                         </option>
                       ))}
-                      {profile.subjectAssignments.map((sa) => (
-                        <option key={sa.classId} value={sa.classId}>
+                      {profile.subjectAssignments.map((sa, idx) => (
+                        <option key={`sa-${sa.classId}-${sa.subjectId}-${idx}`} value={sa.classId}>
                           {sa.className} ({sa.sectionName})
                         </option>
                       ))}
@@ -890,8 +946,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
                     >
                       <option value="">Select Subject</option>
-                      {profile.subjectAssignments.map((sa) => (
-                        <option key={sa.subjectId} value={sa.subjectId}>
+                      {profile.subjectAssignments.map((sa, idx) => (
+                        <option key={`subj-${sa.subjectId}-${idx}`} value={sa.subjectId}>
                           {sa.subjectName}
                         </option>
                       ))}
@@ -913,12 +969,65 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Description / Instructions</label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     placeholder="Instructions for students..."
                     value={hwDescription}
                     onChange={(e) => setHwDescription(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
                   />
+                </div>
+
+                {/* Questions & Master Question Bank Import Section */}
+                <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                        <Sparkles size={15} className="text-purple-600" />
+                        Assignment Questions ({hwQuestions.length})
+                      </h4>
+                      <p className="text-[10px] text-slate-500">Import questions from Master Question Bank or add custom items.</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleFetchQuestionBank}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <Sparkles size={13} />
+                      <span>Import from Question Bank</span>
+                    </button>
+                  </div>
+
+                  {/* Attached Questions Preview List */}
+                  {hwQuestions.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {hwQuestions.map((q, idx) => (
+                        <div key={idx} className="p-2.5 bg-white rounded-xl border border-purple-200/60 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-extrabold text-[10px] flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="font-semibold text-slate-800 text-xs truncate max-w-xs">{q.questionText}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold shrink-0">
+                              {q.type} ({q.points} pt)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setHwQuestions(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-rose-500 hover:text-rose-700 p-1 text-xs font-bold cursor-pointer shrink-0"
+                            title="Remove Question"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-slate-400 text-[11px] italic bg-white/60 rounded-xl border border-dashed border-purple-200">
+                      No questions attached yet. Click &quot;Import from Question Bank&quot; to load master questions.
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
@@ -938,6 +1047,119 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Master Question Bank Import Modal */}
+        {showQBankImportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="relative w-full max-w-xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <Sparkles className="text-purple-600" size={20} />
+                    Import Master Questions
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Select questions from your school Master Question Bank to attach to this assignment.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowQBankImportModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-1">
+                {loadingQBank ? (
+                  <div className="py-12 text-center space-y-2">
+                    <Loader2 size={30} className="animate-spin text-purple-600 mx-auto" />
+                    <p className="font-bold text-slate-600">Loading Master Question Bank...</p>
+                  </div>
+                ) : qBankItems.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs italic bg-slate-50 rounded-2xl border border-slate-200">
+                    No questions found in the Master Question Bank for this subject/class.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+                      <span>Available Questions ({qBankItems.length})</span>
+                      <span>Selected ({selectedQBankIds.length})</span>
+                    </div>
+
+                    {qBankItems.map((q) => {
+                      const isSelected = selectedQBankIds.includes(q.id)
+                      return (
+                        <div
+                          key={q.id}
+                          onClick={() => {
+                            setSelectedQBankIds((prev) =>
+                              isSelected ? prev.filter((id) => id !== q.id) : [...prev, q.id]
+                            )
+                          }}
+                          className={`p-3.5 rounded-2xl border transition cursor-pointer space-y-2 ${
+                            isSelected
+                              ? 'bg-purple-50/80 border-purple-400 ring-2 ring-purple-500/20'
+                              : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/70'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-4 h-4 text-purple-600 rounded-md border-slate-300 focus:ring-purple-500 cursor-pointer"
+                              />
+                              <span className="font-bold text-slate-900 text-xs">{q.questionText}</span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-bold shrink-0">
+                              {q.questionType?.toUpperCase() || 'MCQ'} ({q.marks || 1} pt)
+                            </span>
+                          </div>
+
+                          {Array.isArray(q.options) && q.options.length > 0 && (
+                            <div className="pl-6 grid grid-cols-2 gap-1.5 text-[11px] text-slate-600">
+                              {q.options.map((opt: string, oIdx: number) => (
+                                <div key={oIdx} className="bg-white/80 px-2 py-1 rounded-lg border border-slate-200/60 truncate">
+                                  &bull; {opt}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 flex items-center justify-between border-t border-slate-100 mt-4">
+                <span className="text-xs font-bold text-slate-600">
+                  {selectedQBankIds.length} question(s) selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQBankImportModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportSelectedQuestions}
+                    disabled={selectedQBankIds.length === 0}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-md cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Sparkles size={14} />
+                    <span>Import Selected</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1080,6 +1302,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   }
   if (activeSection === 'cbt-exams' || activeSection === 'question-bank') {
     return <QuestionBankManager profile={profile} />
+  }
+  if (activeSection === 'subjects' || activeSection === 'my-subjects' || activeSection === 'subject-session') {
+    return <TeacherSubjectsHub profile={profile} onNavigate={onNavigate} />
   }
   if (activeSection === 'calendar') {
     return <SchoolCalendar user={user} />

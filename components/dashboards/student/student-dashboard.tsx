@@ -32,6 +32,7 @@ import {
   Bell,
   ChevronRight,
   ArrowRight,
+  ArrowLeft,
   Star,
   Award,
   Sparkles,
@@ -720,30 +721,122 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     }
   }
 
+function normalizeQuestions(raw: any): any[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return normalizeQuestions(parsed)
+    } catch {
+      return []
+    }
+  }
+  if (typeof raw === 'object' && Array.isArray(raw.questions)) {
+    return raw.questions
+  }
+  return []
+}
+
+  const [hwAnswersMap, setHwAnswersMap] = useState<Record<string, string>>({})
+
   // Homework submission
-  const handleOpenHwSubmit = (hw: any) => {
-    setSelectedHomework(hw)
-    setSubmissionContent('')
+  const handleOpenHwSubmit = async (hw: any) => {
+    setSelectedHomework({
+      ...hw,
+      score: hw.submissionScore ?? hw.score ?? null,
+      submissionScore: hw.submissionScore ?? hw.score ?? null,
+      feedback: hw.feedback || null,
+      questions: normalizeQuestions(hw.questions),
+    })
+    setSubmissionContent(hw.submission?.answers?.[0]?.notes || '')
+    setHwAnswersMap({})
     setHwSuccessMsg(null)
     setShowSubmitHwModal(true)
+
+    try {
+      const res = await apiSlice.get<{ success: boolean; homework?: any }>(endpoints.student.homeworkDetail(hw.id))
+      if (res.success && res.homework) {
+        const normQ = normalizeQuestions(res.homework.questions)
+        const sub = res.homework.submission
+        const finalScore = res.homework.score ?? res.homework.submissionScore ?? sub?.score ?? hw.submissionScore ?? hw.score ?? null
+        const finalFeedback = res.homework.feedback ?? sub?.feedback ?? hw.feedback ?? null
+        
+        // Populate previous answers if already submitted
+        const subAnswers = sub?.answers || []
+        const mappedAnswers: Record<string, string> = {}
+        if (Array.isArray(subAnswers)) {
+          for (const item of subAnswers) {
+            if (item && item.questionId !== undefined) {
+              mappedAnswers[String(item.questionId)] = item.answerText || ''
+            }
+          }
+        }
+        setHwAnswersMap(mappedAnswers)
+        if (sub?.answers?.[0]?.notes) {
+          setSubmissionContent(sub.answers[0].notes)
+        }
+
+        setSelectedHomework((prev: any) => ({
+          ...prev,
+          ...res.homework,
+          score: finalScore,
+          submissionScore: finalScore,
+          feedback: finalFeedback,
+          submitted: res.homework.submitted ?? !!sub ?? prev?.submitted,
+          questions: normQ,
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to load full homework detail:', err)
+    }
   }
 
   const handleSubmitHomework = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedHomework || !submissionContent.trim()) return
+    if (!selectedHomework) return
+
+    const questions = normalizeQuestions(selectedHomework.questions)
+    let payloadAnswers: any[] = []
+
+    if (questions.length > 0) {
+      payloadAnswers = questions.map((q: any) => ({
+        questionId: q.id,
+        answerText: hwAnswersMap[q.id] || '',
+      }))
+    }
+
     try {
       setSubmittingHw(true)
       setHwSuccessMsg(null)
-      const res = await apiSlice.post<{ success: boolean; message: string }>(endpoints.student.submitHomework(selectedHomework.id), {
-        notes: submissionContent.trim()
-      })
+      const res = await apiSlice.post<{ success: boolean; message: string; submission?: any }>(
+        endpoints.student.submitHomework(selectedHomework.id),
+        {
+          answers: payloadAnswers.length > 0 ? payloadAnswers : undefined,
+          notes: submissionContent.trim() || 'Submitted',
+        }
+      )
       if (res.success) {
         setHwSuccessMsg('Homework submitted successfully to your teacher!')
         if (tasks) {
-          setTasks(prev => prev ? {
-            ...prev,
-            homeworks: prev.homeworks.map(h => h.id === selectedHomework.id ? { ...h, submitted: true, submittedAt: new Date().toISOString() } : h)
-          } : null)
+          setTasks((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  homeworks: prev.homeworks.map((h) =>
+                    h.id === selectedHomework.id
+                      ? {
+                          ...h,
+                          submitted: true,
+                          submittedAt: new Date().toISOString(),
+                          submissionScore: res.submission?.score ?? null,
+                          submissionStatus: res.submission?.score !== null ? 'GRADED' : 'SUBMITTED',
+                        }
+                      : h
+                  ),
+                }
+              : null
+          )
         }
         setTimeout(() => {
           setShowSubmitHwModal(false)
@@ -1408,8 +1501,260 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
 
   // 9. ASSIGNMENTS & HOMEWORKS SUB-VIEW
   if (activeSection === 'assignments' || activeSection === 'tasks') {
-    const hwList = tasks?.homeworks || []
+    const rawHwList = tasks?.homeworks?.length ? tasks.homeworks : (dashboardOverview?.upcomingHomeworks || [])
     const notesList = tasks?.notes || []
+
+    // When an assignment is active (Attempting or Reviewing)
+    if (showSubmitHwModal && selectedHomework) {
+      const activeQs = normalizeQuestions(selectedHomework.questions)
+
+      return (
+        <div className="space-y-6 pb-12 font-sans">
+          {/* Top Bar with Back Button */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubmitHwModal(false)
+                  setSelectedHomework(null)
+                  setHwSuccessMsg(null)
+                }}
+                className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer flex items-center gap-1.5 font-bold text-xs"
+              >
+                <ArrowLeft size={16} />
+                <span>Back to Assignments</span>
+              </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-700 font-bold text-[11px]">
+                    {selectedHomework.subjectName}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    Due: {new Date(selectedHomework.dueDate).toLocaleDateString()}
+                  </span>
+                  {selectedHomework.submitted && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">
+                      ✓ Submitted
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mt-1">
+                  {selectedHomework.title}
+                </h2>
+              </div>
+            </div>
+
+            {activeQs.length > 0 && (
+              <span className="px-3.5 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold shrink-0 flex items-center gap-1.5">
+                <Sparkles size={14} />
+                <span>{activeQs.length} Questions • Auto-Grading Enabled</span>
+              </span>
+            )}
+          </div>
+
+          {hwSuccessMsg && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold flex items-center gap-2">
+              <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+              <span>{hwSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Grade & Teacher Evaluation Card if submitted */}
+          {selectedHomework.submitted && (
+            <div className="bg-linear-to-r from-emerald-500/10 via-blue-500/10 to-indigo-500/10 rounded-3xl p-6 border border-emerald-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-extrabold text-xl shadow-md shrink-0">
+                  {selectedHomework.score !== null && selectedHomework.score !== undefined
+                    ? selectedHomework.score
+                    : '✓'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                      {selectedHomework.score !== null && selectedHomework.score !== undefined
+                        ? 'Teacher Grade & Evaluation'
+                        : 'Submission Status'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px]">
+                      {selectedHomework.score !== null && selectedHomework.score !== undefined ? 'GRADED' : 'SUBMITTED'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 mt-0.5">
+                    {selectedHomework.score !== null && selectedHomework.score !== undefined
+                      ? `Score Awarded: ${selectedHomework.score} pts`
+                      : 'Assignment Submitted • Awaiting Teacher Grade'}
+                  </h3>
+                  {selectedHomework.feedback && (
+                    <p className="text-xs text-slate-700 mt-1.5 font-medium bg-white/70 p-2.5 rounded-xl border border-emerald-100">
+                      <span className="font-bold text-indigo-700">Teacher Feedback:</span> &quot;{selectedHomework.feedback}&quot;
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {selectedHomework.score !== null && selectedHomework.score !== undefined && (
+                <div className="px-5 py-2.5 bg-white rounded-2xl border border-emerald-200 shadow-2xs text-center shrink-0">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
+                  <span className="text-sm font-black text-emerald-600">EVALUATED</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Description / Instructions */}
+          {selectedHomework.description && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Assignment Instructions</h3>
+              <p className="text-xs text-slate-700 leading-relaxed">{selectedHomework.description}</p>
+            </div>
+          )}
+
+          {/* Questions Sheet / Submission Form */}
+          <form onSubmit={handleSubmitHomework} className="space-y-6">
+            {activeQs.length > 0 ? (
+              <div className="space-y-4">
+                {activeQs.map((q: any, idx: number) => {
+                  const qType = String(q.type || q.questionType || '').toUpperCase()
+                  const currentAns = hwAnswersMap[q.id] || ''
+
+                  return (
+                    <div key={q.id || idx} className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <span className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-sm leading-snug">
+                              {q.questionText}
+                            </h4>
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              Question {idx + 1} of {activeQs.length}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold shrink-0">
+                          {q.points || q.marks || 1} pt
+                        </span>
+                      </div>
+
+                      {/* MCQ Options */}
+                      {qType === 'MCQ' && Array.isArray(q.options) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                          {q.options.map((opt: string, oIdx: number) => {
+                            const isSelected = currentAns === opt || currentAns === String(oIdx)
+                            return (
+                              <button
+                                type="button"
+                                key={oIdx}
+                                disabled={selectedHomework.submitted}
+                                onClick={() => setHwAnswersMap((prev) => ({ ...prev, [q.id]: opt }))}
+                                className={`p-4 rounded-2xl border text-xs font-bold transition cursor-pointer flex items-center justify-between text-left ${
+                                  isSelected
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300'
+                                    : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                                }`}
+                              >
+                                <span>{opt}</span>
+                                {isSelected && <CheckCircle2 size={18} className="text-white shrink-0" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* True / False Options */}
+                      {qType === 'TF' && (
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                          {['True', 'False'].map((tfOpt) => {
+                            const isSelected = currentAns.toLowerCase() === tfOpt.toLowerCase()
+                            return (
+                              <button
+                                type="button"
+                                key={tfOpt}
+                                disabled={selectedHomework.submitted}
+                                onClick={() => setHwAnswersMap((prev) => ({ ...prev, [q.id]: tfOpt }))}
+                                className={`py-3.5 rounded-2xl border text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 ${
+                                  isSelected
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300'
+                                    : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span>{tfOpt}</span>
+                                {isSelected && <CheckCircle2 size={18} className="text-white" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Theory / Short Answer Input */}
+                      {(qType === 'THEORY' || qType === 'SHORT') && (
+                        <div className="pt-2">
+                          <textarea
+                            rows={4}
+                            disabled={selectedHomework.submitted}
+                            placeholder="Type your explanation or response here..."
+                            value={currentAns}
+                            onChange={(e) => setHwAnswersMap((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+                <label className="block font-bold text-slate-800 text-xs">Your Solution / Answer Notes *</label>
+                <textarea
+                  required
+                  rows={6}
+                  disabled={selectedHomework.submitted}
+                  placeholder="Type your answers, solutions or comments here..."
+                  value={submissionContent}
+                  onChange={(e) => setSubmissionContent(e.target.value)}
+                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition"
+                />
+              </div>
+            )}
+
+            {/* Bottom Actions Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubmitHwModal(false)
+                  setSelectedHomework(null)
+                  setHwSuccessMsg(null)
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer flex items-center gap-1.5"
+              >
+                <ArrowLeft size={14} />
+                <span>Return to Homeworks List</span>
+              </button>
+
+              {!selectedHomework.submitted ? (
+                <button
+                  type="submit"
+                  disabled={submittingHw}
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md cursor-pointer flex items-center gap-2 transition"
+                >
+                  <Upload size={15} />
+                  <span>{submittingHw ? 'Submitting Answers...' : 'Submit Completed Assignment'}</span>
+                </button>
+              ) : (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200">
+                  ✓ Assignment Already Submitted
+                </span>
+              )}
+            </div>
+          </form>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-6 pb-12 font-sans">
@@ -1428,38 +1773,61 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
         {/* Homeworks List */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-            Assigned Homeworks ({hwList.length})
+            Assigned Homeworks ({rawHwList.length})
           </h3>
 
-          {hwList.length > 0 ? (
+          {rawHwList.length > 0 ? (
             <div className="space-y-3">
-              {hwList.map((hw) => (
+              {rawHwList.map((hw: any) => (
                 <div key={hw.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-md">
                         {hw.subjectName}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${hw.submitted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {hw.submitted ? 'Submitted' : 'Pending'}
-                      </span>
+                      {hw.submissionScore !== null && hw.submissionScore !== undefined ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shadow-2xs">
+                          ★ Graded: {hw.submissionScore} pts
+                        </span>
+                      ) : hw.submitted ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                          ✓ Submitted (Awaiting Grade)
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                          Pending
+                        </span>
+                      )}
                     </div>
                     <h4 className="text-sm font-bold text-slate-900">{hw.title}</h4>
                     <p className="text-xs text-slate-500">Due: {new Date(hw.dueDate).toLocaleDateString()}</p>
                     {hw.feedback && (
-                      <p className="text-xs text-indigo-700 bg-indigo-50 p-2 rounded-xl mt-1">Teacher Feedback: {hw.feedback}</p>
+                      <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100/80 p-2.5 rounded-xl mt-1.5 font-medium flex items-center gap-1.5">
+                        <MessageSquare size={13} className="shrink-0 text-indigo-500" />
+                        <span>Teacher Feedback: &quot;{hw.feedback}&quot;</span>
+                      </p>
                     )}
                   </div>
 
-                  {!hw.submitted && (
-                    <button
-                      onClick={() => handleOpenHwSubmit(hw)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 shrink-0"
-                    >
-                      <Upload size={14} />
-                      <span>Submit Assignment</span>
-                    </button>
-                  )}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {hw.submitted ? (
+                      <button
+                        onClick={() => handleOpenHwSubmit(hw)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Eye size={14} className="text-blue-600" />
+                        <span>{hw.submissionScore !== null && hw.submissionScore !== undefined ? 'View Graded Assignment' : 'View Submission'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenHwSubmit(hw)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Sparkles size={14} />
+                        <span>Attempt Assignment</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -2401,19 +2769,40 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
                 {homeworksList.length > 0 ? (
                   <div className="space-y-2.5">
                     {homeworksList.map((hw: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                      <div
+                        key={idx}
+                        onClick={() => handleOpenHwSubmit(hw)}
+                        className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-blue-300 hover:bg-slate-100/60 transition cursor-pointer flex items-center justify-between gap-3 group"
+                      >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 group-hover:bg-blue-600 text-blue-600 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
                             <FileText size={16} />
                           </div>
                           <div>
-                            <h4 className="text-xs font-bold text-slate-900">{hw.title}</h4>
-                            <p className="text-[10px] text-slate-500 font-medium">{new Date(hw.dueDate).toLocaleDateString()}</p>
+                            <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{hw.title}</h4>
+                            <p className="text-[10px] text-slate-500 font-medium">Due: {new Date(hw.dueDate).toLocaleDateString()}</p>
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                          {hw.deadlineBadge}
-                        </span>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${hw.submitted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                            {hw.submitted ? '✓ Submitted' : hw.deadlineBadge || 'Pending'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenHwSubmit(hw)
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition shadow-2xs ${
+                              hw.submitted
+                                ? 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                          >
+                            {hw.submitted ? 'View' : 'Attempt'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2643,68 +3032,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
 
       </div>
 
-      {/* Homework Submission Modal */}
-      {showSubmitHwModal && selectedHomework && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Upload className="text-blue-600" size={20} />
-                <span>Submit Homework Assignment</span>
-              </h3>
-              <button
-                onClick={() => setShowSubmitHwModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            {hwSuccessMsg && (
-              <div className="p-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-                {hwSuccessMsg}
-              </div>
-            )}
-
-            <div className="mb-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1">
-              <span className="font-bold text-slate-900 block">{selectedHomework.title}</span>
-              <span className="text-[11px] text-blue-600 font-semibold">{selectedHomework.subjectName}</span>
-              <span className="text-[10px] text-slate-400 block">Due: {new Date(selectedHomework.dueDate).toLocaleDateString()}</span>
-            </div>
-
-            <form onSubmit={handleSubmitHomework} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Your Solution / Answer Notes *</label>
-                <textarea
-                  required
-                  rows={5}
-                  placeholder="Type your answers, solutions or comments here..."
-                  value={submissionContent}
-                  onChange={(e) => setSubmissionContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowSubmitHwModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingHw}
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md cursor-pointer"
-                >
-                  {submittingHw ? 'Submitting...' : 'Submit to Teacher'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Message Modal */}
       {showMsgModal && (
