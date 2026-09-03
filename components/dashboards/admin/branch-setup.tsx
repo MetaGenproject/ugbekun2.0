@@ -68,7 +68,7 @@ interface Teacher {
 }
 
 export function BranchSetup() {
-  const [activeTab, setActiveTab] = useState<'classrooms' | 'subjects' | 'exams'>('classrooms')
+  const [activeTab, setActiveTab] = useState<'classrooms' | 'subjects'>('classrooms')
 
   // Classes & Sections state
   const [classes, setClasses] = useState<ClassData[]>([])
@@ -235,8 +235,6 @@ export function BranchSetup() {
   useEffect(() => {
     if (activeTab === 'subjects') {
       loadSubjects()
-    } else if (activeTab === 'exams') {
-      loadExams()
     }
   }, [activeTab])
 
@@ -615,21 +613,15 @@ export function BranchSetup() {
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 p-1 rounded-xl">
             <button 
               onClick={() => setActiveTab('classrooms')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition duration-200 ${activeTab === 'classrooms' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition duration-200 cursor-pointer ${activeTab === 'classrooms' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
               <Layers size={14} /> Classrooms
             </button>
             <button 
               onClick={() => setActiveTab('subjects')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition duration-200 ${activeTab === 'subjects' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition duration-200 cursor-pointer ${activeTab === 'subjects' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
               <BookOpen size={14} /> Curriculum
-            </button>
-            <button 
-              onClick={() => setActiveTab('exams')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs transition duration-200 ${activeTab === 'exams' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <Award size={14} /> Evaluation Matrix
             </button>
           </div>
         </div>
@@ -1349,166 +1341,6 @@ export function BranchSetup() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* EXAMS TAB */}
-          {activeTab === 'exams' && (
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* Exam creation panel */}
-              <div className="space-y-6 lg:col-span-1">
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Plus size={16} className="text-blue-600" /> Create Academic Exam
-                  </h3>
-                  <form onSubmit={handleCreateExam} className="space-y-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Exam Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. 1st Term Examination, Mid-Term CA" 
-                        value={newExamName}
-                        onChange={e => setNewExamName(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Mark Evaluation Metrics (Distributions)</label>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="e.g. Classwork, Exam, Project" 
-                          value={distInput}
-                          onChange={e => setDistInput(e.target.value)}
-                          className="flex-1 text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
-                        />
-                        <button 
-                          type="button"
-                          onClick={addDistChip}
-                          className="px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-extrabold text-xs cursor-pointer"
-                        >
-                          Add
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {newExamDist.length === 0 ? (
-                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                            <Info size={10} /> Add grading criteria columns (e.g. Test, Examination)
-                          </span>
-                        ) : (
-                          newExamDist.map((chip, idx) => (
-                            <span 
-                              key={idx} 
-                              onClick={() => setNewExamDist(newExamDist.filter((_, i) => i !== idx))}
-                              className="text-[10px] bg-blue-50 border border-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer hover:bg-rose-50 hover:border-rose-100 hover:text-rose-600 transition"
-                            >
-                              {chip} <span className="font-extrabold">×</span>
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1">Remarks / Description</label>
-                      <textarea 
-                        placeholder="Evaluation instructions..." 
-                        value={newExamRemark}
-                        onChange={e => setNewExamRemark(e.target.value)}
-                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-20 resize-none"
-                      />
-                    </div>
-                    <button 
-                      type="submit" 
-                      disabled={isSubmittingExam}
-                      className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm shadow-blue-500/10"
-                    >
-                      {isSubmittingExam ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                      Deploy Exam Matrix
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Exam listing workspace */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <Award size={16} className="text-blue-600" /> Active Evaluation Matrices
-                    </span>
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                      {exams.length} Matrices
-                    </span>
-                  </h3>
-                  {exams.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 text-sm font-semibold bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                      No exams configured yet. Complete the form to deploy an evaluation matrix.
-                    </div>
-                  ) : (
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {exams.map(ex => {
-                        let parsedDist: string[] = []
-                        try {
-                          parsedDist = JSON.parse(ex.markDistribution)
-                        } catch {
-                          parsedDist = []
-                        }
-                        return (
-                          <div 
-                            key={ex.id}
-                            className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col justify-between min-h-36 hover:shadow-sm"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <span className="text-xs font-bold text-slate-400">Exam ID #{ex.id}</span>
-                                <h4 className="font-extrabold text-slate-800 text-base mt-0.5">{ex.name}</h4>
-                                {ex.remark && <p className="text-[11px] text-slate-500 mt-1">{ex.remark}</p>}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingExam(ex)
-                                    setEditExamDist(parsedDist)
-                                  }}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition cursor-pointer"
-                                  title="Edit Exam"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeletingExamId(ex.id)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition cursor-pointer"
-                                  title="Delete Exam"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5 mt-3">
-                              <span className="text-[9px] text-slate-400 font-bold uppercase block">Grading Columns Bound:</span>
-                              <div className="flex flex-wrap gap-1">
-                                {parsedDist.length === 0 ? (
-                                  <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-md font-bold uppercase">General Score</span>
-                                ) : (
-                                  parsedDist.map((dId, idx) => (
-                                    <span key={idx} className="text-[9px] bg-emerald-50 border border-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold uppercase">
-                                      {dId}
-                                    </span>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
                     </div>
                   )}
                 </div>

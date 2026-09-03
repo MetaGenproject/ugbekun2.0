@@ -41,8 +41,10 @@ import {
 } from '@/components/ui/table'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
+import { EvaluationMatrices } from './evaluation-matrices'
 
 type ExamTab = 
+  | 'evaluation-matrix'
   | 'exam-setup-manual' 
   | 'exam-setup-cbt' 
   | 'ca-entry' 
@@ -72,8 +74,12 @@ interface ExamRecord {
   remark?: string
 }
 
-export function ExamCbtManagement() {
-  const [activeTab, setActiveTab] = useState<ExamTab>('exam-setup-cbt')
+interface ExamCbtManagementProps {
+  initialTab?: ExamTab
+}
+
+export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtManagementProps) {
+  const [activeTab, setActiveTab] = useState<ExamTab>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Data State
@@ -251,31 +257,39 @@ export function ExamCbtManagement() {
 
       {/* Sub-Module Tabs Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs">
-        <button onClick={() => setActiveTab('exam-setup-manual')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'exam-setup-manual' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('evaluation-matrix')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'evaluation-matrix' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+          ⚖️ Evaluation Matrix
+        </button>
+        <button onClick={() => setActiveTab('exam-setup-manual')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'exam-setup-manual' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📝 Exam Setup (Manual)
         </button>
-        <button onClick={() => setActiveTab('exam-setup-cbt')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'exam-setup-cbt' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('exam-setup-cbt')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'exam-setup-cbt' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           💻 Exam Setup (CBT)
         </button>
-        <button onClick={() => setActiveTab('ca-entry')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'ca-entry' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('ca-entry')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'ca-entry' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📊 CA Entry (+CBT Score)
         </button>
-        <button onClick={() => setActiveTab('cbt-exam')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'cbt-exam' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('cbt-exam')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'cbt-exam' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           🖥️ CBT Exam Portal
         </button>
-        <button onClick={() => setActiveTab('question-bank')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'question-bank' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('question-bank')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'question-bank' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📚 Question Bank
         </button>
-        <button onClick={() => setActiveTab('ai-generator')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'ai-generator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('ai-generator')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'ai-generator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           🤖 AI Question Generator
         </button>
-        <button onClick={() => setActiveTab('results-processing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'results-processing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('results-processing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'results-processing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           ⚙️ Results Processing
         </button>
-        <button onClick={() => setActiveTab('result-publishing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'result-publishing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+        <button onClick={() => setActiveTab('result-publishing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'result-publishing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📢 Result Publishing
         </button>
       </div>
+
+      {/* 0. EVALUATION MATRIX */}
+      {activeTab === 'evaluation-matrix' && (
+        <EvaluationMatrices />
+      )}
 
       {/* 1. EXAM SETUP MANUAL */}
       {activeTab === 'exam-setup-manual' && (

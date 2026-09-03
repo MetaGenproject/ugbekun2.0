@@ -652,7 +652,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   }
 
   if (activeSection === 'evaluation-matrices') {
-    return <EvaluationMatrices />
+    return <ExamCbtManagement initialTab="evaluation-matrix" />
   }
 
   if (activeSection === 'marks-entry') {

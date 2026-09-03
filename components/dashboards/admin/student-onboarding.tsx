@@ -1137,8 +1137,12 @@ export function StudentOnboarding() {
 
     const selectedClass = classes.find(c => c.id === Number(studentForm.classId))
     if (selectedClass) {
-      setAvailableSections(selectedClass.sections.map(s => s.section))
-      setStudentForm(s => ({ ...s, sectionId: '' }))
+      const secs = selectedClass.sections.map(s => s.section)
+      setAvailableSections(secs)
+      setStudentForm(s => ({
+        ...s,
+        sectionId: secs.length > 0 ? String(secs[0].id) : ''
+      }))
     }
   }, [studentForm.classId, classes])
 
@@ -1221,16 +1225,20 @@ export function StudentOnboarding() {
     const pEmail = parentForm.email.trim()
     const pPhone = parentForm.mobileno.trim()
 
-    if (sName && sLastName && studentForm.classId && studentForm.sectionId && pName && (pEmail || pPhone)) {
+    if (sName && sLastName && studentForm.classId && pName && (pEmail || pPhone)) {
       const selectedClass = classes.find(c => c.id === Number(studentForm.classId))
       const classLabel = selectedClass ? selectedClass.name : ''
-      const selectedSection = availableSections.find(s => s.id === Number(studentForm.sectionId))
-      const sectionLabel = selectedSection ? selectedSection.name : ''
+      const secs = selectedClass?.sections.map(s => s.section) || []
+      const effectiveSectionId = studentForm.sectionId || (secs.length > 0 ? String(secs[0].id) : '1')
+      const selectedSection = availableSections.find(s => s.id === Number(effectiveSectionId))
+      const sectionLabel = selectedSection ? selectedSection.name : (secs[0]?.name || '')
 
       itemsToSubmit.push({
         id: 'active-form',
         student: {
           ...studentForm,
+          classId: String(studentForm.classId),
+          sectionId: String(effectiveSectionId),
           firstName: sName,
           lastName: sLastName,
         },
