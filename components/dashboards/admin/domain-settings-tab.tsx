@@ -59,7 +59,7 @@ export function DomainSettingsTab() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [probeResult, setProbeResult] = useState<any | null>(null)
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+  const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
 
   const getAdminToken = () => {
     if (typeof window === 'undefined') return ''

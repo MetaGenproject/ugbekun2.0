@@ -20,7 +20,7 @@ function TenantHomeContent() {
     setError(null)
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+      const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
       const query = new URLSearchParams()
       if (domainParam) query.set('domain', domainParam)
       if (subdomainParam) query.set('subdomain', subdomainParam)

@@ -27,7 +27,7 @@ export function SchoolSelector() {
     async function loadLiveSchools() {
       setIsLoading(true)
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+        const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
         const res = await fetch(`${backendUrl}/api/public/tenant/schools${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`)
         const json = await res.json()
         if (!isCancelled && json.success && Array.isArray(json.data)) {

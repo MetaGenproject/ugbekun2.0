@@ -54,7 +54,7 @@ export function SuperadminSchoolCmsEditor() {
   // Form State
   const [cmsData, setCmsData] = useState<SchoolHomepageData | null>(null)
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+  const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
 
   const getSuperadminToken = () => {
     if (typeof window === 'undefined') return ''

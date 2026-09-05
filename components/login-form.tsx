@@ -26,7 +26,7 @@ export function LoginForm() {
   useEffect(() => {
     const fetchBranding = async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+        const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
         const host = typeof window !== 'undefined' ? window.location.hostname : ''
         const res = await fetch(`${backendUrl}/api/public/tenant/branding?domain=${host}`)
         const json = await res.json()
