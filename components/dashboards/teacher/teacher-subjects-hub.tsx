@@ -358,9 +358,9 @@ export function TeacherSubjectsHub({ profile, onNavigate }: TeacherSubjectsHubPr
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSubjects.map((sub) => (
+          {filteredSubjects.map((sub, idx) => (
             <div
-              key={sub.id}
+              key={`subj-card-${sub.id}-${idx}`}
               className="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between overflow-hidden group"
             >
               {/* Card Header */}
@@ -448,7 +448,7 @@ export function TeacherSubjectsHub({ profile, onNavigate }: TeacherSubjectsHubPr
               </thead>
               <tbody className="divide-y divide-slate-200/60 font-medium text-slate-700">
                 {filteredSubjects.map((sub, idx) => (
-                  <tr key={sub.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={`subj-row-${sub.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 font-bold text-slate-400">{idx + 1}</td>
                     <td className="p-4">
                       <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-black border border-blue-200/60 text-[11px]">
@@ -540,7 +540,7 @@ export function TeacherSubjectsHub({ profile, onNavigate }: TeacherSubjectsHubPr
 
                   {rosterStudents.map((st, idx) => (
                     <div
-                      key={st.id}
+                      key={`roster-st-${st.id}-${idx}`}
                       className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3 hover:bg-slate-100/60 transition"
                     >
                       <div className="flex items-center gap-3">

@@ -64,9 +64,16 @@ import {
   ChevronLeft,
   Flag,
   Zap,
-  ShieldAlert
+  ShieldAlert,
+  Printer,
+  School,
+  Coffee,
+  Sun,
+  LayoutGrid,
+  List,
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
+import { useSchoolBranding } from '@/lib/schoolBrandingContext'
 import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
@@ -354,6 +361,7 @@ function SVGDonutChart({
 }
 
 export function StudentDashboard({ user, activeSection, onNavigate }: DashboardProps) {
+  const { branding } = useSchoolBranding()
   const [profile, setProfile] = useState<StudentProfile | null>(null)
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [tasks, setTasks] = useState<TaskData | null>(null)
@@ -382,6 +390,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
   const [examScheduleSlots, setExamScheduleSlots] = useState<any[]>([])
   const [loadingTimetable, setLoadingTimetable] = useState<boolean>(false)
   const [selectedTimetableDay, setSelectedTimetableDay] = useState<string>('ALL')
+  const [timetableViewMode, setTimetableViewMode] = useState<'grid' | 'cards'>('grid')
 
   // Reminders / Study Checklist state
   const [remindersList, setRemindersList] = useState<Array<{ id: number; text: string; subtext?: string; done: boolean }>>([])
@@ -409,6 +418,12 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
 
   // PDF Export state
   const [exportingPdf, setExportingPdf] = useState<boolean>(false)
+
+  // Report Card Preview state
+  const [showReportCardPreview, setShowReportCardPreview] = useState<boolean>(false)
+  const [previewPdfBlobUrl, setPreviewPdfBlobUrl] = useState<string | null>(null)
+  const [loadingPdfPreview, setLoadingPdfPreview] = useState<boolean>(false)
+  const [previewTab, setPreviewTab] = useState<'document' | 'pdf'>('document')
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState<string>('')
@@ -942,6 +957,45 @@ function normalizeQuestions(raw: any): any[] {
     }
   }
 
+  // Open & Pre-load Report Card Preview
+  const handleOpenReportCardPreview = async () => {
+    setShowReportCardPreview(true)
+    setPreviewTab('document')
+
+    if (!previewPdfBlobUrl) {
+      try {
+        setLoadingPdfPreview(true)
+        const token = safeStorage.getItem('ugbekun_token')
+        const url = endpoints.student.exportPdf('all')
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (res.ok) {
+          const blob = await res.blob()
+          const objectUrl = window.URL.createObjectURL(blob)
+          setPreviewPdfBlobUrl(objectUrl)
+        }
+      } catch (err) {
+        console.warn('[STUDENT] PDF preview load error:', err)
+      } finally {
+        setLoadingPdfPreview(false)
+      }
+    }
+  }
+
+  const handleCloseReportCardPreview = () => {
+    setShowReportCardPreview(false)
+  }
+
+  // Clean up PDF blob object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewPdfBlobUrl) {
+        window.URL.revokeObjectURL(previewPdfBlobUrl)
+      }
+    }
+  }, [previewPdfBlobUrl])
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -1054,8 +1108,8 @@ function normalizeQuestions(raw: any): any[] {
 
           {subjectTeachers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {subjectTeachers.map((st) => (
-                <div key={st.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between space-y-3">
+              {subjectTeachers.map((st, idx) => (
+                <div key={`subj-teacher-${st.id}-${idx}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-blue-100 overflow-hidden shrink-0 border border-blue-200">
                       <img
@@ -1128,14 +1182,26 @@ function normalizeQuestions(raw: any): any[] {
             </p>
           </div>
 
-          <button
-            onClick={handleExportReportCard}
-            disabled={exportingPdf}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
-          >
-            {exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            <span>Download Report Card (PDF)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleOpenReportCardPreview}
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
+            >
+              <Eye size={15} />
+              <span>Preview Report Card</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportReportCard}
+              disabled={exportingPdf}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
+            >
+              {exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              <span>Download Report Card (PDF)</span>
+            </button>
+          </div>
         </div>
 
         {/* Top Summary Banner */}
@@ -1178,10 +1244,18 @@ function normalizeQuestions(raw: any): any[] {
 
         {/* Report Card Table */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
               Subject Scores, CBT & Theory Marks Breakdown
             </h3>
+            <button
+              type="button"
+              onClick={handleOpenReportCardPreview}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Eye size={13} className="text-indigo-600" />
+              <span>Full Preview Sheet</span>
+            </button>
           </div>
 
           {reportCardList.length > 0 ? (
@@ -1230,6 +1304,366 @@ function normalizeQuestions(raw: any): any[] {
             </div>
           )}
         </div>
+
+        {/* ========================================================================= */}
+        {/* OFFICIAL REPORT CARD PREVIEW MODAL                                        */}
+        {/* ========================================================================= */}
+        {showReportCardPreview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static">
+            <div className="relative w-full max-w-5xl bg-slate-100 rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col max-h-[92vh] print:max-h-none print:shadow-none print:border-none print:bg-white print:rounded-none">
+              
+              {/* Modal Top Header (Hidden in Print) */}
+              <div className="p-4 sm:p-5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                    <Award size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 leading-tight">
+                      Official Term Report Card Preview
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {profile.firstName} {profile.lastName} &bull; Reg: <span className="font-mono font-bold text-slate-700">{profile.registerNo}</span> &bull; {profile.className} ({profile.sectionName})
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tab Switcher & Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('document')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        previewTab === 'document' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Award size={14} />
+                      <span>Digital Certificate</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('pdf')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        previewTab === 'pdf' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Eye size={14} />
+                      <span>PDF Document</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Printer size={14} />
+                    <span className="hidden sm:inline">Print</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportReportCard}
+                    disabled={exportingPdf}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    <span className="hidden sm:inline">Download PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseReportCardPreview}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 print:p-0 print:bg-white print:overflow-visible">
+                {previewTab === 'document' ? (
+                  <div id="printable-report-card" className="bg-white rounded-3xl border border-slate-200/90 shadow-lg p-6 sm:p-10 space-y-6 text-slate-800 font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:p-4 print:m-0">
+                    
+                    {/* Institution Header */}
+                    <div className="border-b-2 border-slate-900/80 pb-6 text-center space-y-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center shrink-0">
+                          {branding?.logoUrl ? (
+                            <img src={branding.logoUrl} alt={branding.schoolName} className="w-full h-full object-contain rounded-xl" />
+                          ) : (
+                            <div className="w-full h-full rounded-xl bg-indigo-950 text-white flex items-center justify-center font-bold">
+                              <School size={28} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight uppercase">
+                            {branding?.schoolName || profile.branchName || 'UGBEKUN INTERNATIONAL ACADEMY'}
+                          </h1>
+                          <p className="text-xs italic font-bold text-slate-600 mt-0.5">
+                            {branding?.tagline || 'Excellence in Knowledge & Character'}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {branding?.address || 'Main Campus'} {branding?.phone ? `• Tel: ${branding.phone}` : ''} {branding?.email ? `• Email: ${branding.email}` : ''}
+                          </p>
+                        </div>
+
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img
+                            src={getAvatarUrl(profile.photo, `${profile.firstName} ${profile.lastName}`)}
+                            alt={profile.firstName}
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <span className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest">
+                          Continuous Assessment & Terminal Academic Report Card
+                        </span>
+                        <p className="text-xs font-bold text-indigo-700 mt-1.5">
+                          Academic Session: {branding?.academicSession || '2025/2026'} &bull; Term: {branding?.currentTerm || 'First Term'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Student Bio Grid */}
+                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Student Name</span>
+                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
+                            {profile.firstName} {profile.lastName}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Registration No</span>
+                          <span className="font-mono font-extrabold text-slate-900 text-sm block mt-0.5">
+                            {profile.registerNo}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Class & Arm</span>
+                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
+                            {profile.className} {profile.sectionName}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Gender</span>
+                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5 capitalize">
+                            {profile.gender || 'Not Specified'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Attendance Record</span>
+                          <span className="font-extrabold text-emerald-700 text-sm block mt-0.5">
+                            {attendance?.percentage ?? 100}% ({attendance?.presentCount ?? 0} of {attendance?.totalDays ?? 0} Days)
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Class Position (Rank)</span>
+                          <span className="font-extrabold text-indigo-700 text-sm block mt-0.5">
+                            {userRankText} <span className="text-[11px] text-slate-500 font-normal">out of {totalClass}</span>
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Terminal Average</span>
+                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
+                            {avgScore}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Terminal Grade</span>
+                          <span className="font-extrabold text-indigo-800 text-sm block mt-0.5">
+                            {getGradeLetter(avgScore).letter}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Academic Marks Breakdown Table */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <BarChart3 size={15} className="text-indigo-600" />
+                        <span>Cognitive Academic Evaluation & Subject Breakdown</span>
+                      </h4>
+
+                      {reportCardList.length > 0 ? (
+                        <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-100/80 text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                              <tr>
+                                <th className="p-3">#</th>
+                                <th className="p-3">Subject</th>
+                                <th className="p-3 text-center">CBT / CA (40)</th>
+                                <th className="p-3 text-center">Theory / Exam (60)</th>
+                                <th className="p-3 text-center">Total (100)</th>
+                                <th className="p-3 text-center">Class Avg</th>
+                                <th className="p-3 text-center">Grade</th>
+                                <th className="p-3">Remark</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {reportCardList.map((item, idx) => {
+                                const totalVal = parseFloat(item.mark || '0')
+                                const gradeInfo = getGradeLetter(totalVal)
+                                return (
+                                  <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                    <td className="p-3 font-mono text-slate-400 font-bold">{idx + 1}</td>
+                                    <td className="p-3">
+                                      <span className="font-bold text-slate-900 block">{item.subjectName}</span>
+                                      <span className="text-[10px] text-slate-400 font-mono">{item.subjectCode}</span>
+                                    </td>
+                                    <td className="p-3 text-center font-mono font-semibold text-slate-700">
+                                      {item.cbtMark ? item.cbtMark : '-'}
+                                    </td>
+                                    <td className="p-3 text-center font-mono font-semibold text-slate-700">
+                                      {item.theoryMark ? item.theoryMark : '-'}
+                                    </td>
+                                    <td className="p-3 text-center font-mono font-black text-slate-900 text-sm">
+                                      {item.mark !== null ? `${item.mark}` : 'ABS'}
+                                    </td>
+                                    <td className="p-3 text-center font-mono text-slate-500 font-medium">
+                                      {item.classAverage}%
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${gradeInfo.bg} ${gradeInfo.color}`}>
+                                        {gradeInfo.letter.split(' ')[0]}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 font-medium text-slate-700 text-[11px]">
+                                      {gradeInfo.letter.includes('(') ? gradeInfo.letter.split('(')[1].replace(')', '') : 'Satisfactory'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-400 text-xs italic">
+                          No recorded subject marks available for this term yet.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Non-Cognitive / Affective Skills & Ratings */}
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/60 space-y-2">
+                      <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                        Affective & Behavioral Development
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center text-xs">
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 block">Punctuality</span>
+                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
+                          <span className="text-[9px] text-slate-400 font-semibold">Excellent</span>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 block">Class Neatness</span>
+                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
+                          <span className="text-[9px] text-slate-400 font-semibold">Commendable</span>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 block">Attentiveness</span>
+                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
+                          <span className="text-[9px] text-slate-400 font-semibold">Consistent</span>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 block">Peer Relations</span>
+                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
+                          <span className="text-[9px] text-slate-400 font-semibold">Respectful</span>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 block">Teamwork</span>
+                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
+                          <span className="text-[9px] text-slate-400 font-semibold">Active Leader</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Qualitative Teacher & Principal Endorsement */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                          Form Teacher's Commentary
+                        </span>
+                        <p className="text-xs text-slate-700 italic leading-relaxed">
+                          "{grades?.commentary || 'A diligent, polite, and academically steady pupil. Demonstrates high enthusiasm for learning and cooperation.'}"
+                        </p>
+                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-900">{profile.formTeacher?.name || 'Class Teacher'}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">Signed & Endorsed</span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                            Principal's Certification & Stamp
+                          </span>
+                          <p className="text-xs text-slate-700 italic leading-relaxed">
+                            "Satisfactory academic outcome. Confirmed for progression in line with institution requirements."
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {branding?.principalSignatureUrl ? (
+                              <img src={branding.principalSignatureUrl} alt="Signature" className="h-9 object-contain" />
+                            ) : (
+                              <span className="font-serif italic text-sm font-bold text-indigo-900">Dr. School Principal</span>
+                            )}
+                          </div>
+                          <div className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-emerald-600" />
+                            <span>Official Stamp</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Grading System Legend Footer */}
+                    <div className="border-t border-slate-200 pt-4 text-[10px] text-slate-500 text-center leading-relaxed">
+                      <span className="font-bold text-slate-700">Official Grading Scale:</span> A (80-100%: Distinction) &bull; B (70-79%: Very Good) &bull; C (60-69%: Credit) &bull; D (50-59%: Pass) &bull; E (40-49%: Fair) &bull; F (0-39%: Fail)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
+                    {loadingPdfPreview ? (
+                      <div className="flex flex-col items-center justify-center py-32 gap-3 text-slate-500">
+                        <Loader2 size={36} className="animate-spin text-indigo-600" />
+                        <p className="text-xs font-bold text-slate-700 tracking-wide">Compiling official PDF report card document...</p>
+                      </div>
+                    ) : previewPdfBlobUrl ? (
+                      <iframe
+                        src={previewPdfBlobUrl}
+                        className="w-full h-[650px] rounded-2xl border border-slate-200 shadow-inner bg-slate-50"
+                        title="Report Card PDF Live Preview"
+                      />
+                    ) : (
+                      <div className="py-20 text-center space-y-3">
+                        <Award size={36} className="mx-auto text-slate-300" />
+                        <p className="text-xs font-bold text-slate-600">PDF preview could not be rendered directly in this window.</p>
+                        <button
+                          type="button"
+                          onClick={handleExportReportCard}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md"
+                        >
+                          Download PDF Instead
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1237,82 +1671,330 @@ function normalizeQuestions(raw: any): any[] {
   // 7. TIMETABLE & EXAM SCHEDULE SUB-VIEW
   if (activeSection === 'timetable') {
     const days = ['ALL', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    const weekdayCols = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']
     const filteredSlots = selectedTimetableDay === 'ALL'
       ? timetableSlots
       : timetableSlots.filter(s => s.dayOfWeek?.toUpperCase() === selectedTimetableDay)
 
     return (
       <div className="space-y-6 pb-12 font-sans">
+        {/* Timetable Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
           <div>
             <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <Calendar className="text-purple-600" size={24} />
               Class Timetable & Published Exam Schedule
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Class: <span className="font-bold text-slate-900">{profile.className} {profile.sectionName}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500">
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold">
+                Class: {profile.className || 'My Class'} {profile.sectionName ? `(${profile.sectionName})` : ''}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-semibold">
+                {timetableSlots.length} Total Period Slots
+              </span>
+              {timetableSlots.length > 0 && timetableSlots[0]?.sectionName && (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">
+                  Arm: {timetableSlots[0].sectionName}
+                </span>
+              )}
+            </div>
           </div>
-          {loadingTimetable && <Loader2 size={18} className="animate-spin text-blue-600" />}
-        </div>
 
-        {/* Day-of-Week Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {days.map((day) => {
-            const count = day === 'ALL' ? timetableSlots.length : timetableSlots.filter(s => s.dayOfWeek?.toUpperCase() === day).length
-            return (
+          <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
               <button
-                key={day}
-                onClick={() => setSelectedTimetableDay(day)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
-                  selectedTimetableDay === day
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                type="button"
+                onClick={() => setTimetableViewMode('grid')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  timetableViewMode === 'grid'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <span>{day === 'ALL' ? 'All Days' : day.charAt(0) + day.slice(1).toLowerCase()}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedTimetableDay === day ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  {count}
-                </span>
+                <LayoutGrid size={14} />
+                <span>Weekly Grid</span>
               </button>
-            )
-          })}
+              <button
+                type="button"
+                onClick={() => setTimetableViewMode('cards')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  timetableViewMode === 'cards'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <List size={14} />
+                <span>Day Cards</span>
+              </button>
+            </div>
+
+            {/* Print Button */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition cursor-pointer"
+            >
+              <Printer size={14} className="text-slate-500" />
+              <span>Print</span>
+            </button>
+
+            {loadingTimetable && <Loader2 size={18} className="animate-spin text-blue-600" />}
+          </div>
         </div>
 
-        {/* Weekly Period Timetable Cards */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Weekly Class Period Schedule</h3>
-          {filteredSlots.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredSlots.map((slot) => (
-                <div key={slot.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between text-xs space-y-2 hover:shadow-sm transition">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md uppercase">
-                      {slot.dayOfWeek}
+        {/* 1. WEEKLY GRID VIEW */}
+        {timetableViewMode === 'grid' && (
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <Clock size={15} className="text-indigo-600" />
+                Full Weekly Class Period Schedule
+              </h3>
+              <span className="text-[11px] text-slate-400 font-medium">Monday &ndash; Friday Schedule</span>
+            </div>
+
+            {timetableSlots.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {weekdayCols.map((day) => {
+                  const daySlots = timetableSlots
+                    .filter((s) => s.dayOfWeek?.toUpperCase() === day)
+                    .sort((a, b) => (a.startTime > b.startTime ? 1 : -1))
+
+                  return (
+                    <div
+                      key={day}
+                      className="flex flex-col rounded-2xl border border-slate-200/90 bg-slate-50/60 overflow-hidden"
+                    >
+                      {/* Day Column Header */}
+                      <div className="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100/80 flex items-center justify-between">
+                        <span className="text-xs font-black text-indigo-900 tracking-wide">
+                          {day.charAt(0) + day.slice(1).toLowerCase()}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-indigo-700 border border-indigo-200">
+                          {daySlots.length}
+                        </span>
+                      </div>
+
+                      {/* Day Slot Items */}
+                      <div className="p-2 space-y-2 flex-1 min-h-[220px]">
+                        {daySlots.length > 0 ? (
+                          daySlots.map((slot) => {
+                            if (slot.type === 'BREAK') {
+                              return (
+                                <div
+                                  key={slot.id}
+                                  className="p-2.5 rounded-xl border border-amber-200 bg-amber-50/90 text-amber-900 space-y-1 shadow-xs"
+                                >
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="font-bold flex items-center gap-1 text-amber-700">
+                                      <Coffee size={12} />
+                                      Break / Recess
+                                    </span>
+                                    <span className="font-mono text-amber-800 font-bold">
+                                      {slot.startTime}-{slot.endTime}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs font-extrabold text-amber-900">
+                                    {slot.title || 'Break Time'}
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            if (slot.type === 'ASSEMBLY') {
+                              return (
+                                <div
+                                  key={slot.id}
+                                  className="p-2.5 rounded-xl border border-sky-200 bg-sky-50/90 text-sky-900 space-y-1 shadow-xs"
+                                >
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="font-bold flex items-center gap-1 text-sky-700">
+                                      <Sun size={12} />
+                                      Assembly
+                                    </span>
+                                    <span className="font-mono text-sky-800 font-bold">
+                                      {slot.startTime}-{slot.endTime}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs font-extrabold text-sky-900">
+                                    {slot.title || 'Morning Assembly'}
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            // SUBJECT PERIOD
+                            return (
+                              <div
+                                key={slot.id}
+                                className="p-3 rounded-xl border border-indigo-100 bg-white hover:border-indigo-300 hover:shadow-xs transition space-y-1.5"
+                              >
+                                <div className="flex items-center justify-between text-[10px]">
+                                  <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                    {slot.startTime} - {slot.endTime}
+                                  </span>
+                                  {slot.subjectCode && (
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-bold">
+                                      {slot.subjectCode}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="font-extrabold text-slate-900 text-xs leading-snug">
+                                  {slot.title || slot.subjectName || 'Subject Period'}
+                                </div>
+
+                                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
+                                  <span className="flex items-center gap-1 truncate font-medium text-slate-700">
+                                    <User size={11} className="text-slate-400 shrink-0" />
+                                    {slot.teacherName || 'Teacher Unassigned'}
+                                  </span>
+                                </div>
+
+                                {slot.sectionName && (
+                                  <div className="text-[9px] text-slate-400 font-semibold truncate">
+                                    Arm: {slot.sectionName}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full text-center py-8 text-slate-300 text-xs italic">
+                            No periods scheduled
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 text-xs italic">
+                No class period timetable slots published yet for this classroom.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. CARD / DAY-BY-DAY VIEW */}
+        {timetableViewMode === 'cards' && (
+          <div className="space-y-4">
+            {/* Day-of-Week Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {days.map((day) => {
+                const count =
+                  day === 'ALL'
+                    ? timetableSlots.length
+                    : timetableSlots.filter((s) => s.dayOfWeek?.toUpperCase() === day).length
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedTimetableDay(day)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                      selectedTimetableDay === day
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{day === 'ALL' ? 'All Days' : day.charAt(0) + day.slice(1).toLowerCase()}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        selectedTimetableDay === day ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {count}
                     </span>
-                    <span className="text-slate-500 font-mono font-semibold text-[11px]">
-                      {slot.startTime} - {slot.endTime}
-                    </span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm">{slot.title}</h4>
-                    <span className="text-[11px] text-slate-500 block mt-0.5">Teacher: {slot.teacherName || 'Form Teacher'}</span>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
-                    <span className="font-bold text-slate-600 uppercase">{slot.type || 'PERIOD'}</span>
-                    <span className="px-2 py-0.5 bg-white border border-slate-200 rounded-md font-bold text-slate-700">
-                      {slot.subjectCode || 'CLASS'}
-                    </span>
-                  </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Timetable Cards Grid */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                Class Periods for {selectedTimetableDay.toLowerCase()}
+              </h3>
+              {filteredSlots.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filteredSlots.map((slot) => {
+                    const isBreak = slot.type === 'BREAK'
+                    const isAssembly = slot.type === 'ASSEMBLY'
+
+                    return (
+                      <div
+                        key={slot.id}
+                        className={`p-4 rounded-2xl border flex flex-col justify-between text-xs space-y-2.5 transition hover:shadow-xs ${
+                          isBreak
+                            ? 'bg-amber-50/70 border-amber-200'
+                            : isAssembly
+                            ? 'bg-sky-50/70 border-sky-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
+                              isBreak
+                                ? 'bg-amber-100 text-amber-800'
+                                : isAssembly
+                                ? 'bg-sky-100 text-sky-800'
+                                : 'bg-purple-100 text-purple-700'
+                            }`}
+                          >
+                            {slot.dayOfWeek}
+                          </span>
+                          <span className="text-slate-600 font-mono font-bold text-[11px]">
+                            {slot.startTime} - {slot.endTime}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="font-extrabold text-slate-900 text-sm">{slot.title}</h4>
+                          {isBreak ? (
+                            <span className="text-[11px] text-amber-700 font-semibold block mt-0.5">
+                              Recess / Student Rest Period
+                            </span>
+                          ) : isAssembly ? (
+                            <span className="text-[11px] text-sky-700 font-semibold block mt-0.5">
+                              Morning Devotion & Roll Call
+                            </span>
+                          ) : (
+                            <div className="mt-1 space-y-0.5">
+                              <span className="text-[11px] text-slate-600 font-medium flex items-center gap-1.5">
+                                <User size={12} className="text-slate-400 shrink-0" />
+                                Assigned Teacher: <strong className="text-slate-900">{slot.teacherName || 'Unassigned'}</strong>
+                              </span>
+                              {slot.teacherPhone && (
+                                <span className="text-[10px] text-slate-400 block pl-4">
+                                  Phone: {slot.teacherPhone}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-slate-600 uppercase">
+                            {isBreak ? '☕ RECESS' : isAssembly ? '☀️ ASSEMBLY' : '📚 SUBJECT PERIOD'}
+                          </span>
+                          <span className="px-2 py-0.5 bg-white border border-slate-200 rounded-md font-bold text-slate-700">
+                            {slot.subjectCode || (slot.sectionName ? `Arm: ${slot.sectionName}` : 'CLASS')}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
+              ) : (
+                <div className="py-10 text-center text-slate-400 text-xs italic">
+                  No class period timetable slots published for {selectedTimetableDay.toLowerCase()}.
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="py-10 text-center text-slate-400 text-xs italic">
-              No class period timetable slots published for {selectedTimetableDay.toLowerCase()}.
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Exam Schedule */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">

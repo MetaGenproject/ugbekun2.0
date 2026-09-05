@@ -138,6 +138,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, active: true },
         { id: 'my-classes', label: 'My Classes', icon: Users },
         { id: 'my-subjects', label: 'My Subjects', icon: BookOpen },
+        { id: 'timetable', label: 'My Timetable', icon: Calendar },
         { id: 'ai-planner', label: 'Lesson Plan', icon: FileText },
         { id: 'assignments', label: 'Assignments', icon: CheckSquare },
         { id: 'cbt-exams', label: 'CBT / Tests', icon: Award },

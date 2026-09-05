@@ -62,6 +62,7 @@ import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
 import { QuestionBankManager } from './question-bank-manager'
 import { TeacherSubjectsHub } from './teacher-subjects-hub'
+import { TeacherTimetableView } from './teacher-timetable-view'
 import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
 
@@ -670,8 +671,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {rosterStudents.map((st) => (
-                    <tr key={st.id} className="hover:bg-slate-50/80 transition">
+                  {rosterStudents.map((st, idx) => (
+                    <tr key={`st-${st.id}-${idx}`} className="hover:bg-slate-50/80 transition">
                       <td className="p-4 font-mono text-slate-500 text-[11px]">
                         {st.registerNo || `REG-${st.id}`}
                       </td>
@@ -847,8 +848,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
           {homeworksList.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {homeworksList.map((hw) => (
-                <div key={hw.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 flex flex-col justify-between">
+              {homeworksList.map((hw, idx) => (
+                <div key={`hw-${hw.id}-${idx}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold">
@@ -924,14 +925,16 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
                     >
                       <option value="">Select Class</option>
-                      {profile.formAllocations.map((fa) => (
-                        <option key={`fa-${fa.classId}-${fa.sectionId || ''}`} value={fa.classId}>
-                          {fa.className} ({fa.sectionName})
-                        </option>
-                      ))}
-                      {profile.subjectAssignments.map((sa, idx) => (
-                        <option key={`sa-${sa.classId}-${sa.subjectId}-${idx}`} value={sa.classId}>
-                          {sa.className} ({sa.sectionName})
+                      {Array.from(
+                        new Map<number, string>(
+                          [
+                            ...profile.formAllocations.map(fa => [fa.classId, `${fa.className} (${fa.sectionName})`] as [number, string]),
+                            ...profile.subjectAssignments.map(sa => [sa.classId, `${sa.className} (${sa.sectionName})`] as [number, string])
+                          ]
+                        ).entries()
+                      ).map(([classId, label], idx) => (
+                        <option key={`cls-opt-${classId}-${idx}`} value={classId}>
+                          {label}
                         </option>
                       ))}
                     </select>
@@ -946,9 +949,13 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
                     >
                       <option value="">Select Subject</option>
-                      {profile.subjectAssignments.map((sa, idx) => (
-                        <option key={`subj-${sa.subjectId}-${idx}`} value={sa.subjectId}>
-                          {sa.subjectName}
+                      {Array.from(
+                        new Map<number, string>(
+                          profile.subjectAssignments.map(sa => [sa.subjectId, sa.subjectName] as [number, string])
+                        ).entries()
+                      ).map(([subjId, name], idx) => (
+                        <option key={`subj-opt-${subjId}-${idx}`} value={subjId}>
+                          {name}
                         </option>
                       ))}
                     </select>
@@ -1001,8 +1008,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   {/* Attached Questions Preview List */}
                   {hwQuestions.length > 0 ? (
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                      {hwQuestions.map((q, idx) => (
-                        <div key={idx} className="p-2.5 bg-white rounded-xl border border-purple-200/60 flex items-center justify-between gap-2">
+                      {hwQuestions.map((q: any, idx: number) => (
+                        <div key={`hw-q-${q.id || idx}-${idx}`} className="p-2.5 bg-white rounded-xl border border-purple-200/60 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-extrabold text-[10px] flex items-center justify-center shrink-0">
                               {idx + 1}
@@ -1090,11 +1097,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       <span>Selected ({selectedQBankIds.length})</span>
                     </div>
 
-                    {qBankItems.map((q) => {
+                    {qBankItems.map((q, idx) => {
                       const isSelected = selectedQBankIds.includes(q.id)
                       return (
                         <div
-                          key={q.id}
+                          key={`q-bank-${q.id || idx}-${idx}`}
                           onClick={() => {
                             setSelectedQBankIds((prev) =>
                               isSelected ? prev.filter((id) => id !== q.id) : [...prev, q.id]
@@ -1193,8 +1200,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                 </div>
               ) : hwSubmissions.length > 0 ? (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                  {hwSubmissions.map((sub) => (
-                    <div key={sub.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-3">
+                  {hwSubmissions.map((sub, idx) => (
+                    <div key={`hw-sub-${sub.id}-${idx}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <User size={16} className="text-purple-600" />
@@ -1308,6 +1315,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   }
   if (activeSection === 'calendar') {
     return <SchoolCalendar user={user} />
+  }
+  if (activeSection === 'timetable' || activeSection === 'schedule') {
+    return <TeacherTimetableView />
   }
 
   // Derived values grounded strictly in real DB data
@@ -1625,7 +1635,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-center">
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between px-1">
+                <button 
+                  onClick={() => onNavigate?.('timetable')}
+                  className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Calendar size={13} />
+                  <span>My Timetable</span>
+                </button>
                 <button 
                   onClick={() => onNavigate?.('ai-planner')}
                   className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
@@ -1744,8 +1761,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
             <div className="space-y-3 text-xs">
               {recentActivitiesList.length > 0 ? (
-                recentActivitiesList.map((act) => (
-                  <div key={act.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+                recentActivitiesList.map((act: any, idx: number) => (
+                  <div key={`recent-act-${act.id || idx}-${idx}`} className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
                       <Activity size={15} />
                     </div>
