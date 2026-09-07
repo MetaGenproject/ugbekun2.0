@@ -173,10 +173,29 @@ export const endpoints = {
     cbtDistributionAnalytics: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/analytics`,
     cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/sync-marks`,
     onlineExams: `${BASE_URL}/admin/online-exams`,
-    studentAttendance: (classId?: number, sectionId?: number, date?: string) =>
-      `${BASE_URL}/admin/attendance/students?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${date ? `&date=${date}` : ''}`,
+    studentAttendance: (classId?: number, sectionId?: number, date?: string, extra?: { page?: number; pageSize?: number; q?: string }) => {
+      const params = new URLSearchParams()
+      if (classId) params.set('classId', String(classId))
+      if (sectionId) params.set('sectionId', String(sectionId))
+      if (date) params.set('date', date)
+      if (extra?.page) params.set('page', String(extra.page))
+      if (extra?.pageSize) params.set('pageSize', String(extra.pageSize))
+      if (extra?.q) params.set('q', extra.q)
+      const qs = params.toString()
+      return `${BASE_URL}/admin/attendance/students${qs ? `?${qs}` : ''}`
+    },
     saveStudentAttendanceBatch: `${BASE_URL}/admin/attendance/students/batch-save`,
-    staffAttendance: (date?: string) => `${BASE_URL}/admin/attendance/staff${date ? `?date=${date}` : ''}`,
+    attendanceRegister: `${BASE_URL}/admin/attendance/register`,
+    unlockAttendanceRegister: `${BASE_URL}/admin/attendance/register/unlock`,
+    staffAttendance: (date?: string, extra?: { page?: number; pageSize?: number; q?: string }) => {
+      const params = new URLSearchParams()
+      if (date) params.set('date', date)
+      if (extra?.page) params.set('page', String(extra.page))
+      if (extra?.pageSize) params.set('pageSize', String(extra.pageSize))
+      if (extra?.q) params.set('q', extra.q)
+      const qs = params.toString()
+      return `${BASE_URL}/admin/attendance/staff${qs ? `?${qs}` : ''}`
+    },
     saveStaffAttendanceBatch: `${BASE_URL}/admin/attendance/staff/batch-save`,
     siblingRequests: `${BASE_URL}/admin/sibling-requests`,
     approveSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/approve`,
@@ -308,6 +327,10 @@ export const endpoints = {
     students: `${BASE_URL}/teacher/students`,
     scores: `${BASE_URL}/teacher/scores`,
     attendance: `${BASE_URL}/teacher/attendance`,
+    attendanceRegister: `${BASE_URL}/teacher/attendance/register`,
+    attendanceRegisterEntries: `${BASE_URL}/teacher/attendance/register/entries`,
+    attendanceRegisterSubmit: `${BASE_URL}/teacher/attendance/register/submit`,
+    attendanceWeek: `${BASE_URL}/teacher/attendance/week`,
     commentary: `${BASE_URL}/teacher/commentary`,
     generateAiCommentary: `${BASE_URL}/teacher/commentary/generate-ai`,
     batchGenerateAiCommentary: `${BASE_URL}/teacher/commentary/batch-generate-ai`,
@@ -430,6 +453,10 @@ const getAuthHeaders = (): HeadersInit => {
   if (impersonatedTeacherId) {
     headers['x-admin-teacher-id'] = impersonatedTeacherId;
   }
+  const adminBranchId = safeStorage.getItem('ugbekun_admin_branch_id');
+  if (adminBranchId) {
+    headers['x-branch-id'] = adminBranchId;
+  }
   return headers;
 };
 
@@ -527,6 +554,24 @@ export const apiSlice = {
   async put<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
     const response = await fetch(url, {
       method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...(options?.headers || {}),
+      },
+      body: JSON.stringify(body),
+      credentials: 'include',
+      ...options,
+    });
+    return handleResponse<T>(response);
+  },
+
+  /**
+   * PATCH Request
+   */
+  async patch<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
+    const response = await fetch(url, {
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),

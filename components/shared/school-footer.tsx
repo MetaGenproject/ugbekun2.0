@@ -28,7 +28,7 @@ export function SchoolFooter() {
   const rawWhatsapp = branding.whatsappNo ? branding.whatsappNo.replace(/[^0-9]/g, '') : null
 
   return (
-    <footer className="w-full mt-auto bg-gradient-to-r from-[#0b1739] via-[#091436] to-[#040c21] border-t border-blue-900/60 px-6 py-4 text-white shadow-xl font-sans">
+    <footer className="print:hidden w-full mt-auto bg-gradient-to-r from-[#0b1739] via-[#091436] to-[#040c21] border-t border-blue-900/60 px-6 py-4 text-white shadow-xl font-sans">
       <div className="max-w-[1440px] mx-auto space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* School Identity */}

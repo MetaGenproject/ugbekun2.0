@@ -1116,10 +1116,13 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
       setPhoto(teacher.photo || null)
       setWeeklyPeriods(teacher.weeklyPeriods || 18)
 
-      const hasClassAlloc = Boolean(teacher.isClassTeacher || teacher.allocatedClassId)
+      const firstAlloc = teacher.allocationsList?.[0]
+      const classId = teacher.allocatedClassId ?? firstAlloc?.classId
+      const sectionId = teacher.allocatedSectionId ?? firstAlloc?.sectionId
+      const hasClassAlloc = Boolean(teacher.isClassTeacher || classId)
       setIsClassTeacher(hasClassAlloc)
-      setClassTeacherClassId(teacher.allocatedClassId ? String(teacher.allocatedClassId) : '')
-      setClassTeacherSectionId(teacher.allocatedSectionId ? String(teacher.allocatedSectionId) : '')
+      setClassTeacherClassId(classId ? String(classId) : '')
+      setClassTeacherSectionId(sectionId ? String(sectionId) : '')
 
       if (teacher.subjectAssignsList && teacher.subjectAssignsList.length > 0) {
         setSubjectAssignList(teacher.subjectAssignsList)
@@ -1144,45 +1147,60 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
 
       setErrorMsg(null)
     }
-  }, [teacher, subjects, classes])
+  }, [teacher])
 
   const handleAddSubjectAssign = () => {
-    if (!subjectTeacherSubjectId || !subjectTeacherClassId || !subjectTeacherSectionId) return
-
-    const subObj = subjects.find(s => String(s.id) === String(subjectTeacherSubjectId))
-    const clsObj = classes.find(c => String(c.id) === String(subjectTeacherClassId))
-    const secObj = clsObj?.sections.find(sec => String(sec.section.id) === String(subjectTeacherSectionId))
-
-    if (!subObj || !clsObj || !secObj) return
-
-    const subIdNum = Number(subjectTeacherSubjectId)
-    const clsIdNum = Number(subjectTeacherClassId)
-    const secIdNum = Number(subjectTeacherSectionId)
-
-    const isDuplicate = subjectAssignList.some(
-      s => s.subjectId === subIdNum && s.classId === clsIdNum && s.sectionId === secIdNum
-    )
-
-    if (isDuplicate) {
-      toast.error(`This teacher is already assigned to teach ${subObj.name} for ${clsObj.name} (${secObj.section.name}).`)
+    const pending = resolvePendingSubjectAssign()
+    if (!pending) {
+      toast.error('Select a subject, class, and section before adding.')
       return
     }
 
-    setSubjectAssignList(prev => [
-      ...prev,
-      {
-        subjectId: subIdNum,
-        subjectName: subObj.name,
-        classId: clsIdNum,
-        className: clsObj.name,
-        sectionId: secIdNum,
-        sectionName: secObj.section.name,
-      }
-    ])
+    const isDuplicate = subjectAssignList.some(
+      s => s.subjectId === pending.subjectId && s.classId === pending.classId && s.sectionId === pending.sectionId
+    )
 
+    if (isDuplicate) {
+      toast.error(`This teacher is already assigned to teach ${pending.subjectName} for ${pending.className} (${pending.sectionName}).`)
+      return
+    }
+
+    setSubjectAssignList(prev => [...prev, pending])
     setSubjectTeacherSubjectId('')
     setSubjectTeacherClassId('')
     setSubjectTeacherSectionId('')
+  }
+
+  const resolvePendingSubjectAssign = () => {
+    if (!subjectTeacherSubjectId) return null
+
+    const classId = subjectTeacherClassId || classTeacherClassId
+    const sectionId = subjectTeacherSectionId || classTeacherSectionId
+    if (!classId || !sectionId) return null
+
+    const subObj = subjects.find(s => String(s.id) === String(subjectTeacherSubjectId))
+    const clsObj = classes.find(c => String(c.id) === String(classId))
+    const secObj = clsObj?.sections.find(sec => String(sec.section?.id) === String(sectionId))
+
+    if (!subObj) return null
+
+    return {
+      subjectId: Number(subjectTeacherSubjectId),
+      subjectName: subObj.name,
+      classId: Number(classId),
+      className: clsObj?.name || 'Class',
+      sectionId: Number(sectionId),
+      sectionName: secObj?.section?.name || 'Section',
+    }
+  }
+
+  const buildSubjectAssignPayload = () => {
+    const pending = resolvePendingSubjectAssign()
+    const merged = [...subjectAssignList]
+    if (pending && !merged.some(s => s.subjectId === pending.subjectId && s.classId === pending.classId && s.sectionId === pending.sectionId)) {
+      merged.push(pending)
+    }
+    return merged
   }
 
   const handleRemoveSubjectAssign = (index: number) => {
@@ -1197,7 +1215,24 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
     setIsSubmitting(true)
 
     try {
+      if (isClassTeacher && (!classTeacherClassId || !classTeacherSectionId)) {
+        setErrorMsg('Please select the class and section this form teacher manages.')
+        setIsSubmitting(false)
+        return
+      }
+
+      const finalSubjectAssigns = buildSubjectAssignPayload()
+
+      if (isSubjectTeacher && finalSubjectAssigns.length === 0) {
+        setErrorMsg('Select a subject (and class/section if needed), then save. You can also click “Add Subject Assignment”.')
+        setIsSubmitting(false)
+        return
+      }
+
       const selectedSubjObj = subjects.find(s => String(s.id) === subjectTeacherSubjectId)
+      const photoPayload = photo && photo.startsWith('data:image/') ? photo : undefined
+      const pendingClassId = subjectTeacherClassId || classTeacherClassId
+      const pendingSectionId = subjectTeacherSectionId || classTeacherSectionId
 
       const payload: any = {
         name: name.trim(),
@@ -1205,22 +1240,39 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         phone: phone.trim() || undefined,
         qualifications: qualifications.trim() || undefined,
         houseAddress: houseAddress.trim() || undefined,
-        department: department.trim() || (subjectAssignList.length > 0 ? subjectAssignList[0].subjectName : undefined),
+        department: department.trim() || (finalSubjectAssigns.length > 0 ? finalSubjectAssigns[0].subjectName : undefined),
         bankName: bankName.trim() || undefined,
         accountNumber: accountNumber.trim() || undefined,
         accountName: accountName.trim() || undefined,
-        photo: photo || undefined,
+        photo: photoPayload,
         isClassTeacher,
-        classTeacherClassId: isClassTeacher ? classTeacherClassId : undefined,
-        classTeacherSectionId: isClassTeacher ? classTeacherSectionId : undefined,
-        isSubjectTeacher: isSubjectTeacher || subjectAssignList.length > 0,
-        subjectAssignments: isSubjectTeacher || subjectAssignList.length > 0 ? subjectAssignList.map(s => ({
-          subjectId: s.subjectId,
-          classId: s.classId,
-          sectionId: s.sectionId,
-        })) : [],
-        subjectSpecialization: subjectAssignList.length > 0
-          ? subjectAssignList.map(s => s.subjectName).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+        classTeacherClassId: isClassTeacher ? Number(classTeacherClassId) : undefined,
+        classTeacherSectionId: isClassTeacher ? Number(classTeacherSectionId) : undefined,
+        classAllocations: (() => {
+          if (!isClassTeacher || !classTeacherClassId || !classTeacherSectionId) return []
+          const primary = { classId: Number(classTeacherClassId), sectionId: Number(classTeacherSectionId) }
+          const extras = (teacher.allocationsList || [])
+            .filter((a: any) => {
+              const isOriginalPrimary =
+                Number(a.classId) === Number(teacher.allocatedClassId || teacher.allocationsList?.[0]?.classId) &&
+                Number(a.sectionId) === Number(teacher.allocatedSectionId || teacher.allocationsList?.[0]?.sectionId)
+              const isNewPrimary = Number(a.classId) === primary.classId && Number(a.sectionId) === primary.sectionId
+              return !isOriginalPrimary && !isNewPrimary
+            })
+            .map((a: any) => ({ classId: Number(a.classId), sectionId: Number(a.sectionId) }))
+          return [primary, ...extras]
+        })(),
+        isSubjectTeacher: isSubjectTeacher || finalSubjectAssigns.length > 0,
+        subjectTeacherSubjectId: subjectTeacherSubjectId ? Number(subjectTeacherSubjectId) : undefined,
+        subjectTeacherClassId: pendingClassId ? Number(pendingClassId) : undefined,
+        subjectTeacherSectionId: pendingSectionId ? Number(pendingSectionId) : undefined,
+        subjectAssignments: finalSubjectAssigns.map(s => ({
+          subjectId: Number(s.subjectId),
+          classId: Number(s.classId),
+          sectionId: Number(s.sectionId),
+        })),
+        subjectSpecialization: finalSubjectAssigns.length > 0
+          ? finalSubjectAssigns.map(s => s.subjectName).filter((v, i, a) => a.indexOf(v) === i).join(', ')
           : selectedSubjObj?.name,
         weeklyPeriods: Number(weeklyPeriods) || 18,
       }
@@ -1230,6 +1282,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
         payload
       )
 
+      toast.success('Teacher details saved successfully.')
       onSuccess()
       onClose()
     } catch (err) {
@@ -1356,6 +1409,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-400 block uppercase">Class</label>
                     <select
+                      required={isClassTeacher}
                       value={classTeacherClassId}
                       onChange={(e) => {
                         setClassTeacherClassId(e.target.value)
@@ -1375,6 +1429,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-400 block uppercase">Section / Arm</label>
                     <select
+                      required={isClassTeacher}
                       value={classTeacherSectionId}
                       onChange={(e) => setClassTeacherSectionId(e.target.value)}
                       disabled={!classTeacherClassId}
@@ -1405,6 +1460,10 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                       setSubjectTeacherSubjectId('')
                       setSubjectTeacherClassId('')
                       setSubjectTeacherSectionId('')
+                      setSubjectAssignList([])
+                    } else {
+                      if (!subjectTeacherClassId && classTeacherClassId) setSubjectTeacherClassId(classTeacherClassId)
+                      if (!subjectTeacherSectionId && classTeacherSectionId) setSubjectTeacherSectionId(classTeacherSectionId)
                     }
                   }}
                   className="w-4 h-4 text-[#0063a6] rounded focus:ring-0 cursor-pointer"
@@ -1447,7 +1506,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                     </div>
                   ) : (
                     <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-xl font-medium border border-amber-200/70">
-                      No subjects currently assigned. Use the form below to select a subject and target class.
+                      No subjects currently assigned. Select a subject below — class/section defaults to the form class if left blank — then save or click Add.
                     </div>
                   )}
 
@@ -1516,7 +1575,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                       <button
                         type="button"
                         onClick={handleAddSubjectAssign}
-                        disabled={!subjectTeacherSubjectId || !subjectTeacherClassId || !subjectTeacherSectionId}
+                        disabled={!subjectTeacherSubjectId || !(subjectTeacherClassId || classTeacherClassId) || !(subjectTeacherSectionId || classTeacherSectionId)}
                         className="w-full py-1.5 bg-[#0063a6] hover:bg-[#003da5] disabled:opacity-40 text-white font-bold text-xs rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Plus size={14} /> Add Subject Assignment

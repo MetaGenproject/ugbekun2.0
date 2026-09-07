@@ -99,6 +99,8 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'SaaS Overview', icon: Activity, active: true },
         { id: 'manage-branches', label: 'Manage Branches', icon: School },
+        { id: 'staff', label: 'Staff Directory', icon: UserCheck },
+        { id: 'form-teachers', label: 'Form Teachers', icon: GraduationCap },
         { id: 'tenants', label: 'Tenants Directory', icon: Users },
         { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
         { id: 'revenue-analytics', label: 'Revenue Analytics', icon: TrendingUp },
@@ -435,13 +437,14 @@ export default function DashboardPage() {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          className="print:hidden fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Dynamic Dark Navy Sidebar Shell matching Reference Image */}
       <aside className={`
+        print:hidden
         fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#0b1739] via-[#091436] to-[#040c21] flex flex-col justify-between p-4 text-white shadow-2xl
         transition-transform duration-300 ease-in-out transform select-none
         md:translate-x-0 md:static md:shadow-none md:flex md:shrink-0
@@ -573,7 +576,7 @@ export default function DashboardPage() {
       {/* Main Panel Content Area */}
       <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-y-auto">
         {/* Top Header Bar matching Reference Image */}
-        <header className="h-16 border-b border-slate-200/90 bg-white px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+        <header className="print:hidden h-16 border-b border-slate-200/90 bg-white px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
           <div className="flex items-center gap-3 flex-1 max-w-xl">
             {/* Hamburger toggle button for mobile */}
             <button 
@@ -657,7 +660,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Main Section Content Area */}
-        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6 flex-1">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6 flex-1 print:p-0 print:max-w-none">
           {renderDashboardContent()}
         </div>
 

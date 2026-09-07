@@ -16,6 +16,7 @@ import {
   X,
   UserPlus,
   BookOpen,
+  GraduationCap,
   Briefcase,
   Shield,
   Wrench,
@@ -66,7 +67,14 @@ interface TeacherRow {
   qualifications?: string | null
   subjectSpecialization?: string | null
   allocatedClass?: string | null
+  allocatedClassId?: number | null
+  allocatedSectionId?: number | null
   weeklyPeriods?: number | null
+  isClassTeacher?: boolean
+  isSubjectTeacher?: boolean
+  assignedSubjectId?: number | null
+  assignedSubjectClassId?: number | null
+  assignedSubjectSectionId?: number | null
   allocationsList?: Array<{ id?: number; classId: number; className: string; sectionId: number; sectionName: string }>
   subjectAssignsList?: Array<{ id?: number; subjectId: number; subjectName: string; classId: number; className: string; sectionId: number; sectionName: string }>
   classCount?: number
@@ -93,7 +101,7 @@ interface StaffRow {
   lastLogin?: string | null
 }
 
-type StaffTab = 'teachers' | 'subject-teachers' | 'non-teaching' | 'communication'
+type StaffTab = 'teachers' | 'form-teachers' | 'subject-teachers' | 'non-teaching' | 'communication'
 type NonTeachingCategory = 'All' | 'Bursars' | 'Receptionists' | 'HR Officers' | 'Security Personnel' | 'Maintenance Officers' | 'Drivers' | 'Librarians' | 'Laboratory Officers' | 'ICT Officers'
 
 const STAFF_ROLE_MAP: Record<number | string, string> = {
@@ -104,8 +112,8 @@ const STAFF_ROLE_MAP: Record<number | string, string> = {
   13: 'Staff',
 }
 
-export function StaffDirectory() {
-  const [activeTab, setActiveTab] = useState<StaffTab>('teachers')
+export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: StaffTab } = {}) {
+  const [activeTab, setActiveTab] = useState<StaffTab>(initialTab)
   const [nonTeachingCategory, setNonTeachingCategory] = useState<NonTeachingCategory>('All')
 
   // Live Teachers & Staff Data
@@ -114,6 +122,10 @@ export function StaffDirectory() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
 
   // Modal States
   const [isOnboardOpen, setIsOnboardOpen] = useState(false)
@@ -307,11 +319,36 @@ export function StaffDirectory() {
     }
   }
 
+  const teacherFullName = (t: TeacherRow) =>
+    [t.firstName, t.lastName].filter(Boolean).join(' ') || t.name || 'Teacher'
+
+  const formClassLabels = (t: TeacherRow) => {
+    const list = t.allocationsList || []
+    return list.map((a) => `${a.className}${a.sectionName ? ` ${a.sectionName}` : ''}`.trim()).filter(Boolean)
+  }
+
+  const uniqueSubjectNames = (t: TeacherRow) => {
+    const names = (t.subjectAssignsList || []).map((s) => s.subjectName).filter(Boolean)
+    return [...new Set(names)]
+  }
+
+  const formTeachers = teachers.filter(
+    (t) => t.isClassTeacher || (t.allocationsList && t.allocationsList.length > 0)
+  )
+
   const filteredTeachers = teachers.filter(t => {
-    const fullName = `${t.firstName || ''} ${t.lastName || ''}`.toLowerCase()
+    const fullName = `${teacherFullName(t)} ${t.name || ''}`.toLowerCase()
     const email = (t.email || '').toLowerCase()
     const query = searchQuery.toLowerCase()
     return fullName.includes(query) || email.includes(query)
+  })
+
+  const filteredFormTeachers = formTeachers.filter((t) => {
+    const query = searchQuery.toLowerCase()
+    const nameMatch = teacherFullName(t).toLowerCase().includes(query)
+    const classMatch = formClassLabels(t).join(' ').toLowerCase().includes(query)
+    const subjectMatch = uniqueSubjectNames(t).join(' ').toLowerCase().includes(query)
+    return nameMatch || classMatch || subjectMatch
   })
 
   const filteredNonTeaching = staff.filter(s => {
@@ -379,7 +416,7 @@ export function StaffDirectory() {
               <Users className="text-blue-600" size={24} /> Staff Directory & Communication
             </h1>
             <p className="text-slate-500 text-sm font-medium">
-              Manage teachers, subject specialists, non-teaching personnel, and dispatch staff communications via EduChat.
+              Manage teachers, form teachers, subject specialists, non-teaching personnel, and dispatch staff communications via EduChat.
             </p>
           </div>
 
@@ -403,6 +440,17 @@ export function StaffDirectory() {
           }`}
         >
           <UserCheck size={15} /> Teachers Directory
+        </button>
+
+        <button
+          onClick={() => setActiveTab('form-teachers')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+            activeTab === 'form-teachers'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <GraduationCap size={15} /> Form Teachers
         </button>
 
         <button
@@ -621,7 +669,158 @@ export function StaffDirectory() {
         </div>
       )}
 
-      {/* TAB 2: SUBJECT TEACHERS */}
+      {/* TAB 2: FORM TEACHERS */}
+      {activeTab === 'form-teachers' && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <GraduationCap className="text-purple-600" size={18} /> Form Teachers ({formTeachers.length})
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  Class teachers assigned to manage a form class, with the subjects they also teach.
+                </p>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Filter by name, class, or subject..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-purple-500 focus:bg-white transition"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                {error}
+              </div>
+            )}
+
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="animate-spin text-purple-600" size={28} />
+                <p className="text-slate-500 text-xs font-semibold">Loading form teachers...</p>
+              </div>
+            ) : filteredFormTeachers.length === 0 ? (
+              <div className="p-12 text-center text-slate-500 text-sm font-semibold bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
+                <GraduationCap size={24} className="text-slate-400" />
+                {formTeachers.length === 0
+                  ? 'No form teachers assigned yet. Mark a teacher as Class Teacher (Form Teacher) when onboarding or editing their record.'
+                  : 'No form teachers match your search filter.'}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Photo</TableHead>
+                      <TableHead>Teacher Name</TableHead>
+                      <TableHead className="min-w-[160px]">Class Managing</TableHead>
+                      <TableHead className="min-w-[200px]">Subjects Teaching</TableHead>
+                      <TableHead className="text-right w-28">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredFormTeachers.map((t) => {
+                      const teacherDisplayName = teacherFullName(t)
+                      const classesManaged = formClassLabels(t)
+                      const subjectsTaught = uniqueSubjectNames(t)
+                      return (
+                        <TableRow key={t.id} className="hover:bg-slate-50/50">
+                          <TableCell className="w-12">
+                            <div className="relative group/avatar w-10 h-10">
+                              {t.photo ? (
+                                <img
+                                  src={t.photo}
+                                  alt={teacherDisplayName}
+                                  className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-purple-500 transition"
+                                  onClick={() => setPreviewEnlargePhoto({ url: t.photo!, name: teacherDisplayName })}
+                                />
+                              ) : (
+                                <div
+                                  onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher' })}
+                                  className="w-10 h-10 rounded-full bg-linear-to-br from-purple-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-2xs cursor-pointer hover:ring-2 hover:ring-purple-400 transition"
+                                  title="Click to upload photograph"
+                                >
+                                  {([t.firstName?.[0], t.lastName?.[0]].filter(Boolean).join('') || teacherDisplayName[0] || 'T').toUpperCase()}
+                                </div>
+                              )}
+                              <button
+                                onClick={() => setPhotoUploadTarget({ id: t.id, name: teacherDisplayName, type: 'teacher', currentPhoto: t.photo })}
+                                className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-purple-600 hover:border-purple-400 shadow-xs transition cursor-pointer"
+                                title="Update Photograph"
+                              >
+                                <Camera size={10} />
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-bold text-slate-900">
+                            {teacherDisplayName}
+                          </TableCell>
+                          <TableCell className="max-w-[220px] whitespace-normal">
+                            {classesManaged.length === 0 ? (
+                              <span className="text-xs font-medium text-slate-400">Unassigned</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {classesManaged.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-100 leading-tight"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="max-w-[280px] whitespace-normal">
+                            {subjectsTaught.length === 0 ? (
+                              <span className="text-xs font-medium text-slate-400">No subjects assigned</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {subjectsTaught.map((subject) => (
+                                  <span
+                                    key={subject}
+                                    className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 leading-tight"
+                                  >
+                                    {subject}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              onClick={() => {
+                                setEditingTeacher(t)
+                                setIsEditModalOpen(true)
+                              }}
+                              className="px-3 py-1.5 bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer active:scale-95 inline-flex items-center gap-1.5"
+                            >
+                              <Edit3 size={13} />
+                              <span>Edit</span>
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                  <TableCaption>
+                    Showing {filteredFormTeachers.length} form teacher{filteredFormTeachers.length === 1 ? '' : 's'}.
+                  </TableCaption>
+                </Table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: SUBJECT TEACHERS */}
       {activeTab === 'subject-teachers' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">

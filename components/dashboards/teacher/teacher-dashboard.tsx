@@ -1290,7 +1290,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const normalizedProfile = profile ? { ...profile, id: profile.teacherId } : undefined
 
   if (activeSection === 'attendance') {
-    return <AttendanceRegister formAllocations={profile?.formAllocations || []} />
+    return <AttendanceRegister
+      formAllocations={profile?.formAllocations || []}
+      schoolName={profile?.branchName}
+      teacherName={profile?.name || user.username}
+    />
   }
   if (activeSection === 'ai-planner' || activeSection === 'lesson-plan') {
     return <AiLessonPlanner profile={normalizedProfile as any} />

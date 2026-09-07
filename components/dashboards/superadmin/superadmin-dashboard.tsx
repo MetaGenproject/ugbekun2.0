@@ -29,7 +29,9 @@ import { AddSchoolForm } from './add-school-form'
 import { EditBranchForm, type BranchDetails } from './edit-branch-form'
 import { MultiBranchRevenueAnalytics } from './multi-branch-revenue-analytics'
 import { SuperadminSchoolCmsEditor } from './superadmin-school-cms-editor'
+import { StaffDirectory } from '@/components/dashboards/admin/staff-directory'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { safeStorage } from '@/lib/safeStorage'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -129,6 +131,106 @@ function formatCount(value: number, label: string) {
 
 const COLORS = ['#2563eb', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6']
 
+function SuperadminStaffPortal({ initialTab = 'teachers' }: { initialTab?: 'teachers' | 'form-teachers' | 'subject-teachers' | 'non-teaching' | 'communication' }) {
+  const [branches, setBranches] = useState<BranchDetails[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null)
+  const [isLoadingBranches, setIsLoadingBranches] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadBranches() {
+      setIsLoadingBranches(true)
+      setError(null)
+      try {
+        const res = await apiSlice.get<{ success: boolean; data: BranchDetails[] }>(
+          endpoints.superadmin.branches
+        )
+        if (cancelled) return
+        const list = res.data || []
+        setBranches(list)
+        const stored = Number(safeStorage.getItem('ugbekun_admin_branch_id') || '')
+        const initial = list.find((b) => b.id === stored)?.id || list[0]?.id || null
+        if (initial) {
+          safeStorage.setItem('ugbekun_admin_branch_id', String(initial))
+          setSelectedBranchId(initial)
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Failed to load schools.')
+      } finally {
+        if (!cancelled) setIsLoadingBranches(false)
+      }
+    }
+    loadBranches()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleBranchChange = (id: number) => {
+    setSelectedBranchId(id)
+    safeStorage.setItem('ugbekun_admin_branch_id', String(id))
+  }
+
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId)
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-900">
+            {initialTab === 'form-teachers' ? 'Form Teachers' : 'Staff Directory'}
+          </h2>
+          <p className="text-sm text-slate-500">
+            Manage teachers, form teachers, and staff for a selected school branch.
+          </p>
+        </div>
+        <div className="min-w-[260px]">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">School / Branch</label>
+          <select
+            value={selectedBranchId || ''}
+            onChange={(e) => handleBranchChange(Number(e.target.value))}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
+            disabled={isLoadingBranches || branches.length === 0}
+          >
+            {branches.length === 0 && <option value="">No schools found</option>}
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} {b.code ? `(${b.code})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 font-medium">
+          {error}
+        </div>
+      )}
+
+      {isLoadingBranches ? (
+        <div className="flex items-center justify-center py-16 text-slate-500 text-sm font-semibold gap-2">
+          <Loader2 className="animate-spin" size={18} /> Loading schools...
+        </div>
+      ) : selectedBranchId ? (
+        <StaffDirectory key={`${selectedBranchId}-${initialTab}`} initialTab={initialTab} />
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500 font-semibold">
+          Select a school to view its staff directory.
+        </div>
+      )}
+
+      {selectedBranch && (
+        <p className="text-[11px] text-slate-400 font-medium px-1">
+          Showing staff for {selectedBranch.name}
+          {selectedBranch.adminName ? ` · Admin: ${selectedBranch.adminName}` : ''}.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: DashboardProps) {
   const [mounted, setMounted] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -196,6 +298,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       loadSubscriptions()
     } else if (activeSection === 'settings') {
       loadSessions()
+    } else if (activeSection === 'staff' || activeSection === 'staff-directory' || activeSection === 'form-teachers' || activeSection === 'teachers') {
+      refreshBranches()
     }
   }, [activeSection])
 
@@ -914,6 +1018,14 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
 
       {activeSection === 'school-cms' && (
         <SuperadminSchoolCmsEditor />
+      )}
+
+      {(activeSection === 'staff' || activeSection === 'staff-directory' || activeSection === 'teachers') && (
+        <SuperadminStaffPortal initialTab="teachers" />
+      )}
+
+      {activeSection === 'form-teachers' && (
+        <SuperadminStaffPortal initialTab="form-teachers" />
       )}
 
       {activeSection === 'settings' && (
