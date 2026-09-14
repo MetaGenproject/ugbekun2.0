@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Sparkles, Trophy, Flame, Loader2, Play, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react'
-import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { safeStorage } from '@/lib/safeStorage'
+import { endpoints } from '@/lib/apiSlice'
 
 interface Badge {
   id: number
@@ -63,22 +62,27 @@ export default function PointsHub() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const token = safeStorage.getItem('ugbekun_token')
-      const headers: Record<string, string> = {}
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
 
       // Fetch Profile/Points
-      const profileRes = await fetch(`${endpoints.health.replace('/health', '')}/student/gamification/profile`, { headers })
+      const profileRes = await fetch(`${endpoints.health.replace('/health', '')}/student/gamification/profile`, {
+        headers,
+        credentials: 'include',
+      })
       const profileData = await profileRes.json()
 
       // Fetch Trivia
-      const triviaRes = await fetch(`${endpoints.health.replace('/health', '')}/student/trivia/active`, { headers })
+      const triviaRes = await fetch(`${endpoints.health.replace('/health', '')}/student/trivia/active`, {
+        headers,
+        credentials: 'include',
+      })
       const triviaData = await triviaRes.json()
 
       // Fetch Leaderboard
-      const lbRes = await fetch(`${endpoints.health.replace('/health', '')}/student/gamification/leaderboard?periodType=${selectedPeriod}`, { headers })
+      const lbRes = await fetch(`${endpoints.health.replace('/health', '')}/student/gamification/leaderboard?periodType=${selectedPeriod}`, {
+        headers,
+        credentials: 'include',
+      })
       const lbData = await lbRes.json()
 
       if (profileData.success) {
@@ -147,12 +151,11 @@ export default function PointsHub() {
     setSubmittingTrivia(true)
 
     try {
-      const token = safeStorage.getItem('ugbekun_token')
       const res = await fetch(`${endpoints.health.replace('/health', '')}/student/trivia/submit`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           triviaQuestionId: question.id,

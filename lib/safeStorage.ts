@@ -8,7 +8,7 @@
 
 // In-memory fallback — always available for the current page session
 const memoryStore = new Map<string, string>();
-const AUTH_COOKIE_KEYS = new Set(['ugbekun_token', 'ugbekun_user']);
+const AUTH_COOKIE_KEYS = new Set(['ugbekun_user']);
 const WINDOW_NAME_SESSION_KEY = '__ugbekun_window_name_session__';
 
 const getWindowNameStore = (): Record<string, string> => {

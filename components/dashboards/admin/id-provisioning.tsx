@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { safeStorage } from '@/lib/safeStorage'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { 
   Award, ShieldAlert, FileText, Download, Trash2, CheckCircle2, AlertCircle, 
@@ -81,13 +80,10 @@ export function IdProvisioning() {
         durationMs: 0
       })
 
-      const token = safeStorage.getItem('ugbekun_token')
       const pdfUrl = endpoints.admin.exportClassLoginSlipsPdf(batchPdfClassId, batchPdfSectionId)
 
       const res = await fetch(pdfUrl, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        }
+        credentials: 'include',
       })
 
       if (!res.ok) {

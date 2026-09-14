@@ -74,7 +74,6 @@ import {
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { useSchoolBranding } from '@/lib/schoolBrandingContext'
-import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { StudentMediaLibrary } from './student-media-library'
@@ -522,6 +521,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
       }
     } catch (err: any) {
       alert(err?.message || 'Failed to start CBT examination.')
+      fetchCbtExams()
     }
   }
 
@@ -935,10 +935,9 @@ function normalizeQuestions(raw: any): any[] {
   const handleExportReportCard = async () => {
     try {
       setExportingPdf(true)
-      const token = safeStorage.getItem('ugbekun_token')
       const url = endpoints.student.exportPdf('all')
       const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        credentials: 'include',
       })
       if (!res.ok) throw new Error('PDF Export failed.')
       const blob = await res.blob()
@@ -965,10 +964,9 @@ function normalizeQuestions(raw: any): any[] {
     if (!previewPdfBlobUrl) {
       try {
         setLoadingPdfPreview(true)
-        const token = safeStorage.getItem('ugbekun_token')
         const url = endpoints.student.exportPdf('all')
         const res = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+          credentials: 'include',
         })
         if (res.ok) {
           const blob = await res.blob()
@@ -2882,16 +2880,26 @@ function normalizeQuestions(raw: any): any[] {
               {examsList.map((exam) => {
                 const isCompleted = exam.isSubmitted || exam.submitted
                 const examScore = exam.totalMark !== null && exam.totalMark !== undefined ? exam.totalMark : exam.score
+                const windowStatus = exam.windowStatus || 'open'
+                const canStart = !isCompleted && windowStatus === 'open'
 
                 return (
-                  <div key={exam.id} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between hover:border-amber-400/60 transition">
+                  <div key={`${exam.sourceType || 'exam'}-${exam.id}`} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between hover:border-amber-400/60 transition">
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md">
                           {exam.subjectName}
                         </span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
-                          {isCompleted ? 'Completed' : 'Available to Take'}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                          isCompleted
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : windowStatus === 'upcoming'
+                              ? 'bg-slate-100 text-slate-700'
+                              : windowStatus === 'ended'
+                                ? 'bg-rose-50 text-rose-700'
+                                : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {isCompleted ? 'Completed' : windowStatus === 'upcoming' ? 'Opens later' : windowStatus === 'ended' ? 'Sitting closed' : 'Available to take'}
                         </span>
                       </div>
 
@@ -2901,6 +2909,13 @@ function normalizeQuestions(raw: any): any[] {
                         <span>&bull;</span>
                         <span>Pass Mark: <strong className="text-slate-700">{exam.passingMark || 50}%</strong></span>
                       </p>
+                      {(exam.startDate || exam.endDate) && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {exam.startDate ? `Opens ${new Date(exam.startDate).toLocaleString()}` : ''}
+                          {exam.startDate && exam.endDate ? ' · ' : ''}
+                          {exam.endDate ? `Closes ${new Date(exam.endDate).toLocaleString()}` : ''}
+                        </p>
+                      )}
                     </div>
 
                     {isCompleted ? (
@@ -2908,13 +2923,19 @@ function normalizeQuestions(raw: any): any[] {
                         <span className="flex items-center gap-1.5"><CheckCircle2 size={15} /> Completed</span>
                         <span className="font-mono text-sm font-black">{examScore !== null ? `${examScore}%` : 'Graded'}</span>
                       </div>
-                    ) : (
+                    ) : canStart ? (
                       <button
                         onClick={() => handleStartCbtExam(exam.id)}
                         className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-2xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Zap size={14} /> Start CBT Assessment
                       </button>
+                    ) : (
+                      <div className="p-3 rounded-2xl border border-slate-200 bg-white text-xs text-slate-600">
+                        {exam.windowMessage || (windowStatus === 'ended'
+                          ? 'This sitting has closed. Your school admin can change the date and time on the same exam.'
+                          : 'This examination is not open yet.')}
+                      </div>
                     )}
                   </div>
                 )

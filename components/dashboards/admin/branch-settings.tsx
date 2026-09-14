@@ -4,35 +4,17 @@ import { useState, useEffect } from 'react'
 import {
   Settings,
   Building2,
-  Users,
   Sliders,
   Save,
   Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  HelpCircle,
   ShieldCheck,
   Globe,
   Mail,
   Phone,
-  MapPin,
   FileText,
-  Lock,
-  Bell,
   Sparkles,
-  Clock,
-  Coins,
-  Upload,
   Image as ImageIcon,
-  Bus,
-  CreditCard,
-  Smartphone,
-  Key,
-  Database,
-  History,
   SmartphoneNfc,
-  Calendar,
-  Check,
   Share2,
   RotateCcw,
   RefreshCw,
@@ -55,6 +37,9 @@ import {
   TableCaption,
 } from '@/components/ui/table'
 import { DomainSettingsTab } from './domain-settings-tab'
+import SchoolCalendar from './school-calendar'
+import { RoleManagement } from './role-management'
+import { AcademicSessionManager } from './academic-session-manager'
 
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 
@@ -65,16 +50,9 @@ type SettingsTab =
   | 'academic-session' 
   | 'school-calendar' 
   | 'roles-permissions' 
-  | 'myeduride' 
-  | 'payment-gateway' 
-  | 'sms-email' 
-  | 'api-webhooks' 
-  | 'ose-ai' 
-  | 'backup-restore' 
-  | 'audit-logs' 
   | 'pwa-settings'
 
-export function BranchSettings() {
+export function BranchSettings({ user }: { user?: { id?: number; username?: string; role?: number } }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('school-info')
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -105,30 +83,9 @@ export function BranchSettings() {
   const [secondaryColor, setSecondaryColor] = useState('#0284c7')
   const [idCardTheme, setIdCardTheme] = useState('EMERALD_MODERN')
 
-  // Academic Session
-  const [session, setSession] = useState('2025/2026')
-  const [term, setTerm] = useState('First Term')
-
-  // Payment Gateway Keys
-  const [paystackKey, setPaystackKey] = useState('pk_live_9482910482018402')
-  const [flutterwaveKey, setFlutterwaveKey] = useState('FLWSECK-f8941094-X')
-
-  // SMS Gateway
-  const [smsSenderId, setSmsSenderId] = useState('UGBEKUN SCH')
-  const [smsApiKey, setSmsApiKey] = useState('TL_849204918204')
-
-  // OSe AI Settings
-  const [aiTemperature, setAiTemperature] = useState('0.7')
-  const [aiAutoComment, setAiAutoComment] = useState(true)
-
   // PWA Settings
   const [pwaAppName, setPwaAppName] = useState('Ugbekun Portal')
   const [pwaShortName, setPwaShortName] = useState('Ugbekun')
-
-  // Audit Logs Sample
-  const [auditLogs, setAuditLogs] = useState([
-    { id: 'LOG-001', user: 'Admin', action: 'System Provisioned & Active', ip: '127.0.0.1', date: new Date().toISOString().slice(0, 16).replace('T', ' ') },
-  ])
 
   const loadSettings = async () => {
     setIsLoading(true)
@@ -153,10 +110,6 @@ export function BranchSettings() {
         setPrimaryColor(res.data.primaryColor || '#0f172a')
         setSecondaryColor(res.data.secondaryColor || '#0284c7')
         setIdCardTheme(res.data.idCardTheme || 'EMERALD_MODERN')
-
-        if (res.data.academicSession) setSession(res.data.academicSession)
-        if (res.data.currentTerm) setTerm(res.data.currentTerm)
-        if (res.data.aiAssistanceEnabled !== undefined) setAiAutoComment(res.data.aiAssistanceEnabled)
       }
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -213,9 +166,6 @@ export function BranchSettings() {
         primaryColor,
         secondaryColor,
         idCardTheme,
-        academicSession: session,
-        currentTerm: term,
-        aiAssistanceEnabled: aiAutoComment,
       })
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('branch-settings-updated'))
@@ -300,7 +250,7 @@ export function BranchSettings() {
               <Settings className="text-slate-700" size={24} /> System Configuration & Settings
             </h1>
             <p className="text-slate-500 text-sm font-medium">
-              School profiles, branding, session terms, user permissions, gateways, AI configuration, and PWA setup.
+              School profiles, branding, academic sessions, calendar, user roles, and PWA setup.
             </p>
           </div>
 
@@ -333,27 +283,6 @@ export function BranchSettings() {
         </button>
         <button onClick={() => setActiveTab('roles-permissions')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'roles-permissions' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           🔐 Roles & Permissions
-        </button>
-        <button onClick={() => setActiveTab('myeduride')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'myeduride' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🚌 MyEduRide Integration
-        </button>
-        <button onClick={() => setActiveTab('payment-gateway')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'payment-gateway' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          💳 Payment Gateway
-        </button>
-        <button onClick={() => setActiveTab('sms-email')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'sms-email' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📱 SMS & Email
-        </button>
-        <button onClick={() => setActiveTab('api-webhooks')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'api-webhooks' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🔑 API & Webhooks
-        </button>
-        <button onClick={() => setActiveTab('ose-ai')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'ose-ai' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🤖 OSe AI Settings
-        </button>
-        <button onClick={() => setActiveTab('backup-restore')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'backup-restore' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          💾 Backup & Restore
-        </button>
-        <button onClick={() => setActiveTab('audit-logs')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'audit-logs' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📜 Audit Logs
         </button>
         <button onClick={() => setActiveTab('pwa-settings')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition ${activeTab === 'pwa-settings' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
           📱 PWA Settings
@@ -892,122 +821,18 @@ export function BranchSettings() {
 
       {/* 3. ACADEMIC SESSION */}
       {activeTab === 'academic-session' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Current Academic Session & Term</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <select value={session} onChange={e => setSession(e.target.value)} className="p-2.5 border rounded-xl text-xs bg-slate-50 font-bold"><option value="2025/2026">2025/2026 Session</option><option value="2026/2027">2026/2027 Session</option></select>
-            <select value={term} onChange={e => setTerm(e.target.value)} className="p-2.5 border rounded-xl text-xs bg-slate-50 font-bold"><option value="1st Term">1st Term</option><option value="2nd Term">2nd Term</option><option value="3rd Term">3rd Term</option></select>
-          </div>
-          <button onClick={handleSaveSettings} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Update Session</button>
-        </div>
+        <AcademicSessionManager />
       )}
 
-      {/* 4. SCHOOL CALENDAR */}
       {activeTab === 'school-calendar' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">School Calendar & Key Dates</h3>
-          <p className="text-xs text-slate-500 font-medium">Term Resumption: August 10, 2026 • Mid-Term Break: October 15, 2026.</p>
-        </div>
+        <SchoolCalendar user={user || { role: 2 }} embedded />
       )}
 
-      {/* 5. USER ROLES & PERMISSIONS */}
       {activeTab === 'roles-permissions' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Access Control Matrix (Roles & Permissions)</h3>
-          <Table>
-            <TableHeader><TableRow><TableHead>Role Title</TableHead><TableHead>Scope</TableHead><TableHead>Permissions</TableHead></TableRow></TableHeader>
-            <TableBody>
-              <TableRow><TableCell className="font-bold">Super Admin</TableCell><TableCell>Global</TableCell><TableCell className="text-xs text-emerald-700 font-bold">Full Access</TableCell></TableRow>
-              <TableRow><TableCell className="font-bold">Branch Admin</TableCell><TableCell>Branch</TableCell><TableCell className="text-xs text-emerald-700 font-bold">Full Branch Management</TableCell></TableRow>
-              <TableRow><TableCell className="font-bold">Teacher</TableCell><TableCell>Classroom</TableCell><TableCell className="text-xs text-slate-700">Grades, Attendance, Lessons</TableCell></TableRow>
-            </TableBody>
-          </Table>
-        </div>
+        <RoleManagement embedded />
       )}
 
-      {/* 6. MYEDURIDE INTEGRATION */}
-      {activeTab === 'myeduride' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">MyEduRide API Credentials & Gate Sync</h3>
-          <input type="text" defaultValue="EDURIDE-LIVE-KEY-948291" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-mono font-bold text-cyan-700" />
-          <button onClick={handleSaveSettings} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Save Integration</button>
-        </div>
-      )}
-
-      {/* 7. PAYMENT GATEWAY */}
-      {activeTab === 'payment-gateway' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Online Fee Payment Gateways (Paystack & Flutterwave)</h3>
-          <input type="text" value={paystackKey} onChange={e => setPaystackKey(e.target.value)} placeholder="Paystack Secret Key" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-mono font-bold" />
-          <input type="text" value={flutterwaveKey} onChange={e => setFlutterwaveKey(e.target.value)} placeholder="Flutterwave Public Key" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-mono font-bold" />
-          <button onClick={handleSaveSettings} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Save Payment Keys</button>
-        </div>
-      )}
-
-      {/* 8. SMS & EMAIL */}
-      {activeTab === 'sms-email' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Termii / Twilio SMS Gateway & SMTP Mail Server</h3>
-          <input type="text" value={smsSenderId} onChange={e => setSmsSenderId(e.target.value)} placeholder="SMS Sender ID" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-bold" />
-          <input type="text" value={smsApiKey} onChange={e => setSmsApiKey(e.target.value)} placeholder="SMS API Key" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-mono" />
-          <button onClick={handleSaveSettings} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Save Messaging Config</button>
-        </div>
-      )}
-
-      {/* 9. API & WEBHOOKS */}
-      {activeTab === 'api-webhooks' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900">Developer API Keys & Webhook Endpoints</h3>
-          <input type="text" defaultValue="https://ugbekun.edu.ng/api/v1/webhooks/paystack" className="w-full p-2.5 border rounded-xl text-xs bg-slate-50 font-mono" />
-          <button onClick={() => alert('New API Secret Generated!')} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Generate New API Key</button>
-        </div>
-      )}
-
-      {/* 10. OSE AI SETTINGS */}
-      {activeTab === 'ose-ai' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
-          <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
-            <Sparkles className="text-amber-500" size={18} /> OSe AI Model & Auto-Assist Rules
-          </h3>
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={aiAutoComment} onChange={e => setAiAutoComment(e.target.checked)} /> Auto-Generate Report Card Remarks with OSe Engine
-          </label>
-          <button onClick={handleSaveSettings} className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl">Save OSe Settings</button>
-        </div>
-      )}
-
-      {/* 11. BACKUP & RESTORE */}
-      {activeTab === 'backup-restore' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4 text-center">
-          <Database size={32} className="text-indigo-600 mx-auto" />
-          <h3 className="font-black text-base text-slate-900">Database Backup & Recovery</h3>
-          <p className="text-xs text-slate-500 font-medium">Automatic daily cloud snapshot enabled at 02:00 AM.</p>
-          <button onClick={() => alert('Backup Created & Saved to Cloud!')} className="px-5 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">Create Manual Database Backup</button>
-        </div>
-      )}
-
-      {/* 12. AUDIT LOGS */}
-      {activeTab === 'audit-logs' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">System Security Audit Log Trail</h3>
-          <Table>
-            <TableHeader><TableRow><TableHead>Log ID</TableHead><TableHead>User</TableHead><TableHead>Action Performed</TableHead><TableHead>IP Address</TableHead><TableHead>Date & Time</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {auditLogs.map(l => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-mono font-bold text-slate-800">{l.id}</TableCell>
-                  <TableCell className="font-bold text-slate-900">{l.user}</TableCell>
-                  <TableCell className="text-xs text-slate-700">{l.action}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-500">{l.ip}</TableCell>
-                  <TableCell className="font-mono text-xs text-slate-500">{l.date}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* 13. PWA SETTINGS */}
+      {/* PWA SETTINGS */}
       {activeTab === 'pwa-settings' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto space-y-4">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">

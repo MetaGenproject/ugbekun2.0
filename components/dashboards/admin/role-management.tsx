@@ -27,7 +27,7 @@ export interface StaffRoleItem {
   staffCount: number
 }
 
-export function RoleManagement() {
+export function RoleManagement({ embedded = false }: { embedded?: boolean }) {
   const [roles, setRoles] = useState<StaffRoleItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -149,7 +149,22 @@ export function RoleManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      {embedded ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-black text-base text-slate-900">Roles & Permissions</h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Create, update, and delete custom staff roles. System roles stay read-only.
+            </p>
+          </div>
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+          >
+            <Plus size={14} /> Create Custom Role
+          </button>
+        </div>
+      ) : (
       <div className="bg-gradient-to-r from-[#0063a6] via-[#004d80] to-[#003659] rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 skew-x-12 pointer-events-none" />
         
@@ -172,6 +187,7 @@ export function RoleManagement() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Controls Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
@@ -345,10 +361,10 @@ export function RoleManagement() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500">Role Description</label>
+                <label className="text-xs font-bold text-slate-500">Description / Permissions</label>
                 <textarea
                   rows={3}
-                  placeholder="Briefly describe key duties and permissions for this role..."
+                  placeholder="Describe duties and permissions, e.g. can manage fees, view reports, edit attendance..."
                   value={roleDescription}
                   onChange={(e) => setRoleDescription(e.target.value)}
                   disabled={isSubmitting}

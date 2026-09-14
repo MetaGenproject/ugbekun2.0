@@ -688,7 +688,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   }
 
   if (activeSection === 'settings' || activeSection === 'branch-settings') {
-    return <BranchSettings />
+    return <BranchSettings user={user} />
   }
 
   if (activeSection === 'teacher-duties') {

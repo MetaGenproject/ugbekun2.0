@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { safeStorage } from '@/lib/safeStorage'
+import { apiSlice, endpoints, BASE_URL } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import {
   UserPlus,
@@ -774,13 +773,9 @@ export function StudentOnboarding() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = safeStorage.getItem('ugbekun_token')
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
-      const response = await fetch(`${apiUrl}/admin/students/parse-document`, {
+      const response = await fetch(`${BASE_URL}/admin/students/parse-document`, {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: 'include',
         body: formData,
       })
 
@@ -1161,13 +1156,9 @@ export function StudentOnboarding() {
     formData.append('file', file)
 
     try {
-      const token = safeStorage.getItem('ugbekun_token')
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
-      const response = await fetch(`${apiUrl}/admin/students/parse-document`, {
+      const response = await fetch(`${BASE_URL}/admin/students/parse-document`, {
         method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        credentials: 'include',
         body: formData,
       })
 

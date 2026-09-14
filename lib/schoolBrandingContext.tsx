@@ -79,8 +79,11 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
         if (rawUser) {
           try {
             const parsed = JSON.parse(rawUser)
+            const role = Number(parsed?.role)
             const targetBranchId = parsed?.branchId || parsed?.branch?.id
-            if (targetBranchId) {
+            // Parents: do not pin branding to a stale parent/HQ branchId.
+            // The children overview header uses the selected child's school.
+            if (targetBranchId && role !== 6) {
               branchIdParam = `?branchId=${targetBranchId}`
             }
           } catch {

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Activity, AlertTriangle, User, Calendar, Shield, ArrowRight, CheckCircle, FileText, TrendingDown, DollarSign, X } from 'lucide-react'
-import { endpoints } from '@/lib/apiSlice'
-import { safeStorage } from '@/lib/safeStorage'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
 
 interface Student {
   id: number
@@ -50,13 +49,7 @@ export function TeacherAttritionRadar() {
     setLoading(true)
     setErrorMessage(null)
     try {
-      const token = safeStorage.getItem('ugbekun_token')
-      const res = await fetch(endpoints.teacher.attritionDashboard, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-      const data = await res.json()
+      const data = await apiSlice.get(endpoints.teacher.attritionDashboard)
       if (data.success) {
         setAlerts(data.alerts || [])
       } else {
@@ -73,16 +66,7 @@ export function TeacherAttritionRadar() {
   const handleAction = async (alertId: number, nextStatus: string) => {
     setActionLoading(true)
     try {
-      const token = safeStorage.getItem('ugbekun_token')
-      const res = await fetch(endpoints.teacher.attritionAction(alertId), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: nextStatus })
-      })
-      const data = await res.json()
+      const data = await apiSlice.post(endpoints.teacher.attritionAction(alertId), { status: nextStatus })
       if (data.success) {
         // Refresh alert feed
         await fetchAlerts()

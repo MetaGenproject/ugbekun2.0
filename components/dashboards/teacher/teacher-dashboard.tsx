@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { 
   BookOpen, 
@@ -61,8 +61,10 @@ import { LiveClassroomHub } from './live-classroom-hub'
 import TeacherPointsHub from './points-hub'
 import { TeacherAttritionRadar } from './attrition-radar'
 import { QuestionBankManager } from './question-bank-manager'
+import { HomeworkQuestionStudio, type HomeworkAllocation } from '@/components/dashboards/shared/homework-question-studio'
 import { TeacherSubjectsHub } from './teacher-subjects-hub'
 import { TeacherTimetableView } from './teacher-timetable-view'
+import { SubjectTeacherDashboard, TeacherCommunicationInbox } from './subject-teacher-dashboard'
 import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
 
@@ -74,6 +76,11 @@ interface DashboardProps {
   }
   activeSection?: string
   onNavigate?: (section: string) => void
+  onIdentityChange?: (identity: {
+    name: string
+    photo: string | null
+    title: string
+  } | null) => void
 }
 
 interface FormAllocation {
@@ -250,7 +257,7 @@ function SVGDonutChart({
   )
 }
 
-export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardProps) {
+export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityChange }: DashboardProps) {
   const [profile, setProfile] = useState<TeacherProfile | null>(null)
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverviewData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -279,6 +286,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [homeworksList, setHomeworksList] = useState<any[]>([])
   const [loadingHomeworks, setLoadingHomeworks] = useState<boolean>(false)
   const [showCreateHwModal, setShowCreateHwModal] = useState<boolean>(false)
+  const [showHwStudio, setShowHwStudio] = useState<boolean>(false)
+  const [hwStudioKey, setHwStudioKey] = useState(0)
 
   // New Homework Form State
   const [hwTitle, setHwTitle] = useState<string>('')
@@ -286,6 +295,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [hwClassId, setHwClassId] = useState<string>('')
   const [hwSubjectId, setHwSubjectId] = useState<string>('')
   const [hwDueDate, setHwDueDate] = useState<string>('')
+  const [hwTermName, setHwTermName] = useState<string>('First Term')
   const [hwQuestions, setHwQuestions] = useState<any[]>([])
   const [publishingHw, setPublishingHw] = useState<boolean>(false)
 
@@ -305,6 +315,18 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const [gradeScore, setGradeScore] = useState<string>('')
   const [gradeFeedback, setGradeFeedback] = useState<string>('')
   const [savingGrade, setSavingGrade] = useState<boolean>(false)
+
+  const homeworkAllocations: HomeworkAllocation[] = useMemo(
+    () =>
+      (profile?.subjectAssignments || []).map((sa) => ({
+        classId: sa.classId,
+        className: sa.className,
+        subjectId: sa.subjectId,
+        subjectName: sa.subjectName,
+        sectionName: sa.sectionName,
+      })),
+    [profile]
+  )
 
   // Self-Service Photograph Upload Modal State
   const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false)
@@ -356,6 +378,15 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
 
         if (profileRes && profileRes.success) {
           setProfile(profileRes)
+          onIdentityChange?.({
+            name: profileRes.name || user.username,
+            photo: profileRes.photo || null,
+            title: profileRes.isSubjectTeacher
+              ? 'Subject Teacher'
+              : profileRes.isFormTeacher
+                ? 'Form Teacher'
+                : 'Teacher',
+          })
         } else if (overviewRes?.profile) {
           setProfile({
             teacherId: overviewRes.profile.teacherId,
@@ -369,6 +400,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
             subjectAssignments: [],
             branchName: overviewRes.profile.branchName,
             primaryForm: overviewRes.profile.primaryForm
+          })
+          onIdentityChange?.({
+            name: overviewRes.profile.name || user.username,
+            photo: overviewRes.profile.photo || null,
+            title: 'Subject Teacher',
           })
         } else {
           throw new Error('Failed to load teacher profile data.')
@@ -490,6 +526,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
       const params = new URLSearchParams()
       if (hwSubjectId) params.append('subjectId', hwSubjectId)
       if (hwClassId) params.append('classId', hwClassId)
+      if (hwTermName) params.append('termName', hwTermName)
       if (params.toString()) query = `?${params.toString()}`
 
       const res = await apiSlice.get<{ success: boolean; items?: any[] }>(endpoints.teacher.questionBank(query))
@@ -509,12 +546,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const handleImportSelectedQuestions = () => {
     const selected = qBankItems.filter((q) => selectedQBankIds.includes(q.id))
     const formattedNew = selected.map((q) => ({
-      id: q.id || `q_${Date.now()}_${Math.random()}`,
+      id: q.id,
       questionText: q.questionText,
       type: q.questionType === 'mcq' ? 'MCQ' : 'THEORY',
       options: Array.isArray(q.options) ? q.options : [],
       correctAnswer: q.correctOption || '',
       points: q.marks || 1,
+      termName: q.termName,
+      topic: q.topic,
     }))
 
     setHwQuestions((prev) => [...prev, ...formattedNew])
@@ -530,6 +569,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   const handleCreateHomework = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hwTitle.trim() || !hwClassId || !hwSubjectId || !hwDueDate) return
+    const questionBankIds = hwQuestions.map((q) => Number(q.id)).filter((id) => Number.isInteger(id) && id > 0)
+    if (!questionBankIds.length || questionBankIds.length !== hwQuestions.length) {
+      showSystemStatus(resolveHttpStatus(400, 'Save or import questions from the Question Bank before assigning homework.'))
+      return
+    }
     try {
       setPublishingHw(true)
       const res = await apiSlice.post<{ success: boolean; homework: any; message: string }>(endpoints.teacher.homeworks, {
@@ -538,7 +582,8 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         classId: Number(hwClassId),
         subjectId: Number(hwSubjectId),
         dueDate: hwDueDate,
-        questions: hwQuestions,
+        termName: hwTermName,
+        questionBankIds,
       })
       if (res.success && res.homework) {
         setHomeworksList(prev => [res.homework, ...prev])
@@ -547,6 +592,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
         setHwClassId('')
         setHwSubjectId('')
         setHwDueDate('')
+        setHwTermName('First Term')
         setHwQuestions([])
         setShowCreateHwModal(false)
         showSystemStatus({
@@ -823,25 +869,52 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               <CheckSquare className="text-purple-600" size={24} />
               Homework & Assignments Manager
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Create homework assignments for your classes and grade student submissions in real time.
+            <p className="text-sm text-slate-500 mt-1">
+              Create questions, save them to your bank, then assign homework to the classes you teach.
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCreateHwModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
-          >
-            <Plus size={16} />
-            <span>Create Homework Assignment</span>
-          </button>
+          {!showHwStudio && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowCreateHwModal(true)}
+                className="px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-semibold text-sm transition cursor-pointer flex items-center gap-2"
+              >
+                <BookOpen size={16} className="text-purple-600" />
+                <span>Assign from bank</span>
+              </button>
+              <button
+                onClick={() => {
+                  setHwStudioKey((k) => k + 1)
+                  setShowHwStudio(true)
+                }}
+                className="px-4 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-xs transition cursor-pointer flex items-center gap-2"
+              >
+                <Plus size={16} />
+                <span>New assignment</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Homework List */}
+        {showHwStudio && profile && (
+          <HomeworkQuestionStudio
+            key={hwStudioKey}
+            role="teacher"
+            allocations={homeworkAllocations}
+            onCancel={() => setShowHwStudio(false)}
+            onAssigned={(homework) => {
+              if (homework) setHomeworksList((prev) => [homework, ...prev])
+              setShowHwStudio(false)
+            }}
+          />
+        )}
+
+        {!showHwStudio && (
         <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              Published Assignments ({homeworksList.length})
+            <h3 className="text-sm font-bold text-slate-900">
+              Published assignments ({homeworksList.length})
             </h3>
             {loadingHomeworks && <Loader2 size={16} className="animate-spin text-purple-600" />}
           </div>
@@ -851,16 +924,26 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               {homeworksList.map((hw, idx) => (
                 <div key={`hw-${hw.id}-${idx}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 flex flex-col justify-between">
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold">
-                        {hw.class?.name || 'Class'} &bull; {hw.subject?.name || 'Subject'}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 flex-wrap">
+                      <span className="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold">
+                        {hw.subject?.name || 'Subject'}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-semibold">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium">
+                        {hw.class?.name || 'Class'}
+                      </span>
+                      {hw.termName && (
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-medium">
+                          {hw.termName}
+                        </span>
+                      )}
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium">
                         Due: {new Date(hw.dueDate).toLocaleDateString()}
                       </span>
                     </div>
-                    <h4 className="font-bold text-slate-900 text-sm mt-1">{hw.title}</h4>
-                    {hw.description && <p className="text-xs text-slate-500 line-clamp-2">{hw.description}</p>}
+                    <h4 className="font-bold text-slate-900 mt-1">{hw.title}</h4>
+                    {hw.description && <p className="text-sm text-slate-500 line-clamp-2">{hw.description}</p>}
                   </div>
 
                   <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
@@ -879,20 +962,21 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
               ))}
             </div>
           ) : (
-            <div className="py-12 text-center text-slate-400 text-xs italic">
-              No homework assignments created yet. Click &quot;Create Homework Assignment&quot; to publish your first assignment.
+            <div className="py-12 text-center text-slate-500 text-sm">
+              No homework yet. Use &quot;New assignment&quot; to create questions, or assign from the Question Bank.
             </div>
           )}
         </div>
+        )}
 
         {/* Create Homework Modal */}
         {showCreateHwModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
+            <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <CheckSquare className="text-purple-600" size={20} />
-                  New Homework Assignment
+                  Assign from Question Bank
                 </h3>
                 <button
                   onClick={() => setShowCreateHwModal(false)}
@@ -902,7 +986,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                 </button>
               </div>
 
-              <form onSubmit={handleCreateHomework} className="space-y-4 text-xs">
+              <form onSubmit={handleCreateHomework} className="space-y-4 text-sm">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Assignment Title *</label>
                   <input
@@ -921,7 +1005,11 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                     <select
                       required
                       value={hwClassId}
-                      onChange={(e) => setHwClassId(e.target.value)}
+                      onChange={(e) => {
+                        setHwClassId(e.target.value)
+                        setHwSubjectId('')
+                        setHwQuestions([])
+                      }}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
                     >
                       <option value="">Select Class</option>
@@ -951,7 +1039,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                       <option value="">Select Subject</option>
                       {Array.from(
                         new Map<number, string>(
-                          profile.subjectAssignments.map(sa => [sa.subjectId, sa.subjectName] as [number, string])
+                          profile.subjectAssignments
+                            .filter((sa) => !hwClassId || sa.classId === Number(hwClassId))
+                            .map(sa => [sa.subjectId, sa.subjectName] as [number, string])
                         ).entries()
                       ).map(([subjId, name], idx) => (
                         <option key={`subj-opt-${subjId}-${idx}`} value={subjId}>
@@ -962,15 +1052,30 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Due Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={hwDueDate}
-                    onChange={(e) => setHwDueDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Due Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={hwDueDate}
+                      onChange={(e) => setHwDueDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Term *</label>
+                    <select
+                      required
+                      value={hwTermName}
+                      onChange={(e) => setHwTermName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold"
+                    >
+                      <option>First Term</option>
+                      <option>Second Term</option>
+                      <option>Third Term</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -992,7 +1097,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                         <Sparkles size={15} className="text-purple-600" />
                         Assignment Questions ({hwQuestions.length})
                       </h4>
-                      <p className="text-[10px] text-slate-500">Import questions from Master Question Bank or add custom items.</p>
+                      <p className="text-[10px] text-slate-500">Questions must already be in the Question Bank for this class, subject, and term.</p>
                     </div>
 
                     <button
@@ -1047,10 +1152,10 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   </button>
                   <button
                     type="submit"
-                    disabled={publishingHw}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md cursor-pointer"
+                    disabled={publishingHw || hwQuestions.length === 0}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md cursor-pointer disabled:opacity-50"
                   >
-                    {publishingHw ? 'Publishing...' : 'Publish Assignment'}
+                    {publishingHw ? 'Publishing...' : 'Publish from Question Bank'}
                   </button>
                 </div>
               </form>
@@ -1088,7 +1193,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                   </div>
                 ) : qBankItems.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 text-xs italic bg-slate-50 rounded-2xl border border-slate-200">
-                    No questions found in the Master Question Bank for this subject/class.
+                    No questions found in the Question Bank for this class, subject, and term.
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1123,9 +1228,17 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
                               />
                               <span className="font-bold text-slate-900 text-xs">{q.questionText}</span>
                             </div>
-                            <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-bold shrink-0">
-                              {q.questionType?.toUpperCase() || 'MCQ'} ({q.marks || 1} pt)
-                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {q.termName && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-bold">{q.termName}</span>
+                              )}
+                              {q.class?.name && (
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">{q.class.name}</span>
+                              )}
+                              <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-bold">
+                                {q.questionType?.toUpperCase() || 'MCQ'} ({q.marks || 1} pt)
+                              </span>
+                            </div>
                           </div>
 
                           {Array.isArray(q.options) && q.options.length > 0 && (
@@ -1322,6 +1435,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate }: DashboardP
   }
   if (activeSection === 'timetable' || activeSection === 'schedule') {
     return <TeacherTimetableView />
+  }
+  if (activeSection === 'communication') {
+    return <TeacherCommunicationInbox />
+  }
+  if (!activeSection || activeSection === 'overview') {
+    if (profile.isSubjectTeacher) {
+      return <SubjectTeacherDashboard onNavigate={onNavigate} />
+    }
   }
 
   // Derived values grounded strictly in real DB data

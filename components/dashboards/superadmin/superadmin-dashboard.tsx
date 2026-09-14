@@ -29,6 +29,7 @@ import { AddSchoolForm } from './add-school-form'
 import { EditBranchForm, type BranchDetails } from './edit-branch-form'
 import { MultiBranchRevenueAnalytics } from './multi-branch-revenue-analytics'
 import { SuperadminSchoolCmsEditor } from './superadmin-school-cms-editor'
+import { SuperadminPlatformHub } from './superadmin-platform-hub'
 import { StaffDirectory } from '@/components/dashboards/admin/staff-directory'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { safeStorage } from '@/lib/safeStorage'
@@ -127,6 +128,56 @@ interface AcademicSession {
 
 function formatCount(value: number, label: string) {
   return `${value.toLocaleString()} ${label}`
+}
+
+function normalizeOverviewAnalytics(raw: any): AnalyticsData | null {
+  if (!raw || typeof raw !== 'object') return null
+
+  const branchEnrollments = Array.isArray(raw.branchEnrollments)
+    ? raw.branchEnrollments
+    : Array.isArray(raw.branchLeaderboard)
+      ? raw.branchLeaderboard.map((branch: any) => ({
+          name: String(branch.branchName || branch.name || 'Branch'),
+          studentsCount: Number(branch.studentsCount || 0),
+        }))
+      : []
+
+  const planDistribution = Array.isArray(raw.planDistribution)
+    ? raw.planDistribution
+    : Array.isArray(raw.planRevenueBreakdown)
+      ? raw.planRevenueBreakdown.map((plan: any) => ({
+          name: String(plan.name || 'Plan'),
+          activeSubscriptions: Number(plan.activeSubscriptions || 0),
+          revenue: Number(plan.revenue || 0),
+        }))
+      : []
+
+  let expirationStats = Array.isArray(raw.expirationStats) ? raw.expirationStats : []
+  if (!expirationStats.length && Array.isArray(raw.branchLeaderboard)) {
+    const now = Date.now()
+    let active = 0
+    let expiring = 0
+    let expired = 0
+    let none = 0
+    raw.branchLeaderboard.forEach((branch: any) => {
+      if (!branch.expiryDate) {
+        none += 1
+        return
+      }
+      const days = (new Date(branch.expiryDate).getTime() - now) / 86_400_000
+      if (days < 0) expired += 1
+      else if (days <= 30) expiring += 1
+      else active += 1
+    })
+    expirationStats = [
+      { name: 'Active', count: active, color: '#10b981' },
+      { name: 'Expiring Soon', count: expiring, color: '#f59e0b' },
+      { name: 'Expired', count: expired, color: '#ef4444' },
+      { name: 'No Plan', count: none, color: '#94a3b8' },
+    ]
+  }
+
+  return { branchEnrollments, planDistribution, expirationStats }
 }
 
 const COLORS = ['#2563eb', '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6']
@@ -340,7 +391,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       const res = await apiSlice.get<{ success: boolean; data: AnalyticsData }>(
         endpoints.superadmin.analytics
       )
-      setAnalytics(res.data)
+      setAnalytics(normalizeOverviewAnalytics(res.data))
     } catch (err) {
       setAnalyticsError(err instanceof Error ? err.message : 'Failed to load analytics')
     } finally {
@@ -355,8 +406,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       const res = await apiSlice.get<{ success: boolean; data: { plans: SubscriptionPlan[]; subscriptions: SubscriptionDetail[] } }>(
         endpoints.superadmin.subscriptions
       )
-      setPlans(res.data.plans || [])
-      setSubscriptions(res.data.subscriptions || [])
+      setPlans(res.data?.plans || [])
+      setSubscriptions(res.data?.subscriptions || [])
     } catch (err) {
       setSubsError(err instanceof Error ? err.message : 'Failed to load subscriptions')
     } finally {
@@ -371,8 +422,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       const res = await apiSlice.get<{ success: boolean; data: { sessions: AcademicSession[]; activeSessionId: number | null } }>(
         endpoints.superadmin.sessions
       )
-      setSessions(res.data.sessions || [])
-      setActiveSessionId(res.data.activeSessionId)
+      setSessions(res.data?.sessions || [])
+      setActiveSessionId(res.data?.activeSessionId ?? null)
     } catch (err) {
       setSessionsError(err instanceof Error ? err.message : 'Failed to load academic sessions')
     } finally {
@@ -659,7 +710,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
                 <div className="h-64 flex items-center justify-center text-slate-400 text-sm">Loading distribution data...</div>
               ) : analyticsError ? (
                 <div className="h-64 flex items-center justify-center text-rose-500 text-sm">{analyticsError}</div>
-              ) : analytics?.branchEnrollments.length === 0 ? (
+              ) : !analytics?.branchEnrollments?.length ? (
                 <div className="h-64 flex items-center justify-center text-slate-400 text-sm">No branches enrolled yet</div>
               ) : mounted && analytics ? (
                 <div className="h-64 w-full">
@@ -674,7 +725,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
                         outerRadius={80}
                         label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                       >
-                        {analytics.branchEnrollments.map((entry, index) => (
+                        {(analytics.branchEnrollments || []).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -699,7 +750,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
               ) : mounted && analytics ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analytics.planDistribution} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <BarChart data={analytics.planDistribution || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
                       <YAxis yAxisId="left" stroke="#2563eb" fontSize={12} tickLine={false} label={{ value: 'Branches', angle: -90, position: 'insideLeft', fill: '#2563eb' }} />
@@ -728,13 +779,13 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
               ) : mounted && analytics ? (
                 <div className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart layout="vertical" data={analytics.expirationStats} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart layout="vertical" data={analytics.expirationStats || []} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} />
                       <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
                       <Tooltip formatter={(value) => [`${value} Branches`, 'Count']} />
                       <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                        {analytics.expirationStats.map((entry, index) => (
+                        {(analytics.expirationStats || []).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Bar>
@@ -1029,6 +1080,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       )}
 
       {activeSection === 'settings' && (
+        <>
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Create new Session form */}
           <div className="rounded-xl border border-slate-200/80 bg-white p-6 space-y-4 shadow-sm h-fit">
@@ -1136,6 +1188,15 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
             </div>
           </div>
         </div>
+
+        <div className="mt-8">
+          <SuperadminPlatformHub />
+        </div>
+        </>
+      )}
+
+      {activeSection === 'logs' && (
+        <SuperadminPlatformHub initialTab="audit" />
       )}
 
       {/* EXTEND SUBSCRIPTION MODAL */}

@@ -20,7 +20,6 @@ import {
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { ScoreScannerModal } from './score-scanner-modal'
-import { safeStorage } from '@/lib/safeStorage'
 
 interface StudentRow {
   studentId: number
@@ -35,6 +34,7 @@ interface StudentRow {
   subjectName?: string
   theoryMark: number | null
   objectiveMark: number
+  cbtSource?: string | null
   absent: boolean
   grade?: string
   remark?: string
@@ -68,8 +68,6 @@ export default function GradebookInterface({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [sheetData, setSheetData] = useState<StudentRow[]>([])
-  
-  // Metadata state for selectors
   const [examsList, setExamsList] = useState<Array<{ id: number; name: string }>>([])
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string; sections: Array<{ id: number; name: string }> }>>([])
   const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string }>>([])
@@ -136,18 +134,6 @@ export default function GradebookInterface({
     return () => {
       active = false
     }
-  }, [])
-
-  // Check if current user is Admin
-  const isAdmin = useMemo(() => {
-    try {
-      const userStr = safeStorage.getItem('ugbekun_user')
-      if (userStr) {
-        const u = JSON.parse(userStr)
-        return u.role === 1 || u.role === 2
-      }
-    } catch (e) {}
-    return false
   }, [])
 
   // Local edit states
@@ -227,6 +213,7 @@ export default function GradebookInterface({
               subjectName: activeSubjectName,
               theoryMark: subMark.mark !== null && subMark.mark !== undefined && subMark.mark !== '' ? Number(subMark.mark) : null,
               objectiveMark: subMark.cbtMark !== null && subMark.cbtMark !== undefined && subMark.cbtMark !== '' ? Number(subMark.cbtMark) : 0,
+              cbtSource: subMark.cbtSource || null,
               absent: subMark.absent === '1',
             }
           })
@@ -347,8 +334,7 @@ export default function GradebookInterface({
     const edit = editedScores[row.studentId]
     if (!edit) return false
     const originalTheory = row.theoryMark !== null && row.theoryMark !== undefined ? String(row.theoryMark) : ''
-    const originalObjective = row.objectiveMark !== null && row.objectiveMark !== undefined ? String(row.objectiveMark) : '0'
-    return edit.theoryMark !== originalTheory || edit.objectiveMark !== originalObjective || Boolean(edit.absent) !== Boolean(row.absent)
+    return edit.theoryMark !== originalTheory || Boolean(edit.absent) !== Boolean(row.absent)
   }
 
   // Count of unsaved rows
@@ -372,7 +358,6 @@ export default function GradebookInterface({
           examId: curExamId,
           studentId: row.studentId,
           theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
-          objectiveMark: edit.absent ? null : (edit.objectiveMark === '' ? null : Number(edit.objectiveMark)),
           absent: edit.absent
         }
       )
@@ -384,7 +369,6 @@ export default function GradebookInterface({
               ? {
                   ...r,
                   theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
-                  objectiveMark: edit.absent ? 0 : (edit.objectiveMark === '' ? 0 : Number(edit.objectiveMark)),
                   absent: edit.absent,
                 }
               : r
@@ -413,7 +397,6 @@ export default function GradebookInterface({
         return {
           studentId: row.studentId,
           theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
-          objectiveMark: edit.absent ? null : (edit.objectiveMark === '' ? null : Number(edit.objectiveMark)),
           absent: edit.absent,
         }
       })
@@ -438,7 +421,6 @@ export default function GradebookInterface({
             return {
               ...row,
               theoryMark: edit.absent ? null : (edit.theoryMark === '' ? null : Number(edit.theoryMark)),
-              objectiveMark: edit.absent ? 0 : (edit.objectiveMark === '' ? 0 : Number(edit.objectiveMark)),
               absent: edit.absent,
             }
           })
@@ -868,6 +850,9 @@ export default function GradebookInterface({
             <p className="text-xs font-semibold text-slate-400 mt-1">
               Class: <span className="text-slate-600">{activeClassName} ({activeSectionName})</span> | Subject: <span className="text-slate-600">{activeSubjectName}</span> | Exam: <span className="text-slate-600">{activeExamName}</span>
             </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Enter theory / exam scores only. CBT scores flow from the online examination and appear on the report card automatically. School Admin can correct a CBT score from the CBT hub.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -1045,37 +1030,19 @@ export default function GradebookInterface({
                         </label>
                       </td>
 
-                      {/* Objective Score (Editable for Admin) */}
+                      {/* Objective Score — from CBT, not teacher-editable */}
                       <td className="px-4 py-4 text-center">
-                        {isAdmin ? (
-                          <div className="relative inline-block">
-                            <input
-                              type="number"
-                              disabled={isAbsent}
-                              min={0}
-                              max={100}
-                              value={isAbsent ? '' : edit.objectiveMark}
-                              onChange={(e) => {
-                                setEditedScores(prev => ({
-                                  ...prev,
-                                  [row.studentId]: { ...prev[row.studentId], objectiveMark: e.target.value }
-                                }))
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveSingle(row)
-                                }
-                              }}
-                              placeholder="0"
-                              className="w-24 px-3 py-1.5 text-center text-xs font-semibold bg-white border rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 border-slate-200"
-                            />
+                          <div className="inline-flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 font-extrabold text-xs w-28 shadow-2xs">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Lock size={12} className="text-slate-400" />
+                              <span>{edit.objectiveMark || '0'}</span>
+                            </span>
+                            {row.cbtSource === 'ADMIN_OVERRIDE' ? (
+                              <span className="text-[9px] font-bold uppercase tracking-wide text-amber-700">Admin corrected</span>
+                            ) : row.cbtSource ? (
+                              <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">From CBT</span>
+                            ) : null}
                           </div>
-                        ) : (
-                          <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 font-extrabold text-xs w-24 shadow-2xs">
-                            <Lock size={12} className="text-slate-400" />
-                            <span>{edit.objectiveMark || '0'}</span>
-                          </div>
-                        )}
                       </td>
 
                       {/* Theory Mark Input */}

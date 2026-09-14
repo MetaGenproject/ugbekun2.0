@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Trophy, Sparkles, Award, Loader2, Calendar, Clock, Activity, CheckSquare } from 'lucide-react'
-import { endpoints } from '@/lib/apiSlice'
-import { safeStorage } from '@/lib/safeStorage'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
 
 interface LeaderboardEntry {
   rank: number
@@ -35,19 +34,9 @@ export default function TeacherPointsHub() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const token = safeStorage.getItem('ugbekun_token')
-      const headers: Record<string, string> = {}
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
       // Fetch Profile/Points
-      const profileRes = await fetch(`${endpoints.health.replace('/health', '')}/teacher/gamification/profile`, { headers })
-      const profileData = await profileRes.json()
-
-      // Fetch Leaderboard
-      const lbRes = await fetch(`${endpoints.health.replace('/health', '')}/teacher/gamification/leaderboard?periodType=${selectedPeriod}`, { headers })
-      const lbData = await lbRes.json()
+      const profileData = await apiSlice.get(endpoints.teacher.gamificationProfile)
+      const lbData = await apiSlice.get(endpoints.teacher.gamificationLeaderboard(selectedPeriod))
 
       if (profileData.success) {
         setData({

@@ -20,7 +20,6 @@ import {
   AlertTriangle,
   Send,
   Users,
-  Key,
   RefreshCw,
   Zap,
   Globe,
@@ -49,7 +48,7 @@ import {
   TableCaption,
 } from '@/components/ui/table'
 
-type MyEduRideTab = 'gate-manager' | 'bus-tracking' | 'manifests' | 'api-settings'
+type MyEduRideTab = 'gate-manager' | 'bus-tracking' | 'manifests'
 
 interface MyEduRideConfig {
   branchId: number
@@ -168,13 +167,6 @@ export function MyEduRideIntegration() {
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null)
   const [actionAlert, setActionAlert] = useState<string | null>(null)
 
-  // Config Modal State
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false)
-  const [editApiUrl, setEditApiUrl] = useState<string>('')
-  const [editApiKey, setEditApiKey] = useState<string>('')
-  const [editWebhookSecret, setEditWebhookSecret] = useState<string>('')
-  const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false)
-
   // Visitor Check-in Modal
   const [isVisitorModalOpen, setIsVisitorModalOpen] = useState<boolean>(false)
   const [visitorName, setVisitorName] = useState<string>('')
@@ -203,9 +195,6 @@ export function MyEduRideIntegration() {
       if (overviewRes.data) {
         setConfig(overviewRes.data.config)
         setMetrics(overviewRes.data.metrics)
-        setEditApiUrl(overviewRes.data.config.apiUrl)
-        setEditApiKey(overviewRes.data.config.apiKey)
-        setEditWebhookSecret(overviewRes.data.config.webhookSecret)
       }
 
       // 2. Load Gate Logs
@@ -239,10 +228,7 @@ export function MyEduRideIntegration() {
     try {
       const res = await apiSlice.post<{ success: boolean; data: { success: boolean; latencyMs?: number; message: string } }>(
         endpoints.admin.myeduride.testConnection,
-        {
-          apiUrl: editApiUrl || config?.apiUrl,
-          apiKey: editApiKey || config?.apiKey
-        }
+        {}
       )
       setTestResult(res.data)
       setActionAlert(res.data.message)
@@ -272,28 +258,6 @@ export function MyEduRideIntegration() {
       setActionAlert(err instanceof Error ? err.message : 'Failed to sync roster')
     } finally {
       setIsSyncing(false)
-    }
-  }
-
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSavingConfig(true)
-    try {
-      const res = await apiSlice.post<{ success: boolean; data: MyEduRideConfig; message: string }>(
-        endpoints.admin.myeduride.config,
-        {
-          apiUrl: editApiUrl,
-          apiKey: editApiKey,
-          webhookSecret: editWebhookSecret
-        }
-      )
-      setConfig(res.data)
-      setIsConfigModalOpen(false)
-      setActionAlert('MyEduRide API configuration saved successfully.')
-    } catch (err) {
-      setActionAlert(err instanceof Error ? err.message : 'Failed to save config')
-    } finally {
-      setIsSavingConfig(false)
     }
   }
 
@@ -422,10 +386,11 @@ export function MyEduRideIntegration() {
             </button>
 
             <button
-              onClick={() => setIsConfigModalOpen(true)}
+              onClick={handleTestConnection}
+              disabled={isTestingConn}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white font-bold text-xs shadow-sm border border-slate-700 transition cursor-pointer backdrop-blur-sm"
             >
-              <Key size={15} className="text-cyan-400" /> API Settings
+              {isTestingConn ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} className="text-cyan-400" />} Test Connection
             </button>
           </div>
         </div>
@@ -559,18 +524,6 @@ export function MyEduRideIntegration() {
         >
           <UserCheck size={16} className="text-cyan-600" />
           Student Bus Manifests & SMS Alerts
-        </button>
-
-        <button
-          onClick={() => setActiveTab('api-settings')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
-            activeTab === 'api-settings'
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-          }`}
-        >
-          <Key size={16} className="text-cyan-600" />
-          API Credentials & Webhook Bridge
         </button>
       </div>
 
@@ -1070,123 +1023,6 @@ export function MyEduRideIntegration() {
               ))}
             </TableBody>
           </Table>
-        </div>
-      )}
-
-      {/* TAB 4: API SETTINGS & WEBHOOK BRIDGE */}
-      {activeTab === 'api-settings' && (
-        <div className="max-w-2xl mx-auto rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-6">
-          <div>
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Key className="text-cyan-600" size={20} /> MyEduRide API Configuration & Credentials
-            </h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Configure connection parameters between Ugbekun 2.0 and your standalone MyEduRide backend instance.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveConfig} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">MyEduRide API Base URL</label>
-              <input
-                type="text"
-                value={editApiUrl}
-                onChange={(e) => setEditApiUrl(e.target.value)}
-                placeholder="e.g. http://localhost:3002/api/v1 or https://api.myeduride.com"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-mono font-bold focus:outline-none focus:border-cyan-500 focus:bg-white transition"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">School Live API Key / Secret Token</label>
-              <input
-                type="text"
-                value={editApiKey}
-                onChange={(e) => setEditApiKey(e.target.value)}
-                placeholder="EDURIDE-LIVE-KEY-xxx"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-cyan-800 text-xs font-mono font-black focus:outline-none focus:border-cyan-500 focus:bg-white transition"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">Webhook Ingestion Secret</label>
-              <input
-                type="text"
-                value={editWebhookSecret}
-                onChange={(e) => setEditWebhookSecret(e.target.value)}
-                placeholder="WH-SEC-xxx"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs font-mono font-bold focus:outline-none focus:border-cyan-500 focus:bg-white transition"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={handleTestConnection}
-                disabled={isTestingConn}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              >
-                {isTestingConn ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} className="text-cyan-600" />}
-                Test Connection Handshake
-              </button>
-
-              <button
-                type="submit"
-                disabled={isSavingConfig}
-                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm flex items-center gap-1.5 cursor-pointer"
-              >
-                {isSavingConfig ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                Save Integration Settings
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL 1: API CONFIGURATION MODAL */}
-      {isConfigModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="bg-slate-900 p-5 text-white flex justify-between items-center">
-              <h3 className="font-extrabold text-sm flex items-center gap-2">
-                <Key size={16} className="text-cyan-400" /> MyEduRide API Key Settings
-              </h3>
-              <button onClick={() => setIsConfigModalOpen(false)} className="text-slate-400 hover:text-white text-xs font-bold">✕</button>
-            </div>
-
-            <form onSubmit={handleSaveConfig} className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 block">MyEduRide API Base URL</label>
-                <input
-                  type="text"
-                  value={editApiUrl}
-                  onChange={(e) => setEditApiUrl(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-xs font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 block">School Live API Key</label>
-                <input
-                  type="text"
-                  value={editApiKey}
-                  onChange={(e) => setEditApiKey(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border text-xs font-mono font-bold text-cyan-800"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button type="button" onClick={() => setIsConfigModalOpen(false)} className="px-4 py-2 border rounded-xl text-xs font-bold">Cancel</button>
-                <button type="submit" disabled={isSavingConfig} className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">
-                  {isSavingConfig ? 'Saving...' : 'Save Settings'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 

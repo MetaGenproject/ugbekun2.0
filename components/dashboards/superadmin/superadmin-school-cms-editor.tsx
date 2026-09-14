@@ -28,6 +28,7 @@ import {
   Layers
 } from 'lucide-react'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
+import { BASE_URL } from '@/lib/apiSlice'
 
 interface BranchOption {
   id: number
@@ -54,21 +55,13 @@ export function SuperadminSchoolCmsEditor() {
   // Form State
   const [cmsData, setCmsData] = useState<SchoolHomepageData | null>(null)
 
-  const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
-
-  const getSuperadminToken = () => {
-    if (typeof window === 'undefined') return ''
-    return localStorage.getItem('ugbekun_superadmin_token') || localStorage.getItem('token') || ''
-  }
-
   // Fetch list of branches
   useEffect(() => {
     const fetchBranches = async () => {
       setLoadingBranches(true)
       try {
-        const token = getSuperadminToken()
-        const res = await fetch(`${backendUrl}/api/superadmin/branches`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const res = await fetch(`${BASE_URL}/superadmin/branches`, {
+          credentials: 'include',
         })
         const json = await res.json()
         if (json.success && Array.isArray(json.data)) {
@@ -95,9 +88,8 @@ export function SuperadminSchoolCmsEditor() {
       setLoadingCms(true)
       setErrorMessage('')
       try {
-        const token = getSuperadminToken()
-        const res = await fetch(`${backendUrl}/api/superadmin/branches/${selectedBranchId}/landing-page`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const res = await fetch(`${BASE_URL}/superadmin/branches/${selectedBranchId}/landing-page`, {
+          credentials: 'include',
         })
         const json = await res.json()
         if (json.success && json.data) {
@@ -123,12 +115,11 @@ export function SuperadminSchoolCmsEditor() {
     setErrorMessage('')
 
     try {
-      const token = getSuperadminToken()
-      const res = await fetch(`${backendUrl}/api/superadmin/branches/${selectedBranchId}/landing-page`, {
+      const res = await fetch(`${BASE_URL}/superadmin/branches/${selectedBranchId}/landing-page`, {
         method: 'PUT',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           isEnabled: cmsData.isEnabled,

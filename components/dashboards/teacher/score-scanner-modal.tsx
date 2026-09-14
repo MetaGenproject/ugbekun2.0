@@ -120,12 +120,9 @@ export function ScoreScannerModal({
     formData.append('subjectId', String(subjectId))
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch(endpoints.teacher.scanScoreSheet, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        credentials: 'include',
         body: formData
       })
 
@@ -206,12 +203,11 @@ export function ScoreScannerModal({
     setErrorMessage(null)
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch(endpoints.teacher.commitScanRecord(scanId), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ verifiedData: gridData })
       })

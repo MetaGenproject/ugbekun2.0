@@ -33,9 +33,10 @@ interface SchoolCalendarProps {
     username?: string
     role?: number
   }
+  embedded?: boolean
 }
 
-export default function SchoolCalendar({ user }: SchoolCalendarProps) {
+export default function SchoolCalendar({ user, embedded = false }: SchoolCalendarProps) {
   const isAdmin = user?.role === 2
 
   const [events, setEvents] = useState<SchoolEvent[]>([])
@@ -215,7 +216,24 @@ export default function SchoolCalendar({ user }: SchoolCalendarProps) {
 
   return (
     <div className="space-y-6">
-      {/* Banner / Header */}
+      {embedded ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-black text-base text-slate-900">School Calendar & Key Dates</h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Create, edit, and delete term dates, holidays, closures, and school events.
+            </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={handleOpenCreate}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm"
+            >
+              <Plus size={14} /> Create Event
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="relative rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 p-6 md:p-8 shadow-md overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl opacity-30" />
@@ -241,6 +259,7 @@ export default function SchoolCalendar({ user }: SchoolCalendarProps) {
           )}
         </div>
       </div>
+      )}
 
       {/* Alert states */}
       {success && (

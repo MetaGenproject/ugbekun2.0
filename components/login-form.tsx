@@ -14,6 +14,8 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [sessionEnded, setSessionEnded] = useState(false)
+  const [postLoginPath, setPostLoginPath] = useState('/dashboard')
   const [tenantBranding, setTenantBranding] = useState<{
     isCustomDomain: boolean
     schoolName: string
@@ -22,6 +24,16 @@ export function LoginForm() {
     primaryColor: string
     secondaryColor: string
   } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('reason') === 'session') setSessionEnded(true)
+    const next = params.get('next') || ''
+    if (next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login')) {
+      setPostLoginPath(next)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchBranding = async () => {
@@ -68,7 +80,7 @@ export function LoginForm() {
     try {
       const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password: trimmedPassword })
 
-      if (!data || !data.token || !data.user) {
+      if (!data || !data.user) {
         throw new Error('Invalid credentials or empty server response.')
       }
 
@@ -87,11 +99,11 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist auth session (writes to localStorage, sessionStorage, document.cookie & window.name)
-      setAuthSession(data.token, userToStore)
+      // Persist user profile only. The access token lives in an httpOnly cookie.
+      setAuthSession(userToStore)
 
       // Client-side navigation preserves memorySession (JS context stays alive — critical for old browsers)
-      router.push('/dashboard')
+      router.push(postLoginPath || '/dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
       
@@ -140,6 +152,14 @@ export function LoginForm() {
           <span>Secure institutional login with multi-tenant encryption.</span>
         </div>
       </div>
+
+      {/* Session ended */}
+      {sessionEnded && !errorMsg && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium">
+          <AlertCircle size={16} className="shrink-0 text-amber-600" />
+          <p>Your session ended. Sign in again to continue.</p>
+        </div>
+      )}
 
       {/* Error Alert */}
       {errorMsg && (

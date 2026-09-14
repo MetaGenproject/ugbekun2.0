@@ -112,6 +112,10 @@ interface AnalyticsData {
     isSubmitted: boolean
     totalMark: number | null
     submittedAt: string | null
+    reportCbtMark?: string | null
+    cbtSource?: string | null
+    cbtScale?: number
+    onReportCard?: boolean
   }>
 }
 
@@ -155,6 +159,9 @@ export function AdminCbtManager() {
   const [distShowResults, setDistShowResults] = useState(true)
   const [distPublished, setDistPublished] = useState(true)
   const [distInstructions, setDistInstructions] = useState('')
+  const [distStartDate, setDistStartDate] = useState('')
+  const [distEndDate, setDistEndDate] = useState('')
+  const [distModalMode, setDistModalMode] = useState<'create' | 'edit' | 'reschedule'>('create')
   const [isSavingDist, setIsSavingDist] = useState(false)
 
   // Analytics & Marksheet Sync Modal State
@@ -163,10 +170,70 @@ export function AdminCbtManager() {
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
   const [isSyncingMarks, setIsSyncingMarks] = useState(false)
   const [maxScoreBase, setMaxScoreBase] = useState(40)
+  const [correctingStudentId, setCorrectingStudentId] = useState<number | null>(null)
+  const [correctionScore, setCorrectionScore] = useState('')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false)
 
   const showToast = (msg: string) => {
     setNotification(msg)
     setTimeout(() => setNotification(null), 4000)
+  }
+
+  const toLocalInput = (iso?: string | null) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const formatSitting = (iso?: string | null) => {
+    if (!iso) return 'Not set'
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? 'Not set' : d.toLocaleString()
+  }
+
+  const resetDistForm = () => {
+    setEditingDistId(null)
+    setDistTitle('')
+    setDistInstructions('')
+    setDistStartDate('')
+    setDistEndDate('')
+    setDistModalMode('create')
+  }
+
+  const openCreateDistribution = () => {
+    resetDistForm()
+    setIsDistModalOpen(true)
+  }
+
+  const openEditDistribution = (dist: CbtDistributionItem) => {
+    setDistModalMode('edit')
+    setEditingDistId(dist.id)
+    setDistTitle(dist.title)
+    setDistClassId(String(dist.classId))
+    setDistSectionId(dist.sectionId ? String(dist.sectionId) : '')
+    setDistSubjectId(String(dist.subjectId))
+    setDistGroupId(dist.groupId ? String(dist.groupId) : '')
+    setDistDuration(dist.duration || 30)
+    setDistPassingMark(dist.passingMark || 50)
+    setDistShuffle(dist.shuffleQuestions)
+    setDistShowResults(dist.showResults)
+    setDistPublished(dist.isPublished)
+    setDistInstructions(dist.instructions || '')
+    setDistStartDate(toLocalInput(dist.startDate))
+    setDistEndDate(toLocalInput(dist.endDate))
+    setIsDistModalOpen(true)
+  }
+
+  const openRescheduleDistribution = (dist: CbtDistributionItem) => {
+    setDistModalMode('reschedule')
+    setEditingDistId(dist.id)
+    setDistTitle(dist.title)
+    setDistStartDate(toLocalInput(dist.startDate) || toLocalInput(new Date().toISOString()))
+    setDistEndDate(toLocalInput(dist.endDate))
+    setIsDistModalOpen(true)
   }
 
   useEffect(() => {
@@ -333,13 +400,37 @@ export function AdminCbtManager() {
   // Handle Save Distribution
   const handleSaveDistribution = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!distTitle.trim() || !distClassId || !distSubjectId) {
+    if (distModalMode !== 'reschedule' && (!distTitle.trim() || !distClassId || !distSubjectId)) {
       alert('Title, Class, and Subject are required.')
+      return
+    }
+
+    if (distStartDate && distEndDate && new Date(distEndDate) <= new Date(distStartDate)) {
+      alert('Closes must be after Opens.')
       return
     }
 
     setIsSavingDist(true)
     try {
+      if (distModalMode === 'reschedule' && editingDistId) {
+        if (!distStartDate || !distEndDate) {
+          alert('Choose a new start and end date/time.')
+          setIsSavingDist(false)
+          return
+        }
+        const res = await apiSlice.post<{ success: boolean; distribution: CbtDistributionItem; message: string }>(
+          endpoints.admin.rescheduleCbtDistribution(editingDistId),
+          { startDate: new Date(distStartDate).toISOString(), endDate: new Date(distEndDate).toISOString() }
+        )
+        if (res.success) {
+          fetchDistributions()
+          setIsDistModalOpen(false)
+          resetDistForm()
+          showToast(res.message || 'Sitting rescheduled.')
+        }
+        return
+      }
+
       const payload = {
         id: editingDistId || undefined,
         title: distTitle.trim(),
@@ -353,6 +444,8 @@ export function AdminCbtManager() {
         showResults: distShowResults,
         isPublished: distPublished,
         instructions: distInstructions.trim() || null,
+        startDate: distStartDate ? new Date(distStartDate).toISOString() : null,
+        endDate: distEndDate ? new Date(distEndDate).toISOString() : null,
       }
 
       const res = await apiSlice.post<{ success: boolean; distribution: CbtDistributionItem }>(
@@ -363,10 +456,8 @@ export function AdminCbtManager() {
       if (res.success) {
         fetchDistributions()
         setIsDistModalOpen(false)
-        setEditingDistId(null)
-        setDistTitle('')
-        setDistInstructions('')
-        showToast('CBT Assessment distributed to class successfully!')
+        resetDistForm()
+        showToast(res.message || (editingDistId ? 'CBT schedule updated.' : 'CBT Assessment distributed to class successfully!'))
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to distribute CBT test.')
@@ -398,17 +489,49 @@ export function AdminCbtManager() {
     if (!analyticsDistId) return
     setIsSyncingMarks(true)
     try {
-      const res = await apiSlice.post<{ success: boolean; message: string; syncedCount: number }>(
+      const res = await apiSlice.post<{ success: boolean; message: string; syncCount: number }>(
         endpoints.admin.cbtDistributionSyncMarks(analyticsDistId),
         { maxScoreBase }
       )
       if (res.success) {
-        showToast(res.message || `Scores synced into official report cards!`)
+        showToast(res.message || 'CBT scores recorded on report cards.')
+        await openAnalyticsModal(analyticsDistId)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to sync marks to report cards.')
     } finally {
       setIsSyncingMarks(false)
+    }
+  }
+
+  const handleOverrideCbtMark = async (studentId: number) => {
+    if (!analyticsDistId) return
+    if (!correctionScore.trim() || !correctionReason.trim()) {
+      alert('Enter the corrected report-card CBT score and a reason.')
+      return
+    }
+    setIsSavingCorrection(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.cbtDistributionOverrideMark(analyticsDistId),
+        {
+          studentId,
+          cbtMark: Number(correctionScore),
+          reason: correctionReason.trim(),
+          maxScoreBase,
+        }
+      )
+      if (res.success) {
+        showToast(res.message || 'CBT score corrected on the report card.')
+        setCorrectingStudentId(null)
+        setCorrectionScore('')
+        setCorrectionReason('')
+        await openAnalyticsModal(analyticsDistId)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to correct CBT score.')
+    } finally {
+      setIsSavingCorrection(false)
     }
   }
 
@@ -431,19 +554,14 @@ export function AdminCbtManager() {
             CBT Online Examination & Auto-Grading Hub
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Build question banks, distribute randomized CBT tests to classrooms, and auto-sync scores directly to report cards.
+            Build question banks, schedule sittings, and send CBT scores to report cards automatically. Teachers enter theory only.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {activeTab === 'distributions' && (
             <button
-              onClick={() => {
-                setEditingDistId(null)
-                setDistTitle('')
-                setDistInstructions('')
-                setIsDistModalOpen(true)
-              }}
+              onClick={openCreateDistribution}
               className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Plus size={16} /> Distribute New CBT Test
@@ -530,7 +648,7 @@ export function AdminCbtManager() {
                 Schedule and distribute a timed CBT test to a target classroom and stream to allow pupils to take online assessments.
               </p>
               <button
-                onClick={() => setIsDistModalOpen(true)}
+                onClick={openCreateDistribution}
                 className="px-4 py-2 bg-amber-500 text-slate-950 font-bold rounded-2xl text-xs shadow-xs cursor-pointer"
               >
                 Distribute Test Now
@@ -567,6 +685,14 @@ export function AdminCbtManager() {
 
                     <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
                       <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1"><Calendar size={12} /> Opens:</span>
+                        <strong className="text-slate-900 text-right">{formatSitting(dist.startDate)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1"><Clock size={12} /> Closes:</span>
+                        <strong className="text-slate-900 text-right">{formatSitting(dist.endDate)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
                         <span className="flex items-center gap-1"><Clock size={12} /> Duration:</span>
                         <strong className="text-slate-900">{dist.duration} Minutes</strong>
                       </div>
@@ -581,30 +707,47 @@ export function AdminCbtManager() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => openAnalyticsModal(dist.id)}
-                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <BarChart3 size={13} /> Analytics & Marksheet Sync
-                    </button>
-
-                    <div className="flex items-center gap-1">
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
                       <button
-                        onClick={() => handleTogglePublish(dist)}
-                        className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          dist.isPublished ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                        }`}
-                        title={dist.isPublished ? 'Unpublish Test' : 'Publish Live'}
+                        onClick={() => openAnalyticsModal(dist.id)}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                       >
-                        {dist.isPublished ? <X size={14} /> : <Check size={14} />}
+                        <BarChart3 size={13} /> Analytics
+                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleTogglePublish(dist)}
+                          className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            dist.isPublished ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                          }`}
+                          title={dist.isPublished ? 'Unpublish Test' : 'Publish Live'}
+                        >
+                          {dist.isPublished ? <X size={14} /> : <Check size={14} />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDistribution(dist.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete Distribution"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditDistribution(dist)}
+                        className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 inline-flex items-center justify-center gap-1"
+                      >
+                        <Edit2 size={13} /> Edit
                       </button>
                       <button
-                        onClick={() => handleDeleteDistribution(dist.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                        title="Delete Distribution"
+                        type="button"
+                        onClick={() => openRescheduleDistribution(dist)}
+                        className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 inline-flex items-center justify-center gap-1"
                       >
-                        <Trash2 size={14} />
+                        <Calendar size={13} /> Change date/time
                       </button>
                     </div>
                   </div>
@@ -731,7 +874,12 @@ export function AdminCbtManager() {
           <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
               <div className="flex items-center gap-2 font-black text-sm">
-                <Send size={18} className="text-amber-400" /> Distribute CBT Assessment to Classroom
+                {distModalMode === 'reschedule' ? <Calendar size={18} className="text-amber-400" /> : <Send size={18} className="text-amber-400" />}
+                {distModalMode === 'reschedule'
+                  ? 'Reschedule sitting'
+                  : distModalMode === 'edit'
+                    ? 'Edit CBT schedule'
+                    : 'Distribute CBT Assessment to Classroom'}
               </div>
               <button
                 onClick={() => setIsDistModalOpen(false)}
@@ -742,6 +890,22 @@ export function AdminCbtManager() {
             </div>
 
             <form onSubmit={handleSaveDistribution} className="p-6 space-y-4">
+              {distModalMode === 'reschedule' ? (
+                <>
+                  <p className="text-sm text-slate-600 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+                    Students who missed <span className="font-semibold text-slate-900">{distTitle}</span> can sit this same examination. A new test is not created.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Opens *</label>
+                    <input type="datetime-local" required value={distStartDate} onChange={(e) => setDistStartDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Closes *</label>
+                    <input type="datetime-local" required value={distEndDate} onChange={(e) => setDistEndDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800" />
+                  </div>
+                </>
+              ) : (
+                <>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Assessment Title *</label>
                 <input
@@ -853,6 +1017,28 @@ export function AdminCbtManager() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Opens</label>
+                  <input
+                    type="datetime-local"
+                    value={distStartDate}
+                    onChange={(e) => setDistStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Closes</label>
+                  <input
+                    type="datetime-local"
+                    value={distEndDate}
+                    onChange={(e) => setDistEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 -mt-2">If a student misses this sitting, change these times on the existing exam. Do not create a new test.</p>
+
               <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-100">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
                   <input
@@ -884,6 +1070,8 @@ export function AdminCbtManager() {
                   Publish Live Immediately
                 </label>
               </div>
+                </>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
@@ -899,7 +1087,7 @@ export function AdminCbtManager() {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingDist ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  Distribute Test
+                  {distModalMode === 'reschedule' ? 'Save new sitting' : distModalMode === 'edit' ? 'Save schedule' : 'Distribute Test'}
                 </button>
               </div>
             </form>
@@ -951,16 +1139,37 @@ export function AdminCbtManager() {
                     </div>
                   </div>
 
+                  {analyticsData.pendingCount > 0 && (
+                    <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{analyticsData.pendingCount} student{analyticsData.pendingCount === 1 ? '' : 's'} have not submitted</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">Reschedule this same examination. Do not create a new test for missed sittings.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const dist = distributions.find((d) => d.id === analyticsDistId) || analyticsData.distribution
+                          setAnalyticsDistId(null)
+                          setAnalyticsData(null)
+                          if (dist) openRescheduleDistribution(dist)
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                      >
+                        <Calendar size={14} /> Change date/time
+                      </button>
+                    </div>
+                  )}
+
                   {/* Marksheet Sync Action Card */}
                   <div className="p-5 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent rounded-2xl border border-amber-200/80 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                           <TrendingUp size={16} className="text-amber-600" />
-                          1-Click CBT Marksheet Synchronization
+                          Report card recording
                         </h4>
                         <p className="text-[11px] text-slate-500 mt-0.5">
-                          Sync all student CBT scores directly into their official academic term grade report card (<code className="text-slate-800">cbtMark</code>).
+                          Submitted CBT scores are written to the subject mark register automatically. Use this catch-up if a sitting happened before recording was enabled. Admin corrections are not overwritten.
                         </p>
                       </div>
 
@@ -985,7 +1194,7 @@ export function AdminCbtManager() {
                           className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           {isSyncingMarks ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                          Sync to Report Cards
+                          Record missing scores
                         </button>
                       </div>
                     </div>
@@ -1005,7 +1214,9 @@ export function AdminCbtManager() {
                             <TableHead className="text-xs font-bold">Reg No</TableHead>
                             <TableHead className="text-xs font-bold">Status</TableHead>
                             <TableHead className="text-xs font-bold">CBT Score (%)</TableHead>
+                            <TableHead className="text-xs font-bold">Report card (/ {maxScoreBase})</TableHead>
                             <TableHead className="text-xs font-bold">Submitted At</TableHead>
+                            <TableHead className="text-xs font-bold">Correct</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1031,8 +1242,76 @@ export function AdminCbtManager() {
                               <TableCell className="font-mono font-black text-xs text-slate-800">
                                 {st.totalMark !== null ? `${st.totalMark}%` : '-'}
                               </TableCell>
+                              <TableCell className="text-xs">
+                                <div className="font-mono font-black text-slate-800">
+                                  {st.reportCbtMark != null && st.reportCbtMark !== '' ? st.reportCbtMark : '-'}
+                                </div>
+                                {st.cbtSource === 'ADMIN_OVERRIDE' ? (
+                                  <span className="text-[10px] font-bold text-amber-700">Admin corrected</span>
+                                ) : st.onReportCard ? (
+                                  <span className="text-[10px] font-bold text-emerald-700">On report card</span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400">Not recorded yet</span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-slate-500 text-[11px]">
                                 {st.submittedAt ? new Date(st.submittedAt).toLocaleDateString() : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {correctingStudentId === st.studentId ? (
+                                  <div className="space-y-1.5 min-w-[180px]">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={maxScoreBase}
+                                      step="0.1"
+                                      value={correctionScore}
+                                      onChange={(e) => setCorrectionScore(e.target.value)}
+                                      placeholder={`Score / ${maxScoreBase}`}
+                                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={correctionReason}
+                                      onChange={(e) => setCorrectionReason(e.target.value)}
+                                      placeholder="Reason for correction"
+                                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                                    />
+                                    <div className="flex gap-1">
+                                      <button
+                                        type="button"
+                                        disabled={isSavingCorrection}
+                                        onClick={() => handleOverrideCbtMark(st.studentId)}
+                                        className="px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded-lg disabled:opacity-50"
+                                      >
+                                        {isSavingCorrection ? 'Saving' : 'Save'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCorrectingStudentId(null)
+                                          setCorrectionScore('')
+                                          setCorrectionReason('')
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-bold text-slate-500"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCorrectingStudentId(st.studentId)
+                                      setCorrectionScore(st.reportCbtMark || '')
+                                      setCorrectionReason('')
+                                    }}
+                                    className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1"
+                                  >
+                                    <Edit2 size={12} /> Edit
+                                  </button>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}

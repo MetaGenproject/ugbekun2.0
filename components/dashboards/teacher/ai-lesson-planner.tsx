@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { AiLessonNoteStudio, type LessonNoteDraft } from '@/components/dashboards/shared/ai-lesson-note-studio'
 import {
   Sparkles,
   Save,
@@ -59,7 +60,15 @@ interface LessonPlan {
   teachingGuide: string | null
   assessmentCriteria: string | null
   classAssignments: string | null
-  status: 'DRAFT' | 'PUBLISHED'
+  status: 'DRAFT' | 'PUBLISHED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION'
+  entryBehavior?: string | null
+  aiInstruction?: string | null
+  sourceMaterial?: string | null
+  sourceFileName?: string | null
+  subTopic?: string | null
+  duration?: string | null
+  weekNo?: string | null
+  reviewerNote?: string | null
   createdAt: string
   class: { name: string }
   subject: { name: string }
@@ -75,24 +84,8 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
   const [error, setError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
-  // Selector state
-  const [selectedAllocationIdx, setSelectedAllocationIdx] = useState('0')
-  const [coreTopic, setCoreTopic] = useState('')
-  const [subTopic, setSubTopic] = useState('')
-  const [duration, setDuration] = useState('45 Minutes')
-  const [weekNo, setWeekNo] = useState('Week 3')
-  const [isGenerating, setIsGenerating] = useState(false)
-
-  // Draft Editor State
-  const [isEditing, setIsEditing] = useState(false)
-  const [editingPlanId, setEditingPlanId] = useState<number | null>(null)
-  const [objectives, setObjectives] = useState('')
-  const [materials, setMaterials] = useState('')
-  const [teachingGuide, setTeachingGuide] = useState('')
-  const [assessments, setAssessments] = useState('')
-  const [assignments, setAssignments] = useState('')
-  const [status, setStatus] = useState<'DRAFT' | 'PUBLISHED'>('PUBLISHED')
-  const [isSaving, setIsSaving] = useState(false)
+  const [studioKey, setStudioKey] = useState(0)
+  const [studioPlan, setStudioPlan] = useState<LessonNoteDraft | null>(null)
 
   // Preview Modal State
   const [previewPlan, setPreviewPlan] = useState<LessonPlan | null>(null)
@@ -191,7 +184,7 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
         map.set(plan.subjectId, folder)
       }
       folder.plansCount += 1
-      if (plan.status === 'PUBLISHED') folder.publishedCount += 1
+      if (plan.status === 'APPROVED') folder.publishedCount += 1
       else folder.draftCount += 1
       if (plan.class?.name) folder.classes.add(plan.class.name)
     })
@@ -235,116 +228,40 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
         plan.coreTopic.toLowerCase().includes(planSearchTerm.toLowerCase()) ||
         (plan.educationalObjectives && plan.educationalObjectives.toLowerCase().includes(planSearchTerm.toLowerCase()))
       const matchClass = filterClass === 'All' || plan.class?.name === filterClass
-      const matchStatus = filterStatus === 'All' || plan.status === filterStatus
+      const matchStatus =
+        filterStatus === 'All' ||
+        plan.status === filterStatus ||
+        (filterStatus === 'PENDING_APPROVAL' && plan.status === 'PUBLISHED')
       return matchFolder && matchSearch && matchClass && matchStatus
     })
   }, [plans, selectedFolderSubjectId, planSearchTerm, filterClass, filterStatus])
 
-  const handleGenerateAI = async () => {
-    if (!coreTopic.trim()) {
-      alert('Please enter a core lesson topic.')
-      return
-    }
+  const toDraft = (plan: LessonPlan): LessonNoteDraft => ({
+    id: plan.id,
+    classId: plan.classId,
+    subjectId: plan.subjectId,
+    teacherId: plan.teacherId,
+    coreTopic: plan.coreTopic,
+    subTopic: plan.subTopic,
+    duration: plan.duration,
+    weekNo: plan.weekNo,
+    educationalObjectives: plan.educationalObjectives,
+    materialLists: plan.materialLists,
+    teachingGuide: plan.teachingGuide,
+    assessmentCriteria: plan.assessmentCriteria,
+    classAssignments: plan.classAssignments,
+    entryBehavior: plan.entryBehavior,
+    aiInstruction: plan.aiInstruction,
+    sourceMaterial: plan.sourceMaterial,
+    sourceFileName: plan.sourceFileName,
+    status: plan.status,
+    reviewerNote: plan.reviewerNote,
+  })
 
-    const alloc = profile?.subjectAssignments?.[parseInt(selectedAllocationIdx)]
-    if (!alloc) {
-      alert('Please select a valid subject allocation.')
-      return
-    }
-
-    setIsGenerating(true)
-    setError(null)
-    try {
-      const res = await apiSlice.post<{ success: boolean; lessonPlan: any }>(
-        endpoints.teacher.lessonPlanGenerate,
-        {
-          subjectName: alloc.subjectName,
-          className: alloc.className,
-          coreTopic: coreTopic.trim(),
-          subTopic: subTopic.trim() || undefined,
-          duration,
-          weekNo,
-        }
-      )
-
-      if (res.success && res.lessonPlan) {
-        const lp = res.lessonPlan
-        setObjectives(lp.educationalObjectives || '')
-        setMaterials(lp.materialLists || '')
-        setTeachingGuide(lp.teachingGuide || '')
-        setAssessments(lp.assessmentCriteria || '')
-        setAssignments(lp.classAssignments || '')
-        setIsEditing(true)
-        showToast('AI Curriculum Lesson Plan generated successfully!')
-      }
-    } catch (err: any) {
-      setError(err.message || 'AI Lesson Plan generation failed.')
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  const handleSavePlan = async () => {
-    const alloc = profile?.subjectAssignments?.[parseInt(selectedAllocationIdx)]
-    if (!alloc) {
-      alert('Please select a valid class and subject allocation.')
-      return
-    }
-
-    if (!coreTopic.trim()) {
-      alert('Core lesson topic is required.')
-      return
-    }
-
-    setIsSaving(true)
-    try {
-      if (editingPlanId) {
-        const res = await apiSlice.put<{ success: boolean; plan: LessonPlan }>(
-          endpoints.teacher.lessonPlanItem(editingPlanId),
-          {
-            coreTopic,
-            educationalObjectives: objectives,
-            materialLists: materials,
-            teachingGuide,
-            assessmentCriteria: assessments,
-            classAssignments: assignments,
-            status,
-          }
-        )
-        if (res.success) {
-          setPlans(plans.map((p) => (p.id === editingPlanId ? res.plan : p)))
-          showToast('Lesson plan updated successfully!')
-          setIsEditing(false)
-          setEditingPlanId(null)
-        }
-      } else {
-        const res = await apiSlice.post<{ success: boolean; plan: LessonPlan }>(
-          endpoints.teacher.lessonPlans,
-          {
-            classId: alloc.classId,
-            subjectId: alloc.subjectId,
-            coreTopic,
-            educationalObjectives: objectives,
-            materialLists: materials,
-            teachingGuide,
-            assessmentCriteria: assessments,
-            classAssignments: assignments,
-            status,
-          }
-        )
-        if (res.success) {
-          setPlans([res.plan, ...plans])
-          showToast('Lesson plan saved to curriculum database!')
-          setIsEditing(false)
-          setCoreTopic('')
-          setSubTopic('')
-        }
-      }
-    } catch (err: any) {
-      alert(err.message || 'Failed to save lesson plan.')
-    } finally {
-      setIsSaving(false)
-    }
+  const openStudio = (plan?: LessonPlan | null) => {
+    setStudioPlan(plan ? toDraft(plan) : null)
+    setStudioKey((k) => k + 1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDownloadPdf = async (plan: LessonPlan) => {
@@ -374,37 +291,31 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
   }
 
   const handleEditExisting = (plan: LessonPlan) => {
-    setEditingPlanId(plan.id)
-    setCoreTopic(plan.coreTopic)
-    setObjectives(plan.educationalObjectives || '')
-    setMaterials(plan.materialLists || '')
-    setTeachingGuide(plan.teachingGuide || '')
-    setAssessments(plan.assessmentCriteria || '')
-    setAssignments(plan.classAssignments || '')
-    setStatus(plan.status)
-    setIsEditing(true)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    openStudio(plan)
   }
 
-  // Quick shortcut: create new plan for this subject folder
   const handleCreateNewForSubject = (subjectId: number) => {
-    const allocIdx = profile?.subjectAssignments?.findIndex((sa) => sa.subjectId === subjectId)
-    if (allocIdx !== undefined && allocIdx >= 0) {
-      setSelectedAllocationIdx(String(allocIdx))
-    }
-    setEditingPlanId(null)
-    setCoreTopic('')
-    setSubTopic('')
-    setObjectives('')
-    setMaterials('')
-    setTeachingGuide('')
-    setAssessments('')
-    setAssignments('')
-    setIsEditing(true)
+    const alloc = profile?.subjectAssignments?.find((sa) => sa.subjectId === subjectId)
+    setStudioPlan(alloc ? { classId: alloc.classId, subjectId: alloc.subjectId } : null)
+    setStudioKey((k) => k + 1)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const allocList = profile?.subjectAssignments || []
+
+  const statusTone = (status: string) => {
+    if (status === 'APPROVED') return 'bg-emerald-100 text-emerald-800'
+    if (status === 'PENDING_APPROVAL' || status === 'PUBLISHED') return 'bg-blue-100 text-blue-800'
+    if (status === 'REVISION') return 'bg-rose-100 text-rose-800'
+    return 'bg-amber-100 text-amber-800'
+  }
+
+  const statusLabel = (status: string) => {
+    if (status === 'PENDING_APPROVAL' || status === 'PUBLISHED') return 'Pending approval'
+    if (status === 'APPROVED') return 'Approved'
+    if (status === 'REVISION') return 'Revision'
+    return 'Draft'
+  }
 
   return (
     <div className="space-y-6 font-sans pb-16">
@@ -430,262 +341,36 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
             AI Pedagogical Lesson Planner & Archive
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Generate Bloom’s Taxonomy curriculum lesson plans, organize dossiers by subject folder, and export printable official PDFs.
+            Upload or scan material, instruct the AI, generate a draft, edit it, then save for approval. Notes are not official until a supervisor approves them.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {!isEditing && (
-            <button
-              onClick={() => {
-                setEditingPlanId(null)
-                setCoreTopic('')
-                setObjectives('')
-                setMaterials('')
-                setTeachingGuide('')
-                setAssessments('')
-                setAssignments('')
-                setIsEditing(true)
-              }}
-              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus size={16} /> New Lesson Plan
-            </button>
-          )}
+          <button
+            onClick={() => openStudio(null)}
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus size={16} /> New Lesson Note
+          </button>
         </div>
       </div>
 
-      {/* GENERATOR / BUILDER PANEL */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-            <BookOpen size={16} className="text-indigo-600" />
-            {isEditing ? (editingPlanId ? 'Edit Lesson Plan' : 'Pedagogical Lesson Plan Builder') : 'Create New AI Lesson Plan'}
-          </h3>
-
-          {isEditing && (
-            <button
-              onClick={() => {
-                setIsEditing(false)
-                setEditingPlanId(null)
-              }}
-              className="text-xs text-slate-400 hover:text-slate-700 font-bold"
-            >
-              Close Editor
-            </button>
-          )}
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+          {error}
         </div>
+      )}
 
-        {/* Inputs */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Class & Subject Allocation *
-            </label>
-            <select
-              value={selectedAllocationIdx}
-              onChange={(e) => setSelectedAllocationIdx(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            >
-              {allocList.map((al, idx) => (
-                <option key={idx} value={idx}>
-                  {al.className} ({al.sectionName}) &bull; {al.subjectName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Duration</label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-            >
-              <option value="35 Minutes">35 Minutes (Primary)</option>
-              <option value="45 Minutes">45 Minutes (Secondary Standard)</option>
-              <option value="80 Minutes">80 Minutes (Double Practical)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Academic Week</label>
-            <select
-              value={weekNo}
-              onChange={(e) => setWeekNo(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-            >
-              {Array.from({ length: 14 }).map((_, i) => (
-                <option key={i} value={`Week ${i + 1}`}>
-                  Week {i + 1}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Core Topic *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Chemical Bonding: Covalent & Ionic"
-              value={coreTopic}
-              onChange={(e) => setCoreTopic(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Sub-Topic / Focus Area</label>
-            <input
-              type="text"
-              placeholder="e.g. Electron sharing in Carbon Dioxide and Methane"
-              value={subTopic}
-              onChange={(e) => setSubTopic(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-
-        {/* Generate Action Button */}
-        {!isEditing && (
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={handleGenerateAI}
-              disabled={isGenerating}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-xs rounded-2xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              Generate Complete AI Lesson Plan
-            </button>
-          </div>
-        )}
-
-        {/* Pedagogical Draft Editor Sections */}
-        {isEditing && (
-          <div className="pt-4 border-t border-slate-100 space-y-5 animate-in fade-in duration-200">
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                <Award size={14} className="text-emerald-600" />
-                1. Behavioral Objectives (Cognitive, Affective, Psychomotor)
-              </label>
-              <textarea
-                rows={3}
-                value={objectives}
-                onChange={(e) => setObjectives(e.target.value)}
-                placeholder="By the end of this lesson, pupils should be able to: 1. Cognitive..., 2. Psychomotor..., 3. Affective..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs leading-relaxed text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                <Layers size={14} className="text-blue-600" />
-                2. Instructional Materials & Resources
-              </label>
-              <textarea
-                rows={2}
-                value={materials}
-                onChange={(e) => setMaterials(e.target.value)}
-                placeholder="Charts, Flashcards, Atomic model kits, Periodic table, Realia..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs leading-relaxed text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                <Clock size={14} className="text-purple-600" />
-                3. Instructional Methodology & Step-by-Step Delivery
-              </label>
-              <textarea
-                rows={5}
-                value={teachingGuide}
-                onChange={(e) => setTeachingGuide(e.target.value)}
-                placeholder="Step 1: Introduction & Prior Knowledge activation (5 mins)&#10;Step 2: Core Concept Presentation (15 mins)&#10;Step 3: Guided Practice (15 mins)&#10;Step 4: Independent Practice & Evaluation (10 mins)"
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs leading-relaxed font-mono text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                  <CheckCircle2 size={14} className="text-amber-600" />
-                  4. Formative Assessment & Evaluation Criteria
-                </label>
-                <textarea
-                  rows={3}
-                  value={assessments}
-                  onChange={(e) => setAssessments(e.target.value)}
-                  placeholder="Quick quiz questions, Oral checks, whiteboard response..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs leading-relaxed text-slate-800 focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                  <FileText size={14} className="text-rose-600" />
-                  5. Home Study Assignment & Extension Activity
-                </label>
-                <textarea
-                  rows={3}
-                  value={assignments}
-                  onChange={(e) => setAssignments(e.target.value)}
-                  placeholder="Exercises on page 42, Research question for next class..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs leading-relaxed text-slate-800 focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-bold text-slate-700">Status:</span>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="lpstatus"
-                    checked={status === 'PUBLISHED'}
-                    onChange={() => setStatus('PUBLISHED')}
-                  />
-                  Published
-                </label>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="lpstatus"
-                    checked={status === 'DRAFT'}
-                    onChange={() => setStatus('DRAFT')}
-                  />
-                  Draft
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false)
-                    setEditingPlanId(null)
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePlan}
-                  disabled={isSaving}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  Save Lesson Plan
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <AiLessonNoteStudio
+        key={studioKey}
+        role="teacher"
+        allocations={allocList}
+        initialPlan={studioPlan}
+        onSaved={(plan) => {
+          fetchPlans()
+          showToast(plan?.status === 'PENDING_APPROVAL' ? 'Saved for approval. Not an official school record yet.' : 'Draft saved. Not an official school record yet.')
+        }}
+      />
 
       {/* CURRICULUM LESSON PLANS ARCHIVE (FOLDER SYSTEM LIKE CBT/TEST) */}
       <div className="space-y-6">
@@ -811,7 +496,7 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                         {/* Composition Breakdown */}
                         <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-semibold text-slate-500">
                           <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 text-emerald-800 text-[10px] font-bold">
-                            {folder.publishedCount} Published
+                            {folder.publishedCount} Approved
                           </span>
                           {folder.draftCount > 0 && (
                             <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-100 text-amber-800 text-[10px] font-bold">
@@ -932,8 +617,10 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                     className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
                   >
                     <option value="All">All Statuses</option>
-                    <option value="PUBLISHED">Published</option>
+                    <option value="PENDING_APPROVAL">Pending approval</option>
+                    <option value="APPROVED">Approved</option>
                     <option value="DRAFT">Draft</option>
+                    <option value="REVISION">Revision</option>
                   </select>
                 </div>
               </div>
@@ -975,13 +662,9 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                         </div>
 
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                            plan.status === 'PUBLISHED'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${statusTone(plan.status)}`}
                         >
-                          {plan.status}
+                          {statusLabel(plan.status)}
                         </span>
                       </div>
 
@@ -1020,8 +703,9 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                         </button>
                         <button
                           onClick={() => handleDeletePlan(plan.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          title="Delete Plan"
+                          disabled={plan.status === 'APPROVED'}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer disabled:opacity-30"
+                          title={plan.status === 'APPROVED' ? 'Approved notes cannot be deleted' : 'Delete Plan'}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1072,8 +756,10 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                   className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
                 >
                   <option value="All">All Statuses</option>
-                  <option value="PUBLISHED">Published</option>
+                  <option value="PENDING_APPROVAL">Pending approval</option>
+                  <option value="APPROVED">Approved</option>
                   <option value="DRAFT">Draft</option>
+                  <option value="REVISION">Revision</option>
                 </select>
               </div>
             </div>
@@ -1111,13 +797,9 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                         </div>
 
                         <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                            plan.status === 'PUBLISHED'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${statusTone(plan.status)}`}
                         >
-                          {plan.status}
+                          {statusLabel(plan.status)}
                         </span>
                       </div>
 
@@ -1156,8 +838,9 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                         </button>
                         <button
                           onClick={() => handleDeletePlan(plan.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          title="Delete Plan"
+                          disabled={plan.status === 'APPROVED'}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer disabled:opacity-30"
+                          title={plan.status === 'APPROVED' ? 'Approved notes cannot be deleted' : 'Delete Plan'}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1196,7 +879,17 @@ export function AiLessonPlanner({ profile }: AiLessonPlannerProps) {
                 <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-md">
                   {previewPlan.class?.name}
                 </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${statusTone(previewPlan.status)}`}>
+                  {statusLabel(previewPlan.status)}
+                </span>
               </div>
+
+              {previewPlan.reviewerNote && (
+                <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/80 space-y-1">
+                  <h5 className="text-xs font-black text-amber-900">Supervisor note</h5>
+                  <p className="text-xs text-slate-800 whitespace-pre-line">{previewPlan.reviewerNote}</p>
+                </div>
+              )}
 
               {previewPlan.educationalObjectives && (
                 <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200/80 space-y-1">

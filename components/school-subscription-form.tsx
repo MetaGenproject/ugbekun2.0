@@ -179,8 +179,8 @@ export function SchoolSubscriptionForm() {
         signatureFileName,
       })
 
-      if (data.token && data.user) {
-        setAuthSession(data.token, data.user)
+      if (data.user) {
+        setAuthSession(data.user)
         setSuccessMsg('🎉 School account provisioned! Entering your dashboard...')
         setTimeout(() => router.push('/dashboard'), 1200)
       } else {

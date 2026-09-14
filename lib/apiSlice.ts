@@ -7,17 +7,12 @@ import { showSystemStatus, resolveHttpStatus } from './systemStatus';
 
 const getBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // Local development loopback
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || /^192\.168\.\d+\.\d+$/.test(hostname) || /^10\.\d+\.\d+\.\d+$/.test(hostname)) {
-      return `${window.location.protocol}//${hostname}:5001/api`;
-    }
-    // Mobile & Production deployments: Use same-origin proxy to eliminate CORS preflight blocks
+    // Same-origin proxy so the httpOnly session cookie is sent and never read by JS.
     return '/api/proxy';
   }
 
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
   }
 
   return 'https://ugbekunsmp-backend.onrender.com/api';
@@ -29,8 +24,9 @@ export const BASE_URL = getBaseUrl();
 export const endpoints = {
   auth: {
     login: typeof window !== 'undefined' ? '/api/auth/login' : `${BASE_URL}/auth/login`,
+    logout: typeof window !== 'undefined' ? '/api/auth/logout' : `${BASE_URL}/auth/logout`,
     register: `${BASE_URL}/auth/register`,
-    me: `${BASE_URL}/auth/me`,
+    me: typeof window !== 'undefined' ? '/api/auth/me' : `${BASE_URL}/auth/me`,
     forgotPassword: `${BASE_URL}/auth/forgot-password`,
     verifyResetToken: `${BASE_URL}/auth/verify-reset-token`,
     resetPassword: `${BASE_URL}/auth/reset-password`,
@@ -85,6 +81,17 @@ export const endpoints = {
       const qs = searchParams.toString()
       return `${BASE_URL}/superadmin/revenue-analytics/export/pdf${qs ? `?${qs}` : ''}`
     },
+    platform: `${BASE_URL}/superadmin/platform`,
+    platformApiKeys: `${BASE_URL}/superadmin/platform/api-keys`,
+    platformApiKey: (id: number | string) => `${BASE_URL}/superadmin/platform/api-keys/${id}`,
+    platformWebhooks: `${BASE_URL}/superadmin/platform/webhooks`,
+    platformWebhook: (id: number | string) => `${BASE_URL}/superadmin/platform/webhooks/${id}`,
+    testPlatformWebhook: (id: number | string) => `${BASE_URL}/superadmin/platform/webhooks/${id}/test`,
+    platformBackups: `${BASE_URL}/superadmin/platform/backups`,
+    restorePlatformBackup: (id: number | string) => `${BASE_URL}/superadmin/platform/backups/${id}/restore`,
+    platformBackup: (id: number | string) => `${BASE_URL}/superadmin/platform/backups/${id}`,
+    platformAuditLogs: `${BASE_URL}/superadmin/platform/audit-logs`,
+    platformAuditLog: (id: number | string) => `${BASE_URL}/superadmin/platform/audit-logs/${id}`,
   },
   admin: {
     stats: `${BASE_URL}/admin/stats`,
@@ -166,12 +173,18 @@ export const endpoints = {
       `${BASE_URL}/admin/cbt/distributions?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${subjectId ? `&subjectId=${subjectId}` : ''}`,
     cbtDistributionDetail: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}`,
     toggleCbtDistributionPublish: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/toggle-publish`,
+    rescheduleCbtDistribution: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/reschedule`,
     cbtQuestionBank: (query = '') => `${BASE_URL}/admin/cbt/question-bank${query}`,
     cbtQuestionBankItem: (id: number) => `${BASE_URL}/admin/cbt/question-bank/${id}`,
     cbtQuestionBankImport: `${BASE_URL}/admin/cbt/question-bank/import`,
+    cbtQuestionBankExtract: `${BASE_URL}/admin/cbt/question-bank/extract`,
+    cbtQuestionBankBulk: `${BASE_URL}/admin/cbt/question-bank/bulk`,
     cbtQuestionBankAiGenerate: `${BASE_URL}/admin/cbt/question-bank/ai-generate`,
+    homeworks: `${BASE_URL}/admin/homeworks`,
+    homeworkSubmissions: (id: number) => `${BASE_URL}/admin/homeworks/${id}/submissions`,
     cbtDistributionAnalytics: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/analytics`,
     cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/sync-marks`,
+    cbtDistributionOverrideMark: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/override-mark`,
     onlineExams: `${BASE_URL}/admin/online-exams`,
     studentAttendance: (classId?: number, sectionId?: number, date?: string, extra?: { page?: number; pageSize?: number; q?: string }) => {
       const params = new URLSearchParams()
@@ -233,6 +246,11 @@ export const endpoints = {
     pendingCommentaries: `${BASE_URL}/admin/commentary/pending`,
     reviewCommentary: `${BASE_URL}/admin/commentary/review`,
     lessonPlans: (query = '') => `${BASE_URL}/admin/lesson-plans${query}`,
+    generateLessonPlan: `${BASE_URL}/admin/lesson-plans/generate`,
+    createLessonPlan: `${BASE_URL}/admin/lesson-plans`,
+    lessonPlanItem: (id: number) => `${BASE_URL}/admin/lesson-plans/${id}`,
+    approveLessonPlan: (id: number) => `${BASE_URL}/admin/lesson-plans/${id}/approve`,
+    reviseLessonPlan: (id: number) => `${BASE_URL}/admin/lesson-plans/${id}/revision`,
     downloadLessonPlanPdf: (id: number) => `${BASE_URL}/admin/lesson-plans/${id}/pdf`,
     batchGenerateCommentary: `${BASE_URL}/admin/report-cards/batch-generate-commentary`,
     batchSaveCommentary: `${BASE_URL}/admin/report-cards/batch-save-commentary`,
@@ -274,6 +292,9 @@ export const endpoints = {
     schoolBank: `${BASE_URL}/admin/finances/school-bank`,
     comprehensiveReports: `${BASE_URL}/admin/reports/comprehensive`,
     systemSettings: `${BASE_URL}/admin/settings`,
+    academicSessions: `${BASE_URL}/admin/sessions`,
+    academicSession: (id: number | string) => `${BASE_URL}/admin/sessions/${id}`,
+    setCurrentAcademicSession: (id: number | string) => `${BASE_URL}/admin/sessions/${id}/current`,
     uploadSchoolLogo: `${BASE_URL}/admin/settings/upload-logo`,
     uploadProfilePhoto: `${BASE_URL}/admin/profile/upload-photo`,
     schoolInfo: `${BASE_URL}/public/tenant/school-info`,
@@ -349,6 +370,8 @@ export const endpoints = {
     questionBank: (query = '') => `${BASE_URL}/teacher/question-bank${query}`,
     questionBankItem: (id: number) => `${BASE_URL}/teacher/question-bank/${id}`,
     questionBankImport: `${BASE_URL}/teacher/question-bank/import`,
+    questionBankExtract: `${BASE_URL}/teacher/question-bank/extract`,
+    questionBankBulk: `${BASE_URL}/teacher/question-bank/bulk`,
     questionBankAiGenerate: `${BASE_URL}/teacher/question-bank/ai-generate`,
     schoolInfo: `${BASE_URL}/public/tenant/school-info`,
     distributeExam: `${BASE_URL}/teacher/online-exams/distribute`,
@@ -424,6 +447,8 @@ export const endpoints = {
     childExportPdf: (studentId: number, rankingType: string, rankingLimit?: number) =>
       `${BASE_URL}/parent/child/${studentId}/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
     childInvoices: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/invoices`,
+    payChildInvoice: (studentId: number, invoiceId: number) => `${BASE_URL}/parent/child/${studentId}/invoices/${invoiceId}/pay`,
+    verifyChildPayment: `${BASE_URL}/parent/payments/verify`,
     childTimetable: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/timetable`,
     childTeachers: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/teachers`,
     classesSections: `${BASE_URL}/parent/classes-sections`,
@@ -440,15 +465,12 @@ export const endpoints = {
 
 import { safeStorage } from './safeStorage';
 import { getCacheBustingHeaders, appendCacheBuster } from './cacheBuster';
+import { isExpiredAuthMessage, redirectExpiredSession } from './authSession';
 export { getCacheBustingHeaders, appendCacheBuster };
 
 // Helper to get authorization headers
 const getAuthHeaders = (): HeadersInit => {
-  const token = safeStorage.getItem('ugbekun_token');
   const headers: Record<string, string> = {};
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const impersonatedTeacherId = safeStorage.getItem('ugbekun_admin_impersonated_teacher_id');
   if (impersonatedTeacherId) {
     headers['x-admin-teacher-id'] = impersonatedTeacherId;
@@ -618,7 +640,11 @@ export const apiSlice = {
     if (!response.ok) {
       const isJson = response.headers.get('content-type')?.includes('application/json');
       const data = isJson ? await response.json() : null;
-      throw new Error(data?.message || `Download failed with status ${response.status}`);
+      const errorMessage = data?.message || `Download failed with status ${response.status}`;
+      if (isExpiredAuthMessage(response.status, errorMessage)) {
+        redirectExpiredSession();
+      }
+      throw new Error(errorMessage);
     }
 
     const blob = await response.blob();
@@ -642,7 +668,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const errorMessage = data?.message || `Request failed with status ${response.status}`;
-    showSystemStatus(resolveHttpStatus(response.status, errorMessage));
+    const requestUrl = response.url || '';
+    const isAuthFormRequest = /\/auth\/(login|register|forgot-password|reset-password)/i.test(requestUrl);
+
+    if (!isAuthFormRequest && isExpiredAuthMessage(response.status, errorMessage)) {
+      redirectExpiredSession();
+      throw new Error(errorMessage);
+    }
+
+    if (!isAuthFormRequest) {
+      showSystemStatus(resolveHttpStatus(response.status, errorMessage));
+    }
     throw new Error(errorMessage);
   }
 

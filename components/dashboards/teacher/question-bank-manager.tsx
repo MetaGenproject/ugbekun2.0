@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
+import { HomeworkQuestionStudio, type HomeworkAllocation } from '@/components/dashboards/shared/homework-question-studio'
 import {
   Search,
   Plus,
@@ -54,6 +55,12 @@ interface QuestionBankItem {
     id: number
     name: string
   } | null
+  termName?: string | null
+  topic?: string | null
+  sourceType?: string | null
+  difficulty?: string | null
+  category?: string | null
+  status?: string | null
 }
 
 interface OnlineExamItem {
@@ -69,6 +76,10 @@ interface OnlineExamItem {
   class?: { id: number; name: string }
   subject?: { id: number; name: string }
   submissions?: Array<{ id: number; totalMark: number; createdAt: string }>
+  startDate?: string | null
+  endDate?: string | null
+  shuffleQuestions?: boolean
+  showResults?: boolean
 }
 
 interface QuestionBankManagerProps {
@@ -84,15 +95,38 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // View tabs: 'folders' (organized subject files) | 'pool' (flat search) | 'assigned' (published CBT tests)
-  const [activeTab, setActiveTab] = useState<'folders' | 'pool' | 'assigned'>('folders')
+  const isAdminPortal = Number(profile?.role) === 1
+  const bankListUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank('?limit=200') : endpoints.teacher.questionBank())
+  const bankCreateUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank() : endpoints.teacher.questionBank())
+  const bankItemUrl = (id: number) => (isAdminPortal ? endpoints.admin.cbtQuestionBankItem(id) : endpoints.teacher.questionBankItem(id))
+  const bankImportUrl = isAdminPortal ? endpoints.admin.cbtQuestionBankImport : endpoints.teacher.questionBankImport
+  const bankBulkUrl = isAdminPortal ? endpoints.admin.cbtQuestionBankBulk : endpoints.teacher.questionBankBulk
+  const bankAiUrl = isAdminPortal ? endpoints.admin.cbtQuestionBankAiGenerate : endpoints.teacher.questionBankAiGenerate
+
+  const allocations: HomeworkAllocation[] = useMemo(() => {
+    const rows = Array.isArray(profile?.subjectAssignments) ? profile.subjectAssignments : []
+    return rows.map((sa: any) => ({
+      classId: sa.classId,
+      className: sa.className,
+      subjectId: sa.subjectId,
+      subjectName: sa.subjectName,
+      sectionName: sa.sectionName,
+    }))
+  }, [profile])
+
+  // View tabs: 'studio' | 'folders' | 'pool' | 'assigned'
+  const [activeTab, setActiveTab] = useState<'studio' | 'folders' | 'pool' | 'assigned'>('folders')
   const [selectedFolderSubjectId, setSelectedFolderSubjectId] = useState<number | null>(null)
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('All')
   const [selectedClassId, setSelectedClassId] = useState<string>('All')
+  const [selectedTerm, setSelectedTerm] = useState<string>('All')
   const [folderSearchTerm, setFolderSearchTerm] = useState('')
+  const [formTermName, setFormTermName] = useState('First Term')
+  const [formTopic, setFormTopic] = useState('')
+  const [importTermName, setImportTermName] = useState('First Term')
 
   // Available metadata
   const [subjects, setSubjects] = useState<Array<{ id: number; name: string; subjectCode?: string }>>([])
@@ -114,7 +148,21 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [assignDuration, setAssignDuration] = useState<number>(30)
   const [assignPassingMark, setAssignPassingMark] = useState<number>(50)
   const [assignExamDate, setAssignExamDate] = useState<string>('')
+  const [assignStartDate, setAssignStartDate] = useState('')
+  const [assignEndDate, setAssignEndDate] = useState('')
+  const [assignShuffle, setAssignShuffle] = useState(true)
+  const [assignShowResults, setAssignShowResults] = useState(true)
   const [isPublishingExam, setIsPublishingExam] = useState(false)
+  const [reviewDrafts, setReviewDrafts] = useState<any[]>([])
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
+  const [reviewMeta, setReviewMeta] = useState<{ subjectId: number; classId: string; termName: string; sourceType: string; topic?: string }>({
+    subjectId: 0,
+    classId: '',
+    termName: 'First Term',
+    sourceType: 'UPLOAD',
+  })
+  const [isSavingDrafts, setIsSavingDrafts] = useState(false)
+  const [selectedType, setSelectedType] = useState('All')
 
   // Single Question Form state
   const [newQuestionText, setNewQuestionText] = useState('')
@@ -129,6 +177,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [newQuestionMarks, setNewQuestionMarks] = useState(2.0)
   const [formSubjectId, setFormSubjectId] = useState<number>(0)
   const [formClassId, setFormClassId] = useState<string>('')
+  const [formCategory, setFormCategory] = useState('')
   const [isSavingQuestion, setIsSavingQuestion] = useState(false)
 
   // Bulk Import Form state
@@ -156,8 +205,8 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     const loadSubjectsAndClasses = async () => {
       try {
         const [subRes, clsRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.teacher.subjects),
-          apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.teacher.classesSections),
+          apiSlice.get<{ success: boolean; subjects: any[] }>(isAdminPortal ? endpoints.admin.subjects : endpoints.teacher.subjects),
+          apiSlice.get<{ success: boolean; classes: any[] }>(isAdminPortal ? endpoints.admin.classesSections : endpoints.teacher.classesSections),
         ])
         if (subRes.success && subRes.subjects) {
           setSubjects(subRes.subjects)
@@ -179,14 +228,14 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       }
     }
     loadSubjectsAndClasses()
-  }, [])
+  }, [isAdminPortal])
 
   const fetchQuestions = async () => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[] }>(
-        endpoints.teacher.questionBank()
+        bankListUrl()
       )
       if (res.success && res.items) {
         setQuestions(res.items)
@@ -203,11 +252,39 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const fetchOnlineExams = async () => {
     setLoadingExams(true)
     try {
-      const res = await apiSlice.get<{ success: boolean; exams: OnlineExamItem[] }>(
-        endpoints.teacher.onlineExams
-      )
-      if (res.success && res.exams) {
-        setOnlineExams(res.exams)
+      if (isAdminPortal) {
+        const res = await apiSlice.get<{ success: boolean; distributions?: any[] }>(
+          endpoints.admin.cbtDistributions()
+        )
+        if (res.success && Array.isArray(res.distributions)) {
+          setOnlineExams(
+            res.distributions.map((d) => ({
+              id: d.id,
+              title: d.title,
+              classId: d.classId,
+              subjectId: d.subjectId,
+              passingMark: d.passingMark,
+              duration: d.duration,
+              questions: Array.isArray(d.group?.questionIds) ? d.group.questionIds : [],
+              examDate: d.startDate || null,
+              createdAt: d.createdAt,
+              class: d.class,
+              subject: d.subject,
+              submissions: [],
+              startDate: d.startDate,
+              endDate: d.endDate,
+              shuffleQuestions: d.shuffleQuestions,
+              showResults: d.showResults,
+            }))
+          )
+        }
+      } else {
+        const res = await apiSlice.get<{ success: boolean; exams: OnlineExamItem[] }>(
+          endpoints.teacher.onlineExams
+        )
+        if (res.success && res.exams) {
+          setOnlineExams(res.exams)
+        }
       }
     } catch (err) {
       console.error('Error fetching online exams:', err)
@@ -315,9 +392,11 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       const matchesSearch = q.questionText.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesSubject = selectedSubjectId === 'All' || q.subjectId === Number(selectedSubjectId)
       const matchesClass = selectedClassId === 'All' || q.classId === Number(selectedClassId)
-      return matchesFolder && matchesSearch && matchesSubject && matchesClass
+      const matchesTerm = selectedTerm === 'All' || q.termName === selectedTerm
+      const matchesType = selectedType === 'All' || q.questionType === selectedType
+      return matchesFolder && matchesSearch && matchesSubject && matchesClass && matchesTerm && matchesType
     })
-  }, [questions, selectedFolderSubjectId, searchTerm, selectedSubjectId, selectedClassId])
+  }, [questions, selectedFolderSubjectId, searchTerm, selectedSubjectId, selectedClassId, selectedTerm, selectedType])
 
   // Handle Question Selection for Pool
   const toggleSelectQuestion = (id: number) => {
@@ -347,11 +426,15 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
 
   // Open Assign Modal with selected questions pre-filled
   const handleOpenAssignModal = () => {
-    if (selectedIds.length === 0) {
-      alert('Please select at least 1 question from the pool to assign.')
+    const approvedSelected = selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED')
+    if (approvedSelected.length === 0) {
+      alert('Select approved Question Bank items. Review AI/scanned/uploaded drafts and save them first.')
       return
     }
-    const defaultSubject = currentFolder ? currentFolder.subjectId : (selectedQuestionsObjects[0]?.subjectId || formSubjectId)
+    if (approvedSelected.length !== selectedIds.length) {
+      setSelectedIds(approvedSelected.map((q) => q.id))
+    }
+    const defaultSubject = currentFolder ? currentFolder.subjectId : (approvedSelected[0]?.subjectId || formSubjectId)
     const subjectObj = subjects.find(s => s.id === defaultSubject)
     setAssignSubjectId(defaultSubject)
     setAssignTitle(`${subjectObj?.name || 'Class'} CBT Assessment`)
@@ -388,12 +471,24 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         subjectId: Number(assignSubjectId),
         passingMark: Number(assignPassingMark) || 50,
         duration: Number(assignDuration) || 30,
+        questionBankIds: selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED').map((q) => q.id),
         questions: formattedQuestions,
-        examDate: assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString(),
+        startDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
+        endDate: assignEndDate ? new Date(assignEndDate).toISOString() : null,
+        examDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
+        shuffleQuestions: assignShuffle,
+        showResults: assignShowResults,
+        isPublished: true,
+      }
+
+      if (payload.endDate && payload.startDate && new Date(payload.endDate) <= new Date(payload.startDate)) {
+        alert('Attempt period must close after it opens.')
+        setIsPublishingExam(false)
+        return
       }
 
       const res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
-        endpoints.teacher.onlineExams,
+        isAdminPortal ? endpoints.admin.cbtDistributions() : endpoints.teacher.onlineExams,
         payload
       )
 
@@ -428,8 +523,8 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   // Handle Single Question Creation
   const handleCreateQuestion = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newQuestionText.trim() || !formSubjectId) {
-      alert('Question text and Subject are required.')
+    if (!newQuestionText.trim() || !formSubjectId || !formClassId) {
+      alert('Question text, class, and subject are required so the item can be classified.')
       return
     }
 
@@ -444,11 +539,15 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         correctOption: newQuestionCorrect,
         marks: Number(newQuestionMarks) || 1.0,
         subjectId: formSubjectId,
-        classId: formClassId ? Number(formClassId) : null,
+        classId: Number(formClassId),
+        termName: formTermName,
+        topic: formTopic.trim() || null,
+        sourceType: 'MANUAL',
+        category: formCategory.trim() || null,
       }
 
       const res = await apiSlice.post<{ success: boolean; item: QuestionBankItem }>(
-        endpoints.teacher.questionBank(),
+        bankCreateUrl(),
         payload
       )
 
@@ -457,6 +556,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         setIsAddModalOpen(false)
         setNewQuestionText('')
         setNewQuestionOptions(['Option A', 'Option B', 'Option C', 'Option D'])
+        setFormCategory('')
         showNotification('Question created and added to Subject Folder!')
       }
     } catch (err) {
@@ -469,25 +569,38 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   // Handle Bulk Import
   const handleBulkImport = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!importText.trim() || !importSubjectId) {
-      alert('Import data and Subject are required.')
+    if (!importText.trim() || !importSubjectId || !importClassId) {
+      alert('Import data, class, and subject are required so questions stay classified.')
       return
     }
 
     setIsImporting(true)
     try {
-      const res = await apiSlice.post<{ success: boolean; count: number; message: string }>(
-        endpoints.teacher.questionBankImport,
+      const res = await apiSlice.post<{ success: boolean; drafts?: any[]; count: number; message: string }>(
+        bankImportUrl,
         {
           format: importFormat,
           data: importText,
           subjectId: importSubjectId,
-          classId: importClassId ? Number(importClassId) : null,
+          classId: Number(importClassId),
+          termName: importTermName,
+          sourceType: 'UPLOAD',
         }
       )
 
-      if (res.success) {
-        showNotification(res.message || `Successfully imported questions!`)
+      if (res.success && Array.isArray(res.drafts) && res.drafts.length) {
+        setReviewMeta({
+          subjectId: importSubjectId,
+          classId: importClassId,
+          termName: importTermName,
+          sourceType: 'UPLOAD',
+        })
+        setReviewDrafts(res.drafts)
+        setIsImportModalOpen(false)
+        setIsReviewModalOpen(true)
+        showNotification(res.message || 'Review the uploaded questions before saving.')
+      } else if (res.success) {
+        showNotification(res.message || 'Questions imported.')
         setIsImportModalOpen(false)
         setImportText('')
         fetchQuestions()
@@ -502,29 +615,39 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   // Handle AI Question Generation
   const handleAiGenerate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!aiTopic.trim() || !aiSubjectId) {
-      alert('Topic and Subject are required for AI generation.')
+    if (!aiTopic.trim() || !aiSubjectId || !formClassId) {
+      alert('Topic, subject, and class are required so generated questions stay classified.')
       return
     }
 
     setIsGeneratingAi(true)
     try {
-      const res = await apiSlice.post<{ success: boolean; count: number; message: string }>(
-        endpoints.teacher.questionBankAiGenerate,
+      const res = await apiSlice.post<{ success: boolean; drafts?: any[]; questions?: any[]; message: string }>(
+        bankAiUrl,
         {
           subjectId: aiSubjectId,
+          classId: Number(formClassId),
           topic: aiTopic.trim(),
           classLevel: aiClassLevel,
           count: aiCount,
           questionType: aiQuestionType,
+          termName: formTermName,
         }
       )
 
-      if (res.success) {
-        showNotification(res.message || `AI successfully generated questions!`)
+      const drafts = res.drafts || res.questions || []
+      if (res.success && drafts.length) {
+        setReviewMeta({
+          subjectId: aiSubjectId,
+          classId: formClassId,
+          termName: formTermName,
+          sourceType: 'AI',
+          topic: aiTopic.trim(),
+        })
+        setReviewDrafts(drafts)
         setIsAiModalOpen(false)
-        setAiTopic('')
-        fetchQuestions()
+        setIsReviewModalOpen(true)
+        showNotification(res.message || 'Review the AI drafts before saving them to the Question Bank.')
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to generate AI questions.')
@@ -533,11 +656,46 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     }
   }
 
+  const updateReviewDraft = (idx: number, patch: Record<string, any>) => {
+    setReviewDrafts((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)))
+  }
+
+  const handleSaveReviewedDrafts = async () => {
+    const usable = reviewDrafts.filter((q) => String(q.questionText || '').trim())
+    if (!usable.length || !reviewMeta.subjectId) {
+      alert('Edit at least one question before saving.')
+      return
+    }
+    setIsSavingDrafts(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; count: number; message: string }>(bankBulkUrl, {
+        subjectId: reviewMeta.subjectId,
+        classId: reviewMeta.classId ? Number(reviewMeta.classId) : undefined,
+        termName: reviewMeta.termName,
+        topic: reviewMeta.topic,
+        sourceType: reviewMeta.sourceType,
+        questions: usable,
+      })
+      if (res.success) {
+        showNotification(res.message || 'Questions saved to the Question Bank and approved for assignment.')
+        setIsReviewModalOpen(false)
+        setReviewDrafts([])
+        setImportText('')
+        setAiTopic('')
+        fetchQuestions()
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save reviewed questions.')
+    } finally {
+      setIsSavingDrafts(false)
+    }
+  }
+
   // Handle Delete Question
   const handleDeleteQuestion = async (id: number) => {
     if (!confirm('Are you sure you want to delete this question from the Question Bank?')) return
     try {
-      const res = await apiSlice.delete<{ success: boolean }>(endpoints.teacher.questionBankItem(id))
+      const res = await apiSlice.delete<{ success: boolean }>(bankItemUrl(id))
       if (res.success) {
         setQuestions(questions.filter((q) => q.id !== id))
         setSelectedIds((prev) => prev.filter((item) => item !== id))
@@ -590,7 +748,7 @@ ANSWER: A`)
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-900 font-extrabold text-[10px] uppercase tracking-wider">
-              Teacher Assessment Suite
+              {isAdminPortal ? 'School Admin Question Bank' : 'Teacher Assessment Suite'}
             </span>
             <span className="text-xs text-slate-400 font-bold">•</span>
             <span className="text-xs text-slate-500 font-semibold">{questions.length} Questions in Bank</span>
@@ -600,7 +758,7 @@ ANSWER: A`)
             CBT Examinations & Question Vault
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Organize questions into subject dossiers, pick from the pool, and deploy timed CBT assessments to your classes.
+            Create by typing, upload, scan, or AI. Review AI/scanned items, then assign with a sitting window, shuffle, and result-release setting.
           </p>
         </div>
 
@@ -616,13 +774,10 @@ ANSWER: A`)
           </button>
 
           <button
-            onClick={() => {
-              if (selectedFolderSubjectId) setAiSubjectId(selectedFolderSubjectId)
-              setIsAiModalOpen(true)
-            }}
+            onClick={() => setActiveTab('studio')}
             className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
           >
-            <Sparkles size={15} /> AI Generator
+            <Sparkles size={15} /> AI / Scan / Upload
           </button>
 
           <button
@@ -640,6 +795,21 @@ ANSWER: A`)
       {/* Navigation Tabs */}
       <div className="flex items-center justify-between border-b border-slate-200/80 pb-3 gap-4 flex-wrap">
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setActiveTab('studio')
+              setSelectedFolderSubjectId(null)
+            }}
+            className={`px-4 py-2 rounded-2xl font-bold text-xs transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'studio'
+                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/80'
+            }`}
+          >
+            <Sparkles size={15} />
+            <span>Create with AI</span>
+          </button>
+
           <button
             onClick={() => {
               setActiveTab('folders')
@@ -697,6 +867,14 @@ ANSWER: A`)
           </button>
         )}
       </div>
+
+      {activeTab === 'studio' && (
+        <HomeworkQuestionStudio
+          role={isAdminPortal ? 'admin' : 'teacher'}
+          allocations={allocations}
+          onBankSaved={() => fetchQuestions()}
+        />
+      )}
 
       {/* TAB 1: SUBJECT FOLDERS CABINET */}
       {activeTab === 'folders' && selectedFolderSubjectId === null && (
@@ -891,6 +1069,28 @@ ANSWER: A`)
                     </option>
                   ))}
                 </select>
+                <span className="text-xs font-bold text-slate-500">Term:</span>
+                <select
+                  value={selectedTerm}
+                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+                >
+                  <option value="All">All terms</option>
+                  <option>First Term</option>
+                  <option>Second Term</option>
+                  <option>Third Term</option>
+                </select>
+                <span className="text-xs font-bold text-slate-500">Type:</span>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+                >
+                  <option value="All">All types</option>
+                  <option value="mcq">MCQ</option>
+                  <option value="true_false">True / False</option>
+                  <option value="theory">Theory</option>
+                </select>
               </div>
             </div>
           </div>
@@ -958,9 +1158,32 @@ ANSWER: A`)
                           <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md uppercase">
                             {q.questionType}
                           </span>
+                          {q.category && (
+                            <span className="px-2 py-0.5 bg-cyan-50 text-cyan-800 text-[10px] font-bold rounded-md">
+                              {q.category}
+                            </span>
+                          )}
+                          {q.sourceType && (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase">
+                              {q.sourceType}
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${(q.status || 'APPROVED') === 'APPROVED' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+                            {q.status || 'APPROVED'}
+                          </span>
                           {q.class && (
                             <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md">
                               {q.class.name}
+                            </span>
+                          )}
+                          {q.termName && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-bold rounded-md">
+                              {q.termName}
+                            </span>
+                          )}
+                          {q.topic && (
+                            <span className="px-2 py-0.5 bg-purple-50 text-purple-800 text-[10px] font-bold rounded-md">
+                              {q.topic}
                             </span>
                           )}
                         </div>
@@ -1076,6 +1299,28 @@ ANSWER: A`)
                   </option>
                 ))}
               </select>
+              <span className="text-xs font-bold text-slate-600">Term:</span>
+              <select
+                value={selectedTerm}
+                onChange={(e) => setSelectedTerm(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+              >
+                <option value="All">All terms</option>
+                <option>First Term</option>
+                <option>Second Term</option>
+                <option>Third Term</option>
+              </select>
+              <span className="text-xs font-bold text-slate-600">Type:</span>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+              >
+                <option value="All">All types</option>
+                <option value="mcq">MCQ</option>
+                <option value="true_false">True / False</option>
+                <option value="theory">Theory</option>
+              </select>
             </div>
           </div>
 
@@ -1131,8 +1376,31 @@ ANSWER: A`)
                               {q.class.name}
                             </span>
                           )}
+                          {q.termName && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-bold rounded-md">
+                              {q.termName}
+                            </span>
+                          )}
+                          {q.topic && (
+                            <span className="px-2 py-0.5 bg-purple-50 text-purple-800 text-[10px] font-bold rounded-md">
+                              {q.topic}
+                            </span>
+                          )}
                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md uppercase">
                             {q.questionType}
+                          </span>
+                          {q.category && (
+                            <span className="px-2 py-0.5 bg-cyan-50 text-cyan-800 text-[10px] font-bold rounded-md">
+                              {q.category}
+                            </span>
+                          )}
+                          {q.sourceType && (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase">
+                              {q.sourceType}
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${(q.status || 'APPROVED') === 'APPROVED' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+                            {q.status || 'APPROVED'}
                           </span>
                         </div>
 
@@ -1260,6 +1528,19 @@ ANSWER: A`)
                             <span>•</span>
                             <span>Pass Mark: {exam.passingMark}%</span>
                           </p>
+                          {(exam.startDate || exam.endDate) && (
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              Opens {exam.startDate ? new Date(exam.startDate).toLocaleString() : '—'}
+                              {exam.endDate ? ` · Closes ${new Date(exam.endDate).toLocaleString()}` : ''}
+                            </p>
+                          )}
+                          {(exam.shuffleQuestions !== undefined || exam.showResults !== undefined) && (
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              {exam.shuffleQuestions === false ? 'Fixed order' : 'Random order'}
+                              {' · '}
+                              {exam.showResults === false ? 'Results later' : 'Results immediately'}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 pt-1 text-xs">
@@ -1399,6 +1680,27 @@ ANSWER: A`)
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Opens (attempt window)</label>
+                  <input
+                    type="datetime-local"
+                    value={assignStartDate}
+                    onChange={(e) => setAssignStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Closes</label>
+                  <input
+                    type="datetime-local"
+                    value={assignEndDate}
+                    onChange={(e) => setAssignEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Mins)</label>
@@ -1434,6 +1736,15 @@ ANSWER: A`)
                   />
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={assignShuffle} onChange={(e) => setAssignShuffle(e.target.checked)} className="rounded border-slate-300" />
+                Present questions in random order
+              </label>
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={assignShowResults} onChange={(e) => setAssignShowResults(e.target.checked)} className="rounded border-slate-300" />
+                Show answers / results immediately after submission
+              </label>
 
               <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
@@ -1533,18 +1844,31 @@ ANSWER: A`)
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Class Level (Optional)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Class *</label>
                   <select
                     value={importClassId}
                     onChange={(e) => setImportClassId(e.target.value)}
+                    required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
                   >
-                    <option value="">All Classes / Universal</option>
+                    <option value="">Select class</option>
                     {classesList.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Term *</label>
+                  <select
+                    value={importTermName}
+                    onChange={(e) => setImportTermName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  >
+                    <option>First Term</option>
+                    <option>Second Term</option>
+                    <option>Third Term</option>
                   </select>
                 </div>
               </div>
@@ -1577,7 +1901,7 @@ ANSWER: A`)
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isImporting ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                  Import Questions
+                  Parse for review
                 </button>
               </div>
             </form>
@@ -1629,6 +1953,37 @@ ANSWER: A`)
                     <option value="Junior Secondary (JSS)">Junior Secondary (JSS)</option>
                     <option value="Senior Secondary (SSS)">Senior Secondary (SSS)</option>
                     <option value="Primary School">Primary School</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Class *</label>
+                  <select
+                    value={formClassId}
+                    onChange={(e) => setFormClassId(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  >
+                    <option value="">Select class</option>
+                    {classesList.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Term *</label>
+                  <select
+                    value={formTermName}
+                    onChange={(e) => setFormTermName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  >
+                    <option>First Term</option>
+                    <option>Second Term</option>
+                    <option>Third Term</option>
                   </select>
                 </div>
               </div>
@@ -1686,10 +2041,139 @@ ANSWER: A`)
                   className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isGeneratingAi ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Generate & Save Questions
+                  Generate for review
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0">
+              <div>
+                <div className="flex items-center gap-2 font-black text-sm">
+                  <Eye size={18} className="text-amber-400" /> Review before saving
+                </div>
+                <p className="text-[11px] text-white/70 mt-1 font-medium">
+                  AI-generated, scanned, and uploaded questions must be edited here, then saved. After save they are approved for class assignment.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsReviewModalOpen(false)}
+                className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <p className="text-xs font-semibold text-slate-500">
+                Source: {reviewMeta.sourceType} · Term: {reviewMeta.termName}
+                {reviewMeta.topic ? ` · Topic: ${reviewMeta.topic}` : ''}
+              </p>
+              {reviewDrafts.map((q, idx) => {
+                const options = Array.isArray(q.options) && q.options.length ? q.options : ['', '', '', '']
+                return (
+                  <div key={`review-${idx}`} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-slate-700">Question {idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setReviewDrafts((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={q.questionText || ''}
+                      onChange={(e) => updateReviewDraft(idx, { questionText: e.target.value })}
+                      className="w-full p-3 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-hidden"
+                      placeholder="Question stem"
+                    />
+                    <div className="grid grid-cols-3 gap-3">
+                      <select
+                        value={q.questionType || 'mcq'}
+                        onChange={(e) => updateReviewDraft(idx, { questionType: e.target.value })}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                      >
+                        <option value="mcq">MCQ</option>
+                        <option value="true_false">True / False</option>
+                        <option value="theory">Theory</option>
+                      </select>
+                      <input
+                        value={q.category || ''}
+                        onChange={(e) => updateReviewDraft(idx, { category: e.target.value })}
+                        placeholder="Category (optional)"
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                      />
+                      <input
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        value={q.marks ?? 1}
+                        onChange={(e) => updateReviewDraft(idx, { marks: parseFloat(e.target.value) || 1 })}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                    {(q.questionType || 'mcq') !== 'theory' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {options.map((opt: string, oIdx: number) => {
+                          const letter = String.fromCharCode(65 + oIdx)
+                          return (
+                            <div key={oIdx} className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => updateReviewDraft(idx, { correctOption: letter })}
+                                className={`w-7 h-7 rounded-lg text-[10px] font-black shrink-0 ${
+                                  (q.correctOption || 'A') === letter
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-white border border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {letter}
+                              </button>
+                              <input
+                                value={opt}
+                                onChange={(e) => {
+                                  const next = [...options]
+                                  next[oIdx] = e.target.value
+                                  updateReviewDraft(idx, { options: next })
+                                }}
+                                className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsReviewModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReviewedDrafts}
+                disabled={isSavingDrafts}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSavingDrafts ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Save to Question Bank
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1729,13 +2213,14 @@ ANSWER: A`)
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Class Level</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Class *</label>
                   <select
                     value={formClassId}
                     onChange={(e) => setFormClassId(e.target.value)}
+                    required
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
                   >
-                    <option value="">All / Any Class</option>
+                    <option value="">Select class</option>
                     {classesList.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -1743,6 +2228,40 @@ ANSWER: A`)
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Term *</label>
+                  <select
+                    value={formTermName}
+                    onChange={(e) => setFormTermName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  >
+                    <option>First Term</option>
+                    <option>Second Term</option>
+                    <option>Third Term</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Topic</label>
+                  <input
+                    value={formTopic}
+                    onChange={(e) => setFormTopic(e.target.value)}
+                    placeholder="e.g. Fractions"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                <input
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                  placeholder="e.g. Objective, Comprehension, Essay"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                />
               </div>
 
               <div>

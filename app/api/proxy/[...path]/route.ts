@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { applyAuthCookie, AUTH_COOKIE_NAME, getBackendUrl } from '@/lib/serverAuth'
 
-// Production backend URL — Render.com deployment
-const PRODUCTION_BACKEND = 'https://ugbekunsmp-backend.onrender.com'
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
-const getBackendUrl = (): string => {
-  // Explicit env override takes priority
-  if (process.env.BACKEND_API_URL) {
-    return process.env.BACKEND_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
-  }
-  // NEXT_PUBLIC_API_URL — skip if it points to localhost (dev only)
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '').replace(/\/api$/, '')
-  }
-  // Production Render.com fallback
-  return PRODUCTION_BACKEND
+function stripToken(payload: Record<string, unknown>) {
+  const { token, ...publicJson } = payload
+  return { token: typeof token === 'string' ? token : null, publicJson }
 }
 
 async function handleProxyRequest(request: NextRequest, params: { path: string[] }) {
@@ -24,63 +17,69 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
     const queryString = searchParams ? `?${searchParams}` : ''
     const targetUrl = `${backendHost}/api/${path}${queryString}`
 
-    // Build clean forwarded headers without duplicates
     const forwardHeaders: Record<string, string> = {
-      'Accept': 'application/json',
+      Accept: request.headers.get('accept') || '*/*',
     }
 
-    // Copy authorization header or fall back to cookie
     const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
     if (authHeader) {
       forwardHeaders['Authorization'] = authHeader
     } else {
-      const tokenCookie = request.cookies.get('ugbekun_token')?.value
+      const tokenCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value
       if (tokenCookie) {
         forwardHeaders['Authorization'] = `Bearer ${tokenCookie}`
       }
     }
 
-    // Forward x-admin-teacher-id if present
     const teacherHeader = request.headers.get('x-admin-teacher-id')
     if (teacherHeader) {
       forwardHeaders['x-admin-teacher-id'] = teacherHeader
     }
 
-    let body: any = null
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      body = await request.text().catch(() => null)
+    const branchHeader = request.headers.get('x-branch-id')
+    if (branchHeader) {
+      forwardHeaders['x-branch-id'] = branchHeader
     }
 
-    // Forward single, clean Content-Type header
     const rawContentType = request.headers.get('content-type')
     if (rawContentType) {
       forwardHeaders['Content-Type'] = rawContentType.split(',')[0].trim()
-    } else if (body) {
-      forwardHeaders['Content-Type'] = 'application/json'
+    }
+
+    let body: ArrayBuffer | undefined
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      body = await request.arrayBuffer().catch(() => undefined)
+      if (body && body.byteLength === 0) body = undefined
     }
 
     const response = await fetch(targetUrl, {
       method: request.method,
       headers: forwardHeaders,
-      body: body || undefined,
+      body: body && body.byteLength > 0 ? body : undefined,
     })
 
-    const responseData = await response.text().catch(() => '')
-    let jsonOrText: any = responseData
-    try {
-      jsonOrText = JSON.parse(responseData)
-    } catch (e) {
-      // plain text
+    const responseContentType = response.headers.get('content-type') || ''
+    const issuesSession = /^(auth\/(login|register)|onboarding\/.*register)/i.test(path)
+
+    if (responseContentType.includes('application/json')) {
+      const jsonOrText = await response.json().catch(() => null)
+      if (jsonOrText && typeof jsonOrText === 'object') {
+        const { token, publicJson } = stripToken(jsonOrText as Record<string, unknown>)
+        const nextRes = NextResponse.json(publicJson, { status: response.status })
+        if (issuesSession && token) {
+          applyAuthCookie(nextRes, token)
+        }
+        return nextRes
+      }
+      return NextResponse.json(jsonOrText ?? { message: 'Empty response.' }, { status: response.status })
     }
 
-    if (typeof jsonOrText === 'object' && jsonOrText !== null) {
-      return NextResponse.json(jsonOrText, { status: response.status })
-    }
-
-    return new NextResponse(responseData, {
-      status: response.status,
-      headers: { 'Content-Type': response.headers.get('content-type') || 'text/plain' },
-    })
+    const buf = await response.arrayBuffer()
+    const headers = new Headers()
+    headers.set('Content-Type', responseContentType || 'application/octet-stream')
+    const disposition = response.headers.get('content-disposition')
+    if (disposition) headers.set('Content-Disposition', disposition)
+    return new NextResponse(buf, { status: response.status, headers })
   } catch (err: any) {
     console.error('[Proxy Handler Error]:', err)
     return NextResponse.json({ message: 'Proxy request failed.' }, { status: 502 })

@@ -18,6 +18,7 @@ import {
   Sparkles,
   Lock
 } from 'lucide-react'
+import { BASE_URL } from '@/lib/apiSlice'
 
 interface DomainConfigData {
   branchId: number
@@ -59,20 +60,12 @@ export function DomainSettingsTab() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [probeResult, setProbeResult] = useState<any | null>(null)
 
-  const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
-
-  const getAdminToken = () => {
-    if (typeof window === 'undefined') return ''
-    return localStorage.getItem('token') || ''
-  }
-
   const fetchDomainConfig = async () => {
     setLoading(true)
     setMessage(null)
     try {
-      const token = getAdminToken()
-      const res = await fetch(`${backendUrl}/api/admin/domain/config`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await fetch(`${BASE_URL}/admin/domain/config`, {
+        credentials: 'include',
       })
       const json = await res.json()
       if (json.success && json.data) {
@@ -106,12 +99,11 @@ export function DomainSettingsTab() {
     setProbeResult(null)
 
     try {
-      const token = getAdminToken()
-      const res = await fetch(`${backendUrl}/api/admin/domain/update`, {
+      const res = await fetch(`${BASE_URL}/admin/domain/update`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           subdomain: subdomainInput,
@@ -139,12 +131,11 @@ export function DomainSettingsTab() {
     setProbeResult(null)
 
     try {
-      const token = getAdminToken()
-      const res = await fetch(`${backendUrl}/api/admin/domain/verify-dns`, {
+      const res = await fetch(`${BASE_URL}/admin/domain/verify-dns`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         }
       })
 

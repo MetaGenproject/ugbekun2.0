@@ -68,6 +68,15 @@ interface ChildProfile {
   gender: string | null
   photo: string | null
   branchName: string | null
+  schoolName?: string | null
+  schoolTagline?: string | null
+  schoolLogoUrl?: string | null
+  academicSession?: string | null
+  currentTerm?: string | null
+  primaryColor?: string | null
+  secondaryColor?: string | null
+  website?: string | null
+  whatsappNo?: string | null
   classId: number | null
   className: string | null
   sectionId: number | null
@@ -101,6 +110,71 @@ interface AttendanceData {
     status: string
     remark: string | null
   }>
+}
+
+type AttendanceLog = AttendanceData['logs'][number]
+type AttendanceRange = 'daily' | 'weekly' | 'monthly'
+
+function attendanceDateKey(value: string) {
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(parsed)
+  }
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : ''
+}
+
+function weekStartKey(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const utc = Date.UTC(year, month - 1, day)
+  const dow = new Date(utc).getUTCDay()
+  const mondayOffset = dow === 0 ? -6 : 1 - dow
+  return new Date(utc + mondayOffset * 86400000).toISOString().slice(0, 10)
+}
+
+function addDaysKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
+}
+
+function formatDateLabel(dateKey: string, options: Intl.DateTimeFormatOptions) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-GB', {
+    timeZone: 'UTC',
+    ...options,
+  })
+}
+
+function summarizeAttendanceLogs(logs: AttendanceLog[]) {
+  let present = 0
+  let absent = 0
+  let late = 0
+  let excused = 0
+  let sick = 0
+  for (const log of logs) {
+    const status = String(log.status || '').toUpperCase()
+    if (status === 'PRESENT') present += 1
+    else if (status === 'ABSENT') absent += 1
+    else if (status === 'LATE') late += 1
+    else if (status === 'EXCUSED') excused += 1
+    else if (status === 'SICK') sick += 1
+  }
+  const coded = present + absent + late + excused + sick
+  const inAttendance = present + late
+  return {
+    present,
+    absent,
+    late,
+    excused,
+    sick,
+    coded,
+    inAttendance,
+    percentage: coded > 0 ? Number(((inAttendance / coded) * 100).toFixed(1)) : 0,
+  }
 }
 
 interface TaskData {
@@ -298,6 +372,8 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   const [totalPaidAmount, setTotalPaidAmount] = useState<number>(0)
   const [totalBalance, setTotalBalance] = useState<number>(0)
   const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false)
+  const [paymentGateway, setPaymentGateway] = useState<{ enabled: boolean; provider: string | null } | null>(null)
+  const [payingInvoiceId, setPayingInvoiceId] = useState<number | null>(null)
 
   const [timetableSlots, setTimetableSlots] = useState<TimetableSlot[]>([])
   const [examSlots, setExamSlots] = useState<ExamScheduleSlot[]>([])
@@ -361,6 +437,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
 
   // Filters for Attendance & Billing
   const [attendanceFilter, setAttendanceFilter] = useState<string>('ALL')
+  const [attendanceRange, setAttendanceRange] = useState<AttendanceRange>('daily')
   const [calendarView, setCalendarView] = useState<'events' | 'timetable'>('events')
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null)
 
@@ -672,6 +749,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
           totalFeeAmount: number
           totalPaidAmount: number
           totalBalance: number
+          paymentGateway?: { enabled: boolean; provider: string | null }
         }>(endpoints.parent.childInvoices(childId))
         if (invoicesRes.success) {
           setInvoices(invoicesRes.invoices)
@@ -679,6 +757,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
           setTotalFeeAmount(invoicesRes.totalFeeAmount)
           setTotalPaidAmount(invoicesRes.totalPaidAmount)
           setTotalBalance(invoicesRes.totalBalance)
+          if (invoicesRes.paymentGateway) setPaymentGateway(invoicesRes.paymentGateway)
         }
         setLoadingInvoices(false)
 
@@ -722,16 +801,50 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
     }
   }, [selectedChildId])
 
+  useEffect(() => {
+    if (!selectedChildId) return
+    const params = new URLSearchParams(window.location.search)
+    const payRef = params.get('pay_ref')
+    if (!payRef) return
+    apiSlice
+      .post(endpoints.parent.verifyChildPayment, { reference: payRef })
+      .then(() => {
+        params.delete('pay_ref')
+        const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`
+        window.history.replaceState({}, '', next)
+      })
+      .catch(() => null)
+  }, [selectedChildId])
+
+  const handlePayInvoice = async (invoiceId: number) => {
+    if (!selectedChildId) return
+    setPayingInvoiceId(invoiceId)
+    try {
+      const res = await apiSlice.post<{ success: boolean; authorizationUrl?: string; message?: string }>(
+        endpoints.parent.payChildInvoice(selectedChildId, invoiceId),
+        {}
+      )
+      if (res.authorizationUrl) {
+        window.location.href = res.authorizationUrl
+        return
+      }
+      alert(res.message || 'Unable to start online payment.')
+    } catch (err: any) {
+      alert(err.message || 'Unable to start online payment.')
+    } finally {
+      setPayingInvoiceId(null)
+    }
+  }
+
   // Export PDF Report Card
   const handleExportPdf = async () => {
     if (!selectedChildId) return
     try {
       setExportingPdf(true)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') || sessionStorage.getItem('token') : ''
       const url = endpoints.parent.childExportPdf(selectedChildId, rankingType, rankingLimit)
       
       const response = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
       })
       if (!response.ok) throw new Error('Failed to generate report card PDF.')
 
@@ -768,10 +881,49 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   })
 
   // Filter attendance logs
-  const filteredAttendanceLogs = (attendance?.logs || []).filter(l => {
+  const filteredAttendanceLogs = (attendance?.logs || []).filter((log) => {
     if (attendanceFilter === 'ALL') return true
-    return l.status.toUpperCase() === attendanceFilter.toUpperCase()
+    return String(log.status || '').toUpperCase() === attendanceFilter.toUpperCase()
   })
+
+  const weeklyAttendance = (() => {
+    const groups = new Map<string, AttendanceLog[]>()
+    for (const log of attendance?.logs || []) {
+      const dateKey = attendanceDateKey(log.attendanceDate)
+      if (!dateKey) continue
+      const start = weekStartKey(dateKey)
+      const rows = groups.get(start) || []
+      rows.push(log)
+      groups.set(start, rows)
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([start, logs]) => ({
+        start,
+        end: addDaysKey(start, 6),
+        logs,
+        summary: summarizeAttendanceLogs(logs),
+      }))
+  })()
+
+  const monthlyAttendance = (() => {
+    const groups = new Map<string, AttendanceLog[]>()
+    for (const log of attendance?.logs || []) {
+      const dateKey = attendanceDateKey(log.attendanceDate)
+      if (!dateKey) continue
+      const monthKey = dateKey.slice(0, 7)
+      const rows = groups.get(monthKey) || []
+      rows.push(log)
+      groups.set(monthKey, rows)
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([monthKey, logs]) => ({
+        monthKey,
+        logs,
+        summary: summarizeAttendanceLogs(logs),
+      }))
+  })()
 
   // Compute dynamic checklist reminders based strictly on true database tables
   const dynamicReminders: Array<{ id: string; text: string; defaultDone: boolean }> = []
@@ -826,7 +978,23 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
 
   return (
     <div className="space-y-6 pb-12 font-sans">
-      <SchoolHeader />
+      <SchoolHeader
+        school={
+          profile
+            ? {
+                schoolName: profile.schoolName || profile.branchName || undefined,
+                tagline: profile.schoolTagline || undefined,
+                logoUrl: profile.schoolLogoUrl || undefined,
+                academicSession: profile.academicSession || undefined,
+                currentTerm: profile.currentTerm || undefined,
+                primaryColor: profile.primaryColor || undefined,
+                secondaryColor: profile.secondaryColor || undefined,
+                website: profile.website || undefined,
+                whatsappNo: profile.whatsappNo || undefined,
+              }
+            : null
+        }
+      />
 
       {/* Top Welcome Hero Banner */}
       <div className="relative rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-600 p-6 sm:p-8 text-white shadow-xl overflow-hidden">
@@ -1789,94 +1957,236 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
       {/* SECTION 4: ATTENDANCE LOGS */}
       {activeSection === 'attendance' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                <CheckCircle2 className="text-emerald-600" size={24} />
-                Attendance Logs & Daily Punctuality Record
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Real-time daily roll call records, punctuality status, and monthly presence percentage ring.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {['ALL', 'PRESENT', 'LATE', 'ABSENT'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setAttendanceFilter(status)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    attendanceFilter === status
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                Daily Attendance History ({filteredAttendanceLogs.length} Records)
-              </h3>
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                  <CheckCircle2 className="text-emerald-600" size={24} />
+                  Attendance Logs & Punctuality Record
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Submitted roll-call history by day, school week, and calendar month. Presence counts Present and Late only.
+                </p>
+              </div>
               <span className="text-xs font-bold text-emerald-600">
                 {attendance ? `${attendance.percentage}% Overall Presence` : '0% Overall'}
               </span>
             </div>
 
-            {filteredAttendanceLogs.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                    <tr>
-                      <th className="p-4">Date</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Punctuality Remarks</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredAttendanceLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-4 font-bold text-slate-900">
-                          {new Date(log.attendanceDate).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </td>
-                        <td className="p-4">
-                          {log.status === 'Present' && (
-                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                              ✓ Present
-                            </span>
-                          )}
-                          {log.status === 'Late' && (
-                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                              ⏰ Late Arrival
-                            </span>
-                          )}
-                          {log.status === 'Absent' && (
-                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                              ✕ Absent
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-slate-500">
-                          {log.remark || 'Regular roll call entry by form teacher'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
+                {([
+                  { id: 'daily', label: 'Daily' },
+                  { id: 'weekly', label: 'Weekly' },
+                  { id: 'monthly', label: 'Monthly' },
+                ] as const).map((range) => (
+                  <button
+                    key={range.id}
+                    type="button"
+                    onClick={() => setAttendanceRange(range.id)}
+                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      attendanceRange === range.id
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="p-12 text-center text-slate-500 text-xs">
-                No attendance logs found matching the selected filter.
-              </div>
+
+              {attendanceRange === 'daily' && (
+                <div className="flex items-center gap-2">
+                  {['ALL', 'PRESENT', 'LATE', 'ABSENT'].map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setAttendanceFilter(status)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        attendanceFilter === status
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            {attendanceRange === 'daily' && (
+              <>
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Daily Attendance History ({filteredAttendanceLogs.length} Records)
+                  </h3>
+                </div>
+                {filteredAttendanceLogs.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
+                        <tr>
+                          <th className="p-4">Date</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4">Punctuality Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredAttendanceLogs.map((log) => {
+                          const dateKey = attendanceDateKey(log.attendanceDate)
+                          const status = String(log.status || '').toUpperCase()
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/80 transition">
+                              <td className="p-4 font-bold text-slate-900">
+                                {dateKey
+                                  ? formatDateLabel(dateKey, {
+                                      weekday: 'short',
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                    })
+                                  : log.attendanceDate}
+                              </td>
+                              <td className="p-4">
+                                {status === 'PRESENT' && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                    ✓ Present
+                                  </span>
+                                )}
+                                {status === 'LATE' && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                    ⏰ Late Arrival
+                                  </span>
+                                )}
+                                {status === 'ABSENT' && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                                    ✕ Absent
+                                  </span>
+                                )}
+                                {status === 'EXCUSED' && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
+                                    Excused
+                                  </span>
+                                )}
+                                {status === 'SICK' && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">
+                                    Sick
+                                  </span>
+                                )}
+                                {!['PRESENT', 'LATE', 'ABSENT', 'EXCUSED', 'SICK'].includes(status) && (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                    {log.status || 'Unmarked'}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-4 text-slate-500">
+                                {log.remark || 'Regular roll call entry by form teacher'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-slate-500 text-xs">
+                    No attendance logs found matching the selected filter.
+                  </div>
+                )}
+              </>
+            )}
+
+            {attendanceRange === 'weekly' && (
+              <>
+                <div className="p-5 border-b border-slate-100">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Weekly Attendance Summary ({weeklyAttendance.length} Weeks)
+                  </h3>
+                </div>
+                {weeklyAttendance.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
+                        <tr>
+                          <th className="p-4">Week</th>
+                          <th className="p-4">Days marked</th>
+                          <th className="p-4">Present</th>
+                          <th className="p-4">Late</th>
+                          <th className="p-4">Absent</th>
+                          <th className="p-4">Presence</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {weeklyAttendance.map((week) => (
+                          <tr key={week.start} className="hover:bg-slate-50/80 transition">
+                            <td className="p-4 font-bold text-slate-900">
+                              {formatDateLabel(week.start, { day: 'numeric', month: 'short' })}
+                              {' – '}
+                              {formatDateLabel(week.end, { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="p-4">{week.summary.coded}</td>
+                            <td className="p-4 text-emerald-700 font-semibold">{week.summary.present}</td>
+                            <td className="p-4 text-amber-700 font-semibold">{week.summary.late}</td>
+                            <td className="p-4 text-rose-700 font-semibold">{week.summary.absent}</td>
+                            <td className="p-4 font-bold text-emerald-600">{week.summary.percentage}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-slate-500 text-xs">
+                    No weekly attendance summaries yet.
+                  </div>
+                )}
+              </>
+            )}
+
+            {attendanceRange === 'monthly' && (
+              <>
+                <div className="p-5 border-b border-slate-100">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Monthly Attendance Summary ({monthlyAttendance.length} Months)
+                  </h3>
+                </div>
+                {monthlyAttendance.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
+                        <tr>
+                          <th className="p-4">Month</th>
+                          <th className="p-4">Days marked</th>
+                          <th className="p-4">Present</th>
+                          <th className="p-4">Late</th>
+                          <th className="p-4">Absent</th>
+                          <th className="p-4">Presence</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {monthlyAttendance.map((month) => (
+                          <tr key={month.monthKey} className="hover:bg-slate-50/80 transition">
+                            <td className="p-4 font-bold text-slate-900">
+                              {formatDateLabel(`${month.monthKey}-01`, { month: 'long', year: 'numeric' })}
+                            </td>
+                            <td className="p-4">{month.summary.coded}</td>
+                            <td className="p-4 text-emerald-700 font-semibold">{month.summary.present}</td>
+                            <td className="p-4 text-amber-700 font-semibold">{month.summary.late}</td>
+                            <td className="p-4 text-rose-700 font-semibold">{month.summary.absent}</td>
+                            <td className="p-4 font-bold text-emerald-600">{month.summary.percentage}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-slate-500 text-xs">
+                    No monthly attendance summaries yet.
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1951,6 +2261,17 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                             <span className="font-extrabold text-rose-600">₦{inv.balance.toLocaleString()}</span>
                           </div>
                         </div>
+                        {paymentGateway?.enabled && inv.balance > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handlePayInvoice(inv.id)}
+                            disabled={payingInvoiceId === inv.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
+                          >
+                            {payingInvoiceId === inv.id ? <Loader2 size={13} className="animate-spin" /> : <CreditCard size={13} />}
+                            Pay now with {paymentGateway.provider === 'flutterwave' ? 'Flutterwave' : 'Paystack'}
+                          </button>
+                        )}
 
                         {/* Itemized breakdown */}
                         {inv.items.length > 0 && (

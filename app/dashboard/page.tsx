@@ -56,8 +56,8 @@ import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashbo
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
-import { clearAuthSession, getAuthSession, setAuthSession } from '@/lib/authSession'
-import { safeStorage } from '@/lib/safeStorage'
+import { endAuthSession, getAuthSession, redirectExpiredSession, setAuthSession, type AuthUser } from '@/lib/authSession'
+import { getAvatarUrl } from '@/lib/avatar'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
 // Role 1 = 1 global user  → Superadmin / Master
@@ -91,6 +91,7 @@ interface NavLink {
   active?: boolean
   badge?: string
   hasSub?: boolean
+  group?: string
 }
 
 const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] => {
@@ -137,21 +138,18 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       ]
     case 3: // Teacher
       return [
-        { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, active: true },
-        { id: 'my-classes', label: 'My Classes', icon: Users },
-        { id: 'my-subjects', label: 'My Subjects', icon: BookOpen },
-        { id: 'timetable', label: 'My Timetable', icon: Calendar },
-        { id: 'ai-planner', label: 'Lesson Plan', icon: FileText },
-        { id: 'assignments', label: 'Assignments', icon: CheckSquare },
-        { id: 'cbt-exams', label: 'CBT / Tests', icon: Award },
-        { id: 'gradebook', label: 'Scores Entry', icon: TrendingUp },
-        { id: 'roster', label: 'My Students', icon: UserCheck },
-        { id: 'attendance', label: 'Attendance', icon: Calendar },
-        { id: 'class-reports', label: 'Class Reports', icon: FileSpreadsheet },
-        { id: 'subject-reports', label: 'Subject Reports', icon: BarChart3 },
-        { id: 'attrition', label: 'Performance Overview', icon: Activity },
-        { id: 'communication', label: 'Messages', icon: MessageSquare, badge: '12' },
-        { id: 'announcements', label: 'Announcements', icon: Bell },
+        { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Teaching' },
+        { id: 'my-classes', label: 'My Classes', icon: Users, group: 'Teaching' },
+        { id: 'roster', label: 'Students', icon: UserCheck, group: 'Teaching' },
+        { id: 'gradebook', label: 'Assessments & Scores', icon: TrendingUp, group: 'Teaching' },
+        { id: 'assignments', label: 'Assignments', icon: CheckSquare, group: 'Teaching' },
+        { id: 'cbt-exams', label: 'Exams & Questions', icon: Award, group: 'Teaching' },
+        { id: 'timetable', label: 'Schedule', icon: Calendar, group: 'Teaching' },
+        { id: 'attendance', label: 'Attendance', icon: CheckSquare, group: 'Teaching' },
+        { id: 'communication', label: 'Staff Communication', icon: MessageSquare, group: 'Communication' },
+        { id: 'media', label: 'Resource Library', icon: BookOpen, group: 'Resources' },
+        { id: 'class-reports', label: 'Reports', icon: FileText, group: 'Other' },
+        { id: 'ai-planner', label: 'Lesson Plan', icon: FileText, group: 'Other' },
       ]
     case 6: // Parent
       return [
@@ -188,25 +186,6 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
   }
 }
 
-const recoverAuthFromUrl = (): { token: string; user: User } | null => {
-  if (typeof window === 'undefined') return null
-
-  const params = new URLSearchParams(window.location.search)
-  const authParam = params.get('auth')
-  if (!authParam) return null
-
-  try {
-    const parsed = JSON.parse(decodeURIComponent(authParam))
-    if (parsed?.token && parsed?.user) {
-      return { token: parsed.token, user: parsed.user }
-    }
-  } catch (e) {
-    // ignore invalid fallback payload
-  }
-
-  return null
-}
-
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -221,6 +200,11 @@ export default function DashboardPage() {
     academicSession: string
     currentTerm: string
   } | null>(null)
+  const [headerIdentity, setHeaderIdentity] = useState<{
+    name: string
+    photo: string | null
+    title: string
+  } | null>(null)
 
   // Interactive OSe AI Assistant Modal State
   const [isOseModalOpen, setIsOseModalOpen] = useState(false)
@@ -234,8 +218,13 @@ export default function DashboardPage() {
         setIsOseModalOpen((prev) => !prev)
       }
     }
+    const handleOpenOse = () => setIsOseModalOpen(true)
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('open-ose-assistant', handleOpenOse)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('open-ose-assistant', handleOpenOse)
+    }
   }, [])
 
   const handleSendOseMessage = (promptText?: string) => {
@@ -265,63 +254,80 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    const authSession = getAuthSession()
+    let cancelled = false
 
-    if (authSession.token && authSession.user) {
-      const normalizedUser: User = {
-        id: authSession.user.id,
-        username: authSession.user.username,
-        role: authSession.user.role,
-        roleName: authSession.user.roleName,
-        legacyUserId: authSession.user.legacyUserId ?? null,
-        lastLogin: authSession.user.lastLogin ?? undefined,
-      }
-      if (authSession.user.branch) {
-        ;(normalizedUser as any).branch = authSession.user.branch
-      }
-
-      setUser(normalizedUser)
-      setIsLoading(false)
-      return
-    }
-
-    const fallbackAuth = recoverAuthFromUrl()
-    if (fallbackAuth?.token && fallbackAuth?.user) {
-      const normalizedUser: User = {
-        id: fallbackAuth.user.id,
-        username: fallbackAuth.user.username,
-        role: fallbackAuth.user.role,
-        roleName: fallbackAuth.user.roleName,
-        legacyUserId: fallbackAuth.user.legacyUserId ?? null,
-        lastLogin: fallbackAuth.user.lastLogin ?? undefined,
-      }
-      if ((fallbackAuth.user as any).branch) {
-        ;(normalizedUser as any).branch = (fallbackAuth.user as any).branch
-      }
-
-      setAuthSession(fallbackAuth.token, fallbackAuth.user)
-      setUser(normalizedUser)
-      setIsLoading(false)
-      return
-    }
-
-    const token = safeStorage.getItem('ugbekun_token')
-    const userDataStr = safeStorage.getItem('ugbekun_user')
-
-    if (token && userDataStr) {
+    async function hydrateSession() {
       try {
-        const parsedUser = JSON.parse(userDataStr)
-        if (parsedUser && typeof parsedUser === 'object' && parsedUser.id && parsedUser.role) {
-          setUser(parsedUser)
-          setIsLoading(false)
+        const meRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+        if (cancelled) return
+
+        if (meRes.ok) {
+          const res = await meRes.json() as { success?: boolean; user?: AuthUser }
+          if (res.success && res.user) {
+            const normalizedUser: User = {
+              id: res.user.id,
+              username: res.user.username,
+              role: res.user.role,
+              roleName: res.user.roleName,
+              legacyUserId: res.user.legacyUserId ?? null,
+              lastLogin: res.user.lastLogin ?? undefined,
+            }
+            if (res.user.branch) (normalizedUser as any).branch = res.user.branch
+            setAuthSession({
+              id: res.user.id,
+              username: res.user.username,
+              role: res.user.role,
+              roleName: res.user.roleName,
+              legacyUserId: res.user.legacyUserId ?? null,
+              lastLogin: res.user.lastLogin ?? null,
+              branch: res.user.branch || null,
+            })
+            setUser(normalizedUser)
+            return
+          }
+        }
+
+        if (meRes.status === 401) {
+          redirectExpiredSession()
           return
         }
-      } catch (e) {
-        // ignore invalid payload
+
+        const cached = getAuthSession().user
+        if (cached) {
+          const normalizedUser: User = {
+            id: cached.id,
+            username: cached.username,
+            role: cached.role,
+            roleName: cached.roleName,
+            legacyUserId: cached.legacyUserId ?? null,
+            lastLogin: cached.lastLogin ?? undefined,
+          }
+          if (cached.branch) (normalizedUser as any).branch = cached.branch
+          setUser(normalizedUser)
+        }
+      } catch {
+        const cached = getAuthSession().user
+        if (cached) {
+          const normalizedUser: User = {
+            id: cached.id,
+            username: cached.username,
+            role: cached.role,
+            roleName: cached.roleName,
+            legacyUserId: cached.legacyUserId ?? null,
+            lastLogin: cached.lastLogin ?? undefined,
+          }
+          if (cached.branch) (normalizedUser as any).branch = cached.branch
+          setUser(normalizedUser)
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
       }
     }
 
-    setIsLoading(false)
+    hydrateSession()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -364,6 +370,37 @@ export default function DashboardPage() {
 
     loadSchoolInfo()
 
+    async function loadTeacherHeader() {
+      if (Number(user?.role) !== 3) {
+        setHeaderIdentity(null)
+        return
+      }
+      try {
+        const res = await apiSlice.get<{
+          success: boolean
+          name?: string
+          photo?: string | null
+          isFormTeacher?: boolean
+          isSubjectTeacher?: boolean
+        }>(endpoints.teacher.profile)
+        if (cancelled || !res.success) return
+        const title = res.isSubjectTeacher
+          ? 'Subject Teacher'
+          : res.isFormTeacher
+            ? 'Form Teacher'
+            : 'Teacher'
+        setHeaderIdentity({
+          name: res.name || user.username,
+          photo: res.photo || null,
+          title,
+        })
+      } catch {
+        if (!cancelled) setHeaderIdentity(null)
+      }
+    }
+
+    loadTeacherHeader()
+
     const handleSettingsUpdated = () => {
       loadSchoolInfo()
     }
@@ -375,8 +412,8 @@ export default function DashboardPage() {
     }
   }, [user])
 
-  const handleLogout = () => {
-    clearAuthSession()
+  const handleLogout = async () => {
+    await endAuthSession()
     router.push('/login')
   }
 
@@ -422,7 +459,7 @@ export default function DashboardPage() {
           />
         )
       case 3:
-        return <TeacherDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
+        return <TeacherDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} onIdentityChange={setHeaderIdentity} />
       case 6:
         return <ParentDashboard user={user} activeSection={activeSection} onNavigate={(section) => setSelectedSection(section)} />
       case 7:
@@ -490,32 +527,45 @@ export default function DashboardPage() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1 px-1">
+          <nav className="space-y-1 px-1 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
             {navLinks.map((link, idx) => {
               const IconComponent = link.icon
               const isActive = link.id === activeSection
+              const showGroup = Boolean(link.group && link.group !== navLinks[idx - 1]?.group)
               return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSelectedSection(link.id)
-                    setIsSidebarOpen(false)
-                  }}
-                  className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative group cursor-pointer ${
-                    isActive
-                      ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white font-semibold shadow-md shadow-red-950/50'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <IconComponent size={17} className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}`} />
-                    <span className="truncate">{link.label}</span>
-                  </div>
-                  {link.hasSub !== false && (
-                    <ChevronRight size={14} className={`shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400 opacity-60 group-hover:opacity-100'}`} />
+                <div key={link.id}>
+                  {showGroup && (
+                    <p className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      {link.group}
+                    </p>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSection(link.id)
+                      setIsSidebarOpen(false)
+                    }}
+                    className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative group cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white font-semibold shadow-md shadow-red-950/50'
+                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <IconComponent size={17} className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}`} />
+                      <span className="truncate">{link.label}</span>
+                    </div>
+                    {link.badge ? (
+                      <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-extrabold flex items-center justify-center">
+                        {link.badge}
+                      </span>
+                    ) : (
+                      link.hasSub !== false && (
+                        <ChevronRight size={14} className={`shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400 opacity-60 group-hover:opacity-100'}`} />
+                      )
+                    )}
+                  </button>
+                </div>
               )
             })}
           </nav>
@@ -592,7 +642,7 @@ export default function DashboardPage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="Search students, staff, reports, fees... or ask OSe"
+                placeholder={user.role === 3 ? 'Search students by name, class or subject...' : 'Search students, staff, reports, fees... or ask OSe'}
                 onClick={() => setIsOseModalOpen(true)}
                 readOnly
                 className="w-full pl-9 pr-12 py-2 rounded-xl border border-slate-200 bg-slate-50/80 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition shadow-2xs cursor-pointer"
@@ -612,21 +662,27 @@ export default function DashboardPage() {
             {/* Notification Bell Badge */}
             <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Notifications">
               <Bell size={19} />
-              <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-                12
-              </span>
             </button>
 
             {/* Messages Mail Badge */}
-            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Messages">
+            <button
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer"
+              title="Messages"
+              onClick={() => {
+                if (user.role === 3) setSelectedSection('communication')
+              }}
+            >
               <Mail size={19} />
-              <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-                8
-              </span>
             </button>
 
             {/* Calendar Icon */}
-            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer" title="Calendar">
+            <button
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+              title="Calendar"
+              onClick={() => {
+                if (user.role === 3) setSelectedSection('timetable')
+              }}
+            >
               <Calendar size={19} />
             </button>
 
@@ -636,14 +692,16 @@ export default function DashboardPage() {
             <div className="flex items-center gap-3">
               <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-blue-100 shrink-0 shadow-xs">
                 <img 
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.username || 'User')}&background=2563eb&color=ffffff&bold=true`} 
-                  alt={user?.username || 'User'}
+                  src={getAvatarUrl(headerIdentity?.photo, headerIdentity?.name || user?.username || 'User')}
+                  alt={headerIdentity?.name || user?.username || 'User'}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="hidden sm:block text-left">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">{user?.username || 'User'}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">{user?.roleName || 'Portal User'}</p>
+                <h4 className="text-xs font-bold text-slate-800 leading-tight">{headerIdentity?.name || user?.username || 'User'}</h4>
+                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">
+                  {headerIdentity?.title || user?.roleName || 'Portal User'}
+                </p>
               </div>
             </div>
 
