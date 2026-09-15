@@ -75,10 +75,10 @@ export function FinancialRecordsManagement() {
 
         if (txsRes.success && Array.isArray(txsRes.data)) {
           const incomes = txsRes.data
-            .filter((t: any) => t.type === 'INCOME')
+            .filter((t: any) => t.type === 'INCOME' && t.status !== 'VOIDED')
             .map((t: any) => ({
-              id: t.id,
-              category: t.voucherHead?.name || 'School Revenue',
+              id: t.voucherNo || t.referenceNo || t.id,
+              category: t.voucherHeadName || t.voucherHead?.name || 'School Revenue',
               amount: Number(t.amount) || 0,
               payer: t.description || 'Institutional Payer',
               date: t.transactionDate ? new Date(t.transactionDate).toISOString().split('T')[0] : '',
@@ -87,16 +87,16 @@ export function FinancialRecordsManagement() {
           setIncomeEntries(incomes)
 
           const expenses = txsRes.data
-            .filter((t: any) => t.type === 'EXPENSE')
+            .filter((t: any) => t.type === 'EXPENSE' && t.status !== 'VOIDED')
             .map((t: any) => ({
               id: t.id,
-              voucher: t.referenceNo || `VCH-${t.id}`,
-              category: t.voucherHead?.name || 'Operational Expense',
+              voucher: t.voucherNo || t.referenceNo || `VCH-${t.id}`,
+              category: t.voucherHeadName || t.voucherHead?.name || 'Operational Expense',
               amount: Number(t.amount) || 0,
               vendor: t.description || 'Vendor / Supplier',
               approvedBy: 'Admin',
               date: t.transactionDate ? new Date(t.transactionDate).toISOString().split('T')[0] : '',
-              status: 'Paid'
+              status: t.status || 'Paid'
             }))
           setExpenseEntries(expenses)
         }

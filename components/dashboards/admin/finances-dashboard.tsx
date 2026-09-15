@@ -31,7 +31,9 @@ import {
   Check,
   ChevronRight,
   AlertCircle,
-  BookOpen
+  BookOpen,
+  Pencil,
+  Ban
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -94,9 +96,12 @@ export interface FeeGroup {
   id: number
   name: string
   description?: string | null
-  feeTypeIds: string
+  feeTypeIds: number[] | string
+  classIds?: number[] | string
   totalAmount: number
   createdAt: string
+  feeTypes?: FeeType[]
+  classes?: Array<{ id: number; name: string }>
 }
 
 export interface VoucherHead {
@@ -104,17 +109,27 @@ export interface VoucherHead {
   name: string
   type: 'EXPENSE' | 'INCOME'
   description?: string | null
+  active?: boolean
 }
 
 export interface OfficeTransaction {
   id: number
   type: 'INCOME' | 'EXPENSE'
+  voucherHeadId?: number | null
   voucherHeadName: string
   amount: number
+  originalAmount?: number | null
   paymentMethod: string
   transactionDate: string
   referenceNo?: string | null
+  voucherNo?: string
   description?: string | null
+  status?: 'POSTED' | 'AMENDED' | 'VOIDED' | string
+  amendmentNote?: string | null
+  voidReason?: string | null
+  voidedAt?: string | null
+  amendedAt?: string | null
+  createdAt?: string
 }
 
 export interface SchoolBank {
@@ -203,18 +218,37 @@ export function FinancesDashboard() {
   const [feeGroupForm, setFeeGroupForm] = useState({
     name: '',
     description: '',
-    selectedFeeTypeIds: [] as number[]
+    selectedFeeTypeIds: [] as number[],
+    selectedClassIds: [] as number[],
   })
+  const [showFeeTypeModal, setShowFeeTypeModal] = useState(false)
+  const [feeTypeRows, setFeeTypeRows] = useState([{ name: '', code: '', amount: '', frequency: 'per_term' }])
+  const [savingFeeTypes, setSavingFeeTypes] = useState(false)
+  const [allocatingGroup, setAllocatingGroup] = useState<FeeGroup | null>(null)
+  const [allocateClassIds, setAllocateClassIds] = useState<number[]>([])
+  const [savingAllocation, setSavingAllocation] = useState(false)
 
   const [showOfficeTxModal, setShowOfficeTxModal] = useState(false)
   const [officeTxForm, setOfficeTxForm] = useState({
+    id: null as number | null,
     type: 'EXPENSE',
+    voucherHeadId: '',
     voucherHeadName: 'School Supplies',
     amount: '',
     paymentMethod: 'Bank Transfer',
     referenceNo: '',
-    description: ''
+    description: '',
+    transactionDate: '',
+    amendmentNote: '',
   })
+  const [voucherSearch, setVoucherSearch] = useState('')
+  const [voucherTypeFilter, setVoucherTypeFilter] = useState('ALL')
+  const [voucherStatusFilter, setVoucherStatusFilter] = useState('LIVE')
+  const [headSearch, setHeadSearch] = useState('')
+  const [editingVoucherHeadId, setEditingVoucherHeadId] = useState<number | null>(null)
+  const [voidingTx, setVoidingTx] = useState<OfficeTransaction | null>(null)
+  const [voidReason, setVoidReason] = useState('')
+  const [savingVoucher, setSavingVoucher] = useState(false)
 
   const [showVoucherHeadModal, setShowVoucherHeadModal] = useState(false)
   const [voucherHeadForm, setVoucherHeadForm] = useState({
@@ -248,14 +282,15 @@ export function FinancesDashboard() {
   const fetchInitialData = async () => {
     setLoading(true)
     try {
-      const [ovRes, invRes, ftRes, fgRes, clsRes, vhRes, txRes, sbRes, repRes] = await Promise.all([
+      const [ovRes, invRes, ftRes, fgRes, clsRes, asgRes, vhRes, txRes, sbRes, repRes] = await Promise.all([
         apiSlice.get<{ success: boolean; data: OverviewData }>(endpoints.admin.financesOverview).catch(() => null),
         apiSlice.get<{ success: boolean; data: Invoice[] }>(endpoints.admin.invoices()).catch(() => null),
         apiSlice.get<{ success: boolean; data: FeeType[] }>(endpoints.admin.feeTypes).catch(() => null),
         apiSlice.get<{ success: boolean; data: FeeGroup[] }>(endpoints.admin.feeGroups).catch(() => null),
         apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections).catch(() => null),
-        apiSlice.get<{ success: boolean; data: VoucherHead[] }>(endpoints.admin.voucherHeads).catch(() => null),
-        apiSlice.get<{ success: boolean; data: OfficeTransaction[] }>(endpoints.admin.officeTransactions).catch(() => null),
+        apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.feeAssignments).catch(() => null),
+        apiSlice.get<{ success: boolean; data: VoucherHead[] }>(`${endpoints.admin.voucherHeads}?includeArchived=1`).catch(() => null),
+        apiSlice.get<{ success: boolean; data: OfficeTransaction[] }>(`${endpoints.admin.officeTransactions}?includeVoided=1`).catch(() => null),
         apiSlice.get<{ success: boolean; data: SchoolBank }>(endpoints.admin.schoolBank).catch(() => null),
         apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.financesCollectionsReport).catch(() => null)
       ])
@@ -264,6 +299,7 @@ export function FinancesDashboard() {
       if (invRes && invRes.success) setInvoices(invRes.data || [])
       if (ftRes && ftRes.success) setFeeTypes(ftRes.data || [])
       if (fgRes && fgRes.success) setFeeGroups(fgRes.data || [])
+      if (asgRes && asgRes.success) setAssignments(asgRes.data || [])
       if (clsRes && clsRes.success) {
         setClasses(clsRes.classes || [])
         if (clsRes.classes?.length > 0) {
@@ -494,6 +530,10 @@ export function FinancesDashboard() {
   const handleCreateFeeGroup = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!feeGroupForm.name) return
+    if (feeGroupForm.selectedFeeTypeIds.length === 0) {
+      toast.error('Select at least one fee type for this group.')
+      return
+    }
     const selectedTypes = feeTypes.filter((ft) => feeGroupForm.selectedFeeTypeIds.includes(ft.id))
     const totalAmount = selectedTypes.reduce((acc, ft) => acc + Number(ft.amount), 0)
 
@@ -502,13 +542,100 @@ export function FinancesDashboard() {
         name: feeGroupForm.name,
         description: feeGroupForm.description,
         feeTypeIds: feeGroupForm.selectedFeeTypeIds,
+        classIds: feeGroupForm.selectedClassIds,
         totalAmount
       })
-      toast.success('Fee Group created successfully.')
+      toast.success(
+        feeGroupForm.selectedClassIds.length
+          ? 'Fee group created and allocated to the selected classes.'
+          : 'Fee group created successfully.'
+      )
       setShowFeeGroupModal(false)
+      setFeeGroupForm({ name: '', description: '', selectedFeeTypeIds: [], selectedClassIds: [] })
       fetchInitialData()
     } catch (err: any) {
       toast.error(err.message || 'Failed to create fee group.')
+    }
+  }
+
+  const emptyFeeTypeRow = () => ({ name: '', code: '', amount: '', frequency: 'per_term' })
+
+  const handleCreateFeeTypes = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const feeTypesPayload = feeTypeRows
+      .map((row) => ({
+        name: row.name.trim(),
+        code: row.code.trim().toUpperCase(),
+        amount: row.amount,
+        frequency: row.frequency || 'per_term',
+      }))
+      .filter((row) => row.name && row.code && row.amount !== '')
+
+    if (!feeTypesPayload.length) {
+      toast.error('Add at least one fee type with name, code, and amount.')
+      return
+    }
+
+    setSavingFeeTypes(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string; created?: any[]; skipped?: any[] }>(
+        endpoints.admin.feeTypesBulk,
+        { feeTypes: feeTypesPayload }
+      )
+      toast.success(res.message || 'Fee types saved.')
+      if (res.skipped?.length) {
+        toast.warning(`${res.skipped.length} row(s) skipped (duplicate code or missing fields).`)
+      }
+      setShowFeeTypeModal(false)
+      setFeeTypeRows([emptyFeeTypeRow()])
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create fee types.')
+    } finally {
+      setSavingFeeTypes(false)
+    }
+  }
+
+  const groupTypeIds = (group: FeeGroup): number[] =>
+    Array.isArray(group.feeTypeIds)
+      ? group.feeTypeIds
+      : String(group.feeTypeIds || '[]')
+          .replace(/[\[\]\s]/g, '')
+          .split(',')
+          .map(Number)
+          .filter((id) => Number.isInteger(id) && id > 0)
+
+  const groupClassIds = (group: FeeGroup): number[] => {
+    if (Array.isArray(group.classIds)) return group.classIds
+    if (Array.isArray(group.classes)) return group.classes.map((cls) => cls.id)
+    return String(group.classIds || '[]')
+      .replace(/[\[\]\s]/g, '')
+      .split(',')
+      .map(Number)
+      .filter((id) => Number.isInteger(id) && id > 0)
+  }
+
+  const openAllocateModal = (group: FeeGroup) => {
+    setAllocatingGroup(group)
+    setAllocateClassIds(groupClassIds(group))
+  }
+
+  const handleAllocateFeeGroup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!allocatingGroup) return
+    setSavingAllocation(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.feeGroupAllocate(allocatingGroup.id),
+        { classIds: allocateClassIds, feeTypeIds: groupTypeIds(allocatingGroup) }
+      )
+      toast.success(res.message || 'Fee group allocated to classes.')
+      setAllocatingGroup(null)
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to allocate fee group.')
+    } finally {
+      setSavingAllocation(false)
     }
   }
 
@@ -535,16 +662,99 @@ export function FinancesDashboard() {
     }
   }
 
+  const emptyOfficeTxForm = () => ({
+    id: null as number | null,
+    type: 'EXPENSE',
+    voucherHeadId: '',
+    voucherHeadName: '',
+    amount: '',
+    paymentMethod: 'Bank Transfer',
+    referenceNo: '',
+    description: '',
+    transactionDate: new Date().toISOString().slice(0, 10),
+    amendmentNote: '',
+  })
+
+  const openNewVoucher = () => {
+    const defaults = emptyOfficeTxForm()
+    const firstHead = voucherHeads.find((head) => head.active !== false && head.type === 'EXPENSE') || voucherHeads.find((head) => head.active !== false)
+    setOfficeTxForm({
+      ...defaults,
+      voucherHeadId: firstHead ? String(firstHead.id) : '',
+      voucherHeadName: firstHead?.name || '',
+    })
+    setShowOfficeTxModal(true)
+  }
+
+  const openEditVoucher = (tx: OfficeTransaction) => {
+    if (tx.status === 'VOIDED') {
+      toast.error('Voided vouchers are retained for audit and cannot be edited.')
+      return
+    }
+    setOfficeTxForm({
+      id: tx.id,
+      type: tx.type,
+      voucherHeadId: tx.voucherHeadId ? String(tx.voucherHeadId) : '',
+      voucherHeadName: tx.voucherHeadName || '',
+      amount: String(tx.amount ?? ''),
+      paymentMethod: tx.paymentMethod || 'Bank Transfer',
+      referenceNo: tx.referenceNo || '',
+      description: tx.description || '',
+      transactionDate: tx.transactionDate ? new Date(tx.transactionDate).toISOString().slice(0, 10) : '',
+      amendmentNote: '',
+    })
+    setShowOfficeTxModal(true)
+  }
+
   const handleSaveOfficeTx = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!officeTxForm.amount) return
+    const selectedHead = voucherHeads.find((head) => String(head.id) === String(officeTxForm.voucherHeadId))
+    const payload = {
+      type: officeTxForm.type,
+      voucherHeadId: officeTxForm.voucherHeadId || selectedHead?.id || null,
+      voucherHeadName: selectedHead?.name || officeTxForm.voucherHeadName,
+      amount: officeTxForm.amount,
+      paymentMethod: officeTxForm.paymentMethod,
+      referenceNo: officeTxForm.referenceNo,
+      description: officeTxForm.description,
+      transactionDate: officeTxForm.transactionDate,
+      amendmentNote: officeTxForm.amendmentNote,
+    }
+    setSavingVoucher(true)
     try {
-      await apiSlice.post(endpoints.admin.officeTransactions, officeTxForm)
-      toast.success('Office financial transaction recorded.')
+      if (officeTxForm.id) {
+        await apiSlice.put(endpoints.admin.officeTransactionItem(officeTxForm.id), payload)
+        toast.success('Voucher corrected. The original record is retained.')
+      } else {
+        await apiSlice.post(endpoints.admin.officeTransactions, payload)
+        toast.success('Voucher recorded and retained in the register.')
+      }
       setShowOfficeTxModal(false)
+      setOfficeTxForm(emptyOfficeTxForm())
       fetchInitialData()
     } catch (err: any) {
-      toast.error(err.message || 'Failed to record transaction.')
+      toast.error(err.message || 'Failed to save voucher.')
+    } finally {
+      setSavingVoucher(false)
+    }
+  }
+
+  const handleVoidVoucher = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!voidingTx) return
+    if (!voidReason.trim()) {
+      toast.error('A void reason is required so the record can be retained.')
+      return
+    }
+    try {
+      await apiSlice.post(endpoints.admin.officeTransactionVoid(voidingTx.id), { voidReason: voidReason.trim() })
+      toast.success('Voucher voided and retained for audit.')
+      setVoidingTx(null)
+      setVoidReason('')
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to void voucher.')
     }
   }
 
@@ -552,14 +762,58 @@ export function FinancesDashboard() {
     e.preventDefault()
     if (!voucherHeadForm.name) return
     try {
-      await apiSlice.post(endpoints.admin.voucherHeads, voucherHeadForm)
-      toast.success('Voucher head created.')
+      if (editingVoucherHeadId) {
+        await apiSlice.put(endpoints.admin.voucherHeadItem(editingVoucherHeadId), voucherHeadForm)
+        toast.success('Voucher head updated.')
+      } else {
+        await apiSlice.post(endpoints.admin.voucherHeads, voucherHeadForm)
+        toast.success('Voucher head created.')
+      }
       setShowVoucherHeadModal(false)
+      setEditingVoucherHeadId(null)
+      setVoucherHeadForm({ name: '', type: 'EXPENSE', description: '' })
       fetchInitialData()
     } catch (err: any) {
       toast.error(err.message || 'Failed to save voucher head.')
     }
   }
+
+  const handleArchiveVoucherHead = async (head: VoucherHead) => {
+    if (!confirm(`Archive “${head.name}”? Existing vouchers stay on the register.`)) return
+    try {
+      await apiSlice.post(endpoints.admin.voucherHeadArchive(head.id), {})
+      toast.success('Voucher head archived. Historical vouchers are retained.')
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to archive voucher head.')
+    }
+  }
+
+  const filteredVouchers = useMemo(() => {
+    const q = voucherSearch.trim().toLowerCase()
+    return officeTxs.filter((tx) => {
+      const status = tx.status || 'POSTED'
+      if (voucherTypeFilter !== 'ALL' && tx.type !== voucherTypeFilter) return false
+      if (voucherStatusFilter === 'LIVE' && status === 'VOIDED') return false
+      if (voucherStatusFilter !== 'LIVE' && voucherStatusFilter !== 'ALL' && status !== voucherStatusFilter) return false
+      if (!q) return true
+      const voucherNo = (tx.voucherNo || tx.referenceNo || `VCH-${tx.id}`).toLowerCase()
+      return [voucherNo, tx.voucherHeadName, tx.description, tx.paymentMethod, tx.referenceNo]
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [officeTxs, voucherSearch, voucherTypeFilter, voucherStatusFilter])
+
+  const filteredHeads = useMemo(() => {
+    const q = headSearch.trim().toLowerCase()
+    if (!q) return voucherHeads
+    return voucherHeads.filter((head) =>
+      [head.name, head.description, head.type].join(' ').toLowerCase().includes(q)
+    )
+  }, [voucherHeads, headSearch])
+
+  const activeVoucherHeads = voucherHeads.filter((head) => head.active !== false)
 
   const handleSaveSchoolBank = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -731,9 +985,9 @@ export function FinancesDashboard() {
             <div className="lg:col-span-2 space-y-4">
               <IncomeVsExpensesChart
                 totalIncome={Number(overview?.summary?.totalRevenue || 0)}
-                totalExpenses={officeTxs.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + Number(t.amount || 0), 0)}
+                totalExpenses={officeTxs.filter(t => t.type === 'EXPENSE' && t.status !== 'VOIDED').reduce((acc, t) => acc + Number(t.amount || 0), 0)}
                 feeIncome={Number(overview?.summary?.totalRevenue || 0)}
-                netSurplus={Number(overview?.summary?.totalRevenue || 0) - officeTxs.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + Number(t.amount || 0), 0)}
+                netSurplus={Number(overview?.summary?.totalRevenue || 0) - officeTxs.filter(t => t.type === 'EXPENSE' && t.status !== 'VOIDED').reduce((acc, t) => acc + Number(t.amount || 0), 0)}
               />
             </div>
 
@@ -1000,14 +1254,33 @@ export function FinancesDashboard() {
       {/* TAB 3: FEE TYPES & FEE GROUPS */}
       {activeTab === 'feetypes' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="text-xs font-semibold text-slate-600">Fee Types & Group Bundles</div>
-            <button
-              onClick={() => setShowFeeGroupModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus size={16} /> Create Fee Group Bundle
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div>
+              <div className="text-sm font-bold text-slate-900">Fee Types & Group Bundles</div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Create fee types, bundle them into groups, then allocate each group to the classes that should pay it.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setFeeTypeRows([emptyFeeTypeRow()])
+                  setShowFeeTypeModal(true)
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={16} /> Create Fee Types
+              </button>
+              <button
+                onClick={() => {
+                  setFeeGroupForm({ name: '', description: '', selectedFeeTypeIds: [], selectedClassIds: [] })
+                  setShowFeeGroupModal(true)
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={16} /> Create Fee Group
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1015,15 +1288,19 @@ export function FinancesDashboard() {
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
               <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Individual Fee Types ({feeTypes.length})</h3>
               <div className="divide-y divide-slate-100">
-                {feeTypes.map((ft) => (
-                  <div key={ft.id} className="py-2.5 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-900">{ft.name} ({ft.code})</div>
-                      <div className="text-[11px] text-slate-400 capitalize">{ft.frequency}</div>
+                {feeTypes.length === 0 ? (
+                  <p className="py-6 text-xs text-slate-400 text-center">No fee types yet. Use Create Fee Types to add one or more entries.</p>
+                ) : (
+                  feeTypes.map((ft) => (
+                    <div key={ft.id} className="py-2.5 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900">{ft.name} ({ft.code})</div>
+                        <div className="text-[11px] text-slate-400 capitalize">{ft.frequency}</div>
+                      </div>
+                      <div className="font-bold text-emerald-700 text-sm">₦{Number(ft.amount).toLocaleString()}</div>
                     </div>
-                    <div className="font-bold text-emerald-700 text-sm">₦{Number(ft.amount).toLocaleString()}</div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
@@ -1031,15 +1308,42 @@ export function FinancesDashboard() {
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
               <h3 className="font-bold text-slate-900 text-sm border-b pb-2">Group Fee Bundles ({feeGroups.length})</h3>
               <div className="space-y-3">
-                {feeGroups.map((fg) => (
-                  <div key={fg.id} className="p-4 bg-slate-50 rounded-xl border space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-slate-900">{fg.name}</h4>
-                      <span className="font-bold text-indigo-700 text-sm">₦{Number(fg.totalAmount).toLocaleString()}</span>
-                    </div>
-                    {fg.description && <p className="text-[11px] text-slate-500">{fg.description}</p>}
-                  </div>
-                ))}
+                {feeGroups.length === 0 ? (
+                  <p className="py-6 text-xs text-slate-400 text-center">No fee groups yet. Bundle fee types, then allocate the group to classes.</p>
+                ) : (
+                  feeGroups.map((fg) => {
+                    const bundled = Array.isArray(fg.feeTypes) && fg.feeTypes.length
+                      ? fg.feeTypes
+                      : feeTypes.filter((ft) => groupTypeIds(fg).includes(ft.id))
+                    const allocated = Array.isArray(fg.classes) && fg.classes.length
+                      ? fg.classes
+                      : classes.filter((cls) => groupClassIds(fg).includes(cls.id))
+                    return (
+                      <div key={fg.id} className="p-4 bg-slate-50 rounded-xl border space-y-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="font-bold text-slate-900">{fg.name}</h4>
+                          <span className="font-bold text-indigo-700 text-sm">₦{Number(fg.totalAmount).toLocaleString()}</span>
+                        </div>
+                        {fg.description && <p className="text-[11px] text-slate-500">{fg.description}</p>}
+                        {bundled.length > 0 && (
+                          <p className="text-[11px] text-slate-600">
+                            Types: {bundled.map((ft) => ft.name).join(', ')}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-slate-600">
+                          Classes: {allocated.length ? allocated.map((cls) => cls.name).join(', ') : 'Not allocated yet'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => openAllocateModal(fg)}
+                          className="mt-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          Allocate to classes
+                        </button>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1063,60 +1367,233 @@ export function FinancesDashboard() {
         </div>
       )}
 
-      {/* TAB 5: OFFICE TRANSACTIONS */}
+      {/* TAB 5: OFFICE TRANSACTIONS / VOUCHERS */}
       {activeTab === 'office-finance' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="text-xs font-semibold text-slate-600">Office Expense & Income Log</div>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div>
+              <div className="text-sm font-bold text-slate-900">Office vouchers</div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Every voucher stays on this register. Correct a live record, or void it with a reason — nothing is deleted.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowVoucherHeadModal(true)}
+                onClick={() => {
+                  setEditingVoucherHeadId(null)
+                  setVoucherHeadForm({ name: '', type: 'EXPENSE', description: '' })
+                  setShowVoucherHeadModal(true)
+                }}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
               >
-                <Plus size={14} /> New Voucher Head
+                <Plus size={14} /> New voucher head
               </button>
               <button
-                onClick={() => setShowOfficeTxModal(true)}
+                onClick={openNewVoucher}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               >
-                <Plus size={16} /> Record Office Expense / Income
+                <Plus size={16} /> Record voucher
               </button>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Voucher Head</TableHead>
-                  <TableHead>Amount (₦)</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Ref / Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {officeTxs.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          tx.type === 'INCOME' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {tx.type}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-bold text-slate-800">{tx.voucherHeadName}</TableCell>
-                    <TableCell className="font-bold">₦{Number(tx.amount).toLocaleString()}</TableCell>
-                    <TableCell>{tx.paymentMethod}</TableCell>
-                    <TableCell>{new Date(tx.transactionDate).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-slate-500">{tx.description || tx.referenceNo || '-'}</TableCell>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-52">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={voucherSearch}
+                    onChange={(e) => setVoucherSearch(e.target.value)}
+                    placeholder="Search voucher no, head, reference, notes…"
+                    className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <select
+                  value={voucherTypeFilter}
+                  onChange={(e) => setVoucherTypeFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold"
+                >
+                  <option value="ALL">All types</option>
+                  <option value="EXPENSE">Expense</option>
+                  <option value="INCOME">Income</option>
+                </select>
+                <select
+                  value={voucherStatusFilter}
+                  onChange={(e) => setVoucherStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold"
+                >
+                  <option value="LIVE">Live (posted &amp; amended)</option>
+                  <option value="ALL">All retained records</option>
+                  <option value="POSTED">Posted</option>
+                  <option value="AMENDED">Amended</option>
+                  <option value="VOIDED">Voided</option>
+                </select>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Voucher</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Head</TableHead>
+                    <TableHead>Amount (₦)</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredVouchers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-xs text-slate-400 py-8">
+                        No vouchers match this search. Record a voucher or include voided records.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredVouchers.map((tx) => {
+                      const status = tx.status || 'POSTED'
+                      const voucherNo = tx.voucherNo || tx.referenceNo || `VCH-${String(tx.id).padStart(5, '0')}`
+                      return (
+                        <TableRow key={tx.id} className={status === 'VOIDED' ? 'opacity-70' : ''}>
+                          <TableCell>
+                            <div className="font-mono font-bold text-slate-900">{voucherNo}</div>
+                            <div className="text-[10px] text-slate-400">{tx.paymentMethod}</div>
+                            {tx.description && <div className="text-[10px] text-slate-500 max-w-48 truncate">{tx.description}</div>}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                tx.type === 'INCOME' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}
+                            >
+                              {tx.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-bold text-slate-800">{tx.voucherHeadName}</TableCell>
+                          <TableCell className="font-bold">
+                            ₦{Number(tx.amount).toLocaleString()}
+                            {tx.originalAmount != null && Number(tx.originalAmount) !== Number(tx.amount) && (
+                              <div className="text-[10px] text-slate-400 font-medium">
+                                Was ₦{Number(tx.originalAmount).toLocaleString()}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">{new Date(tx.transactionDate).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                status === 'VOIDED'
+                                  ? 'bg-slate-200 text-slate-700'
+                                  : status === 'AMENDED'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-50 text-emerald-800'
+                              }`}
+                            >
+                              {status}
+                            </span>
+                            {tx.amendmentNote && status === 'AMENDED' && (
+                              <div className="text-[10px] text-slate-500 mt-1 max-w-40 truncate" title={tx.amendmentNote}>
+                                {tx.amendmentNote}
+                              </div>
+                            )}
+                            {tx.voidReason && status === 'VOIDED' && (
+                              <div className="text-[10px] text-slate-500 mt-1 max-w-40 truncate" title={tx.voidReason}>
+                                {tx.voidReason}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {status !== 'VOIDED' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditVoucher(tx)}
+                                    className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 cursor-pointer"
+                                    title="Correct voucher"
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVoidingTx(tx)
+                                      setVoidReason('')
+                                    }}
+                                    className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 cursor-pointer"
+                                    title="Void and retain"
+                                  >
+                                    <Ban size={13} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 space-y-2">
+                <h3 className="font-bold text-slate-900 text-sm">Voucher heads</h3>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={headSearch}
+                    onChange={(e) => setHeadSearch(e.target.value)}
+                    placeholder="Search heads…"
+                    className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-[28rem] overflow-y-auto">
+                {filteredHeads.length === 0 ? (
+                  <p className="p-6 text-xs text-slate-400 text-center">No voucher heads yet.</p>
+                ) : (
+                  filteredHeads.map((head) => (
+                    <div key={head.id} className="p-3 flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">{head.name}</div>
+                        <div className="text-[10px] text-slate-500 uppercase">{head.type}{head.active === false ? ' · archived' : ''}</div>
+                        {head.description && <div className="text-[10px] text-slate-400 mt-0.5">{head.description}</div>}
+                      </div>
+                      {head.active !== false && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingVoucherHeadId(head.id)
+                              setVoucherHeadForm({
+                                name: head.name,
+                                type: head.type,
+                                description: head.description || '',
+                              })
+                              setShowVoucherHeadModal(true)
+                            }}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 cursor-pointer"
+                            title="Edit head"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleArchiveVoucherHead(head)}
+                            className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 cursor-pointer"
+                            title="Archive head"
+                          >
+                            <Ban size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1480,10 +1957,10 @@ export function FinancesDashboard() {
 
       {/* MODAL 3: CREATE FEE GROUP */}
       {showFeeGroupModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-6">
             <div className="flex items-center justify-between border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Create Fee Group Bundle</h2>
+              <h2 className="text-lg font-bold text-slate-900">Create Fee Group</h2>
               <button onClick={() => setShowFeeGroupModal(false)} className="text-slate-400 font-bold">✕</button>
             </div>
 
@@ -1505,31 +1982,68 @@ export function FinancesDashboard() {
               />
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Select Fee Types to Bundle</label>
+                <label className="block text-slate-700 font-semibold mb-1">Select Fee Types to Bundle *</label>
                 <div className="space-y-1 max-h-36 overflow-y-auto border p-2 rounded-xl">
-                  {feeTypes.map((ft) => {
-                    const isChecked = feeGroupForm.selectedFeeTypeIds.includes(ft.id)
-                    return (
-                      <label key={ft.id} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer">
-                        <span className="font-bold text-slate-800">{ft.name} (₦{Number(ft.amount).toLocaleString()})</span>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFeeGroupForm({ ...feeGroupForm, selectedFeeTypeIds: [...feeGroupForm.selectedFeeTypeIds, ft.id] })
-                            } else {
-                              setFeeGroupForm({
-                                ...feeGroupForm,
-                                selectedFeeTypeIds: feeGroupForm.selectedFeeTypeIds.filter((id) => id !== ft.id)
-                              })
-                            }
-                          }}
-                          className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
-                        />
-                      </label>
-                    )
-                  })}
+                  {feeTypes.length === 0 ? (
+                    <p className="p-2 text-slate-400">Create fee types first, then bundle them here.</p>
+                  ) : (
+                    feeTypes.map((ft) => {
+                      const isChecked = feeGroupForm.selectedFeeTypeIds.includes(ft.id)
+                      return (
+                        <label key={ft.id} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                          <span className="font-bold text-slate-800">{ft.name} (₦{Number(ft.amount).toLocaleString()})</span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFeeGroupForm({ ...feeGroupForm, selectedFeeTypeIds: [...feeGroupForm.selectedFeeTypeIds, ft.id] })
+                              } else {
+                                setFeeGroupForm({
+                                  ...feeGroupForm,
+                                  selectedFeeTypeIds: feeGroupForm.selectedFeeTypeIds.filter((id) => id !== ft.id)
+                                })
+                              }
+                            }}
+                            className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                          />
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Allocate this group to classes</label>
+                <div className="space-y-1 max-h-36 overflow-y-auto border p-2 rounded-xl">
+                  {classes.length === 0 ? (
+                    <p className="p-2 text-slate-400">No classes found.</p>
+                  ) : (
+                    classes.map((cls) => {
+                      const isChecked = feeGroupForm.selectedClassIds.includes(cls.id)
+                      return (
+                        <label key={cls.id} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                          <span className="font-bold text-slate-800">{cls.name}</span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFeeGroupForm({ ...feeGroupForm, selectedClassIds: [...feeGroupForm.selectedClassIds, cls.id] })
+                              } else {
+                                setFeeGroupForm({
+                                  ...feeGroupForm,
+                                  selectedClassIds: feeGroupForm.selectedClassIds.filter((id) => id !== cls.id)
+                                })
+                              }
+                            }}
+                            className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                          />
+                        </label>
+                      )
+                    })
+                  )}
                 </div>
               </div>
 
@@ -1546,12 +2060,156 @@ export function FinancesDashboard() {
         </div>
       )}
 
-      {/* MODAL 4: RECORD OFFICE TRANSACTION */}
+      {showFeeTypeModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 my-6">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Create Fee Types</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">Add one or more fee types in a single save. Each row needs a name, unique code, and amount.</p>
+              </div>
+              <button onClick={() => setShowFeeTypeModal(false)} className="text-slate-400 font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateFeeTypes} className="space-y-3">
+              <div className="space-y-2">
+                {feeTypeRows.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Fee name *"
+                      value={row.name}
+                      onChange={(e) =>
+                        setFeeTypeRows((prev) => prev.map((item, i) => (i === idx ? { ...item, name: e.target.value } : item)))
+                      }
+                      className="col-span-4 p-2.5 border rounded-xl text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Code *"
+                      value={row.code}
+                      onChange={(e) =>
+                        setFeeTypeRows((prev) => prev.map((item, i) => (i === idx ? { ...item, code: e.target.value } : item)))
+                      }
+                      className="col-span-2 p-2.5 border rounded-xl text-xs uppercase"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Amount *"
+                      value={row.amount}
+                      onChange={(e) =>
+                        setFeeTypeRows((prev) => prev.map((item, i) => (i === idx ? { ...item, amount: e.target.value } : item)))
+                      }
+                      className="col-span-2 p-2.5 border rounded-xl text-xs"
+                    />
+                    <select
+                      value={row.frequency}
+                      onChange={(e) =>
+                        setFeeTypeRows((prev) => prev.map((item, i) => (i === idx ? { ...item, frequency: e.target.value } : item)))
+                      }
+                      className="col-span-3 p-2.5 border rounded-xl text-xs"
+                    >
+                      <option value="per_term">Per term</option>
+                      <option value="per_session">Per session</option>
+                      <option value="one_off">One off</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setFeeTypeRows((prev) => (prev.length === 1 ? [emptyFeeTypeRow()] : prev.filter((_, i) => i !== idx)))}
+                      className="col-span-1 p-2 text-rose-600 hover:bg-rose-50 rounded-xl cursor-pointer flex items-center justify-center"
+                      title="Remove row"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFeeTypeRows((prev) => [...prev, emptyFeeTypeRow()])}
+                className="px-3 py-2 border border-dashed border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} /> Add another fee type
+              </button>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setShowFeeTypeModal(false)} className="px-4 py-2 border rounded-xl text-xs font-bold">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFeeTypes}
+                  className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl cursor-pointer text-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingFeeTypes ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Save fee types
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {allocatingGroup && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Allocate {allocatingGroup.name}</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">Choose the classes that should inherit this group&apos;s fee types.</p>
+              </div>
+              <button onClick={() => setAllocatingGroup(null)} className="text-slate-400 font-bold">✕</button>
+            </div>
+            <form onSubmit={handleAllocateFeeGroup} className="space-y-3 text-xs font-medium">
+              <div className="space-y-1 max-h-56 overflow-y-auto border p-2 rounded-xl">
+                {classes.map((cls) => {
+                  const isChecked = allocateClassIds.includes(cls.id)
+                  return (
+                    <label key={cls.id} className="flex items-center justify-between p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                      <span className="font-bold text-slate-800">{cls.name}</span>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          setAllocateClassIds((prev) =>
+                            e.target.checked ? [...prev, cls.id] : prev.filter((id) => id !== cls.id)
+                          )
+                        }}
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setAllocatingGroup(null)} className="px-4 py-2 border rounded-xl">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAllocation}
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl cursor-pointer disabled:opacity-50"
+                >
+                  {savingAllocation ? 'Saving…' : 'Save allocation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: RECORD / CORRECT VOUCHER */}
       {showOfficeTxModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Record Office Transaction</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                {officeTxForm.id ? 'Correct voucher' : 'Record voucher'}
+              </h2>
               <button onClick={() => setShowOfficeTxModal(false)} className="text-slate-400 font-bold">✕</button>
             </div>
 
@@ -1559,22 +2217,41 @@ export function FinancesDashboard() {
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={officeTxForm.type}
-                  onChange={(e) => setOfficeTxForm({ ...officeTxForm, type: e.target.value as any })}
+                  onChange={(e) => {
+                    const nextType = e.target.value
+                    const firstHead = activeVoucherHeads.find((head) => head.type === nextType) || activeVoucherHeads[0]
+                    setOfficeTxForm({
+                      ...officeTxForm,
+                      type: nextType,
+                      voucherHeadId: firstHead ? String(firstHead.id) : '',
+                      voucherHeadName: firstHead?.name || '',
+                    })
+                  }}
                   className="p-2.5 border rounded-xl"
                 >
                   <option value="EXPENSE">Expense</option>
                   <option value="INCOME">Income</option>
                 </select>
                 <select
-                  value={officeTxForm.voucherHeadName}
-                  onChange={(e) => setOfficeTxForm({ ...officeTxForm, voucherHeadName: e.target.value })}
+                  value={officeTxForm.voucherHeadId}
+                  onChange={(e) => {
+                    const head = activeVoucherHeads.find((item) => String(item.id) === e.target.value)
+                    setOfficeTxForm({
+                      ...officeTxForm,
+                      voucherHeadId: e.target.value,
+                      voucherHeadName: head?.name || '',
+                    })
+                  }}
                   className="p-2.5 border rounded-xl"
                 >
-                  {voucherHeads.map((vh) => (
-                    <option key={vh.id} value={vh.name}>
-                      {vh.name}
-                    </option>
-                  ))}
+                  <option value="">Select head</option>
+                  {activeVoucherHeads
+                    .filter((vh) => vh.type === officeTxForm.type || !vh.type)
+                    .map((vh) => (
+                      <option key={vh.id} value={vh.id}>
+                        {vh.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -1599,28 +2276,50 @@ export function FinancesDashboard() {
                   <option value="Cheque">Cheque</option>
                 </select>
                 <input
-                  type="text"
-                  placeholder="Ref No / Tx Hash"
-                  value={officeTxForm.referenceNo}
-                  onChange={(e) => setOfficeTxForm({ ...officeTxForm, referenceNo: e.target.value })}
+                  type="date"
+                  value={officeTxForm.transactionDate}
+                  onChange={(e) => setOfficeTxForm({ ...officeTxForm, transactionDate: e.target.value })}
                   className="p-2.5 border rounded-xl"
                 />
               </div>
 
+              <input
+                type="text"
+                placeholder="Voucher / payment reference"
+                value={officeTxForm.referenceNo}
+                onChange={(e) => setOfficeTxForm({ ...officeTxForm, referenceNo: e.target.value })}
+                className="w-full p-2.5 border rounded-xl"
+              />
+
               <textarea
                 rows={2}
-                placeholder="Transaction description / notes..."
+                placeholder="Description / notes..."
                 value={officeTxForm.description}
                 onChange={(e) => setOfficeTxForm({ ...officeTxForm, description: e.target.value })}
                 className="w-full p-2.5 border rounded-xl"
               />
 
+              {officeTxForm.id && (
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="Correction note * (kept on the original record)"
+                  value={officeTxForm.amendmentNote}
+                  onChange={(e) => setOfficeTxForm({ ...officeTxForm, amendmentNote: e.target.value })}
+                  className="w-full p-2.5 border rounded-xl bg-amber-50"
+                />
+              )}
+
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <button type="button" onClick={() => setShowOfficeTxModal(false)} className="px-4 py-2 border rounded-xl">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl cursor-pointer">
-                  Save Transaction
+                <button
+                  type="submit"
+                  disabled={savingVoucher}
+                  className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl cursor-pointer disabled:opacity-50"
+                >
+                  {officeTxForm.id ? 'Save correction' : 'Save voucher'}
                 </button>
               </div>
             </form>
@@ -1628,12 +2327,14 @@ export function FinancesDashboard() {
         </div>
       )}
 
-      {/* MODAL 5: CREATE VOUCHER HEAD */}
+      {/* MODAL 5: CREATE / EDIT VOUCHER HEAD */}
       {showVoucherHeadModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Add Voucher Head</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingVoucherHeadId ? 'Edit voucher head' : 'Add voucher head'}
+              </h2>
               <button onClick={() => setShowVoucherHeadModal(false)} className="text-slate-400 font-bold">✕</button>
             </div>
 
@@ -1667,7 +2368,39 @@ export function FinancesDashboard() {
                   Cancel
                 </button>
                 <button type="submit" className="px-4 py-2 bg-slate-900 text-white font-bold rounded-xl cursor-pointer">
-                  Save Voucher Head
+                  {editingVoucherHeadId ? 'Save changes' : 'Save voucher head'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {voidingTx && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h2 className="text-lg font-bold text-slate-900">Void voucher</h2>
+              <button onClick={() => setVoidingTx(null)} className="text-slate-400 font-bold">✕</button>
+            </div>
+            <p className="text-xs text-slate-600">
+              {voidingTx.voucherNo || voidingTx.referenceNo || `VCH-${voidingTx.id}`} will stay on the register as voided. It will not count in live totals.
+            </p>
+            <form onSubmit={handleVoidVoucher} className="space-y-3 text-xs font-medium">
+              <textarea
+                rows={3}
+                required
+                placeholder="Reason for voiding *"
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                className="w-full p-2.5 border rounded-xl"
+              />
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setVoidingTx(null)} className="px-4 py-2 border rounded-xl">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl cursor-pointer">
+                  Void and retain
                 </button>
               </div>
             </form>
