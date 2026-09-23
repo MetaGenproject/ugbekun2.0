@@ -9,7 +9,10 @@ const PLATFORM_HOSTS = [
   'ugbekun-beta.vercel.app',
   'www.ugbekun-beta.vercel.app',
   'ugbekun.com',
-  'www.ugbekun.com'
+  'www.ugbekun.com',
+  'app.ugbekun.com',
+  'www.app.ugbekun.com',
+  'ugbekun-frontend.abj.pipeops.app',
 ]
 
 export function middleware(request: NextRequest) {
