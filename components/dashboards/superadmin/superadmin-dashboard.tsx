@@ -419,11 +419,17 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
     setIsLoadingSessions(true)
     setSessionsError(null)
     try {
-      const res = await apiSlice.get<{ success: boolean; data: { sessions: AcademicSession[]; activeSessionId: number | null } }>(
+      const res = await apiSlice.get<{ success: boolean; data: any; sessions?: AcademicSession[] }>(
         endpoints.superadmin.sessions
       )
-      setSessions(res.data?.sessions || [])
-      setActiveSessionId(res.data?.activeSessionId ?? null)
+      const list: AcademicSession[] = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.sessions || res.sessions || [])
+      setSessions(list)
+      const activeId = Array.isArray(res.data)
+        ? (list.find((s: any) => s.isCurrent)?.id ?? null)
+        : (res.data?.activeSessionId ?? list.find((s: any) => s.isCurrent)?.id ?? null)
+      setActiveSessionId(activeId)
     } catch (err) {
       setSessionsError(err instanceof Error ? err.message : 'Failed to load academic sessions')
     } finally {
@@ -488,7 +494,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
 
   const handleAddSession = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newSessionName.trim()) return
+    const trimmed = newSessionName.trim()
+    if (!trimmed) return
     setIsSubmittingSession(true)
     setSessionActionError(null)
     setActionMessage(null)
@@ -496,7 +503,8 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       const res = await apiSlice.post<{ success: boolean; message: string; data: AcademicSession }>(
         endpoints.superadmin.sessions,
         {
-          schoolYear: newSessionName,
+          name: trimmed,
+          schoolYear: trimmed,
         }
       )
       setActionMessage(res.message || 'Academic session created.')
@@ -1153,7 +1161,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
                       const isActive = sess.id === activeSessionId
                       return (
                         <TableRow key={sess.id}>
-                          <TableCell className="font-bold text-slate-900">{sess.schoolYear}</TableCell>
+                          <TableCell className="font-bold text-slate-900">{sess.schoolYear || (sess as any).name}</TableCell>
                           <TableCell className="text-slate-500 text-xs">
                             {new Date(sess.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                           </TableCell>
