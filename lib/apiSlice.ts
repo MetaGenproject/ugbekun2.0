@@ -229,10 +229,10 @@ export const endpoints = {
     certificates: (query = '') => `${BASE_URL}/admin/certificates${query}`,
     issueCertificate: `${BASE_URL}/admin/certificates/issue`,
     downloadCertificate: (certId: number) => `${BASE_URL}/admin/certificates/${certId}/download`,
-    financesOverview: `${BASE_URL}/admin/finances/overview`,
+    financesOverview: (query = '') => `${BASE_URL}/admin/finances/overview${query}`,
     feeTypes: `${BASE_URL}/admin/finances/fee-types`,
     feeTypesBulk: `${BASE_URL}/admin/finances/fee-types/bulk`,
-    feeAssignments: `${BASE_URL}/admin/finances/fee-assignments`,
+    feeAssignments: (query = '') => `${BASE_URL}/admin/finances/fee-assignments${query}`,
     invoices: (query = '') => `${BASE_URL}/admin/finances/invoices${query}`,
     createInvoice: `${BASE_URL}/admin/finances/invoices`,
     bulkInvoice: `${BASE_URL}/admin/finances/invoices/bulk`,
@@ -287,7 +287,7 @@ export const endpoints = {
     bulkDuesPost: `${BASE_URL}/admin/finances/bulk-dues-post`,
     bulkPaymentsPost: `${BASE_URL}/admin/finances/bulk-payments-post`,
     sendParentReminder: `${BASE_URL}/admin/finances/send-parent-reminder`,
-    financesCollectionsReport: `${BASE_URL}/admin/finances/reports/collections`,
+    financesCollectionsReport: (query = '') => `${BASE_URL}/admin/finances/reports/collections${query}`,
     voucherHeads: `${BASE_URL}/admin/finances/voucher-heads`,
     voucherHeadItem: (id: number) => `${BASE_URL}/admin/finances/voucher-heads/${id}`,
     voucherHeadArchive: (id: number) => `${BASE_URL}/admin/finances/voucher-heads/${id}/archive`,
@@ -309,13 +309,14 @@ export const endpoints = {
     inventorySale: `${BASE_URL}/admin/inventory/sale`,
     inventoryItemDelete: (id: number) => `${BASE_URL}/admin/inventory/items/${id}`,
     reportCards: {
-      classes: `${BASE_URL}/admin/report-cards/classes`,
-      students: (classId: number, sectionId: number) =>
-        `${BASE_URL}/admin/report-cards/students?classId=${classId}&sectionId=${sectionId}`,
-      exportPdf: (studentId: number, classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
-        `${BASE_URL}/admin/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
-      exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
-        `${BASE_URL}/admin/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
+      classes: (sessionId?: number) =>
+        `${BASE_URL}/admin/report-cards/classes${sessionId ? `?sessionId=${sessionId}` : ''}`,
+      students: (classId: number, sectionId: number, sessionId?: number) =>
+        `${BASE_URL}/admin/report-cards/students?classId=${classId}&sectionId=${sectionId}${sessionId ? `&sessionId=${sessionId}` : ''}`,
+      exportPdf: (studentId: number, classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number) =>
+        `${BASE_URL}/admin/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}${sessionId ? `&sessionId=${sessionId}` : ''}`,
+      exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number) =>
+        `${BASE_URL}/admin/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}${sessionId ? `&sessionId=${sessionId}` : ''}`,
       commentary: `${BASE_URL}/admin/report-cards/commentary`,
       behavioral: `${BASE_URL}/admin/report-cards/behavioral`,
       aiComments: `${BASE_URL}/admin/report-cards/ai-comments`,

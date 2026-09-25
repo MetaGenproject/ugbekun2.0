@@ -28,7 +28,9 @@ import {
   FileCheck,
   Printer,
   Check,
-  AlertCircle
+  AlertCircle,
+  Layers,
+  GraduationCap
 } from 'lucide-react'
 import {
   Table,
@@ -37,26 +39,25 @@ import {
   TableRow,
   TableHead,
   TableCell,
-  TableCaption,
 } from '@/components/ui/table'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
+import { AdminCbtManager } from './admin-cbt-manager'
+import { MarksEntry } from './marks-entry'
+import { ExamScheduleManager } from './exam-schedule-manager'
+import { ExamHalls } from './exam-halls'
 import { EvaluationMatrices } from './evaluation-matrices'
 
-type ExamTab = 
+export type ExamTab = 
+  | 'cbt-manager'
+  | 'marks-ca'
+  | 'exam-setup'
+  | 'exam-schedule'
+  | 'exam-halls'
   | 'evaluation-matrix'
-  | 'exam-setup-manual' 
-  | 'exam-setup-cbt' 
-  | 'ca-entry' 
-  | 'cbt-exam' 
-  | 'question-bank' 
-  | 'ai-generator' 
-  | 'results-processing' 
-  | 'result-publishing' 
-  | 'test-manual' 
-  | 'test-setup-cbt' 
-  | 'exam-hall' 
-  | 'exam-timetable'
+  | 'cbt-simulator'
+  | 'ai-generator'
+  | 'result-publishing'
 
 interface ClassData {
   id: number
@@ -75,12 +76,28 @@ interface ExamRecord {
 }
 
 interface ExamCbtManagementProps {
-  initialTab?: ExamTab
+  initialTab?: string
 }
 
-export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtManagementProps) {
-  const [activeTab, setActiveTab] = useState<ExamTab>(initialTab)
-  const [searchQuery, setSearchQuery] = useState('')
+export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
+  // Normalize initialTab if older or alternate tab names are passed
+  const resolveInitialTab = (tab?: string): ExamTab => {
+    if (!tab) return 'cbt-manager'
+    if (tab === 'cbt' || tab === 'cbt-exams' || tab === 'cbt-manager' || tab === 'online-exams') return 'cbt-manager'
+    if (tab === 'marks-entry' || tab === 'marks-ca' || tab === 'ca-entry') return 'marks-ca'
+    if (tab === 'exam-setup' || tab === 'exam-setup-manual' || tab === 'exam-setup-cbt') return 'exam-setup'
+    if (tab === 'exam-schedule' || tab === 'exam-timetable') return 'exam-schedule'
+    if (tab === 'exam-halls' || tab === 'exam-hall') return 'exam-halls'
+    if (tab === 'evaluation-matrix' || tab === 'evaluation-matrices') return 'evaluation-matrix'
+    if (tab === 'cbt-exam' || tab === 'cbt-simulator') return 'cbt-simulator'
+    if (tab === 'ai-generator') return 'ai-generator'
+    if (tab === 'result-publishing' || tab === 'results-processing') return 'result-publishing'
+    return 'cbt-manager'
+  }
+
+  const [activeTab, setActiveTab] = useState<ExamTab>(resolveInitialTab(initialTab))
+  const [examTypeMode, setExamTypeMode] = useState<'cbt' | 'manual'>('cbt')
+  const [searchExamQuery, setSearchExamQuery] = useState('')
 
   // Data State
   const [classesList, setClassesList] = useState<ClassData[]>([])
@@ -96,6 +113,32 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
   const [isSubmittingExam, setIsSubmittingExam] = useState(false)
 
   // CBT Exam Simulator State
+  const [cbtSimulatorQuestions, setCbtSimulatorQuestions] = useState<Array<{ id: number; q: string; options: string[]; correct: string }>>([
+    {
+      id: 1,
+      q: 'Which organelle is known as the powerhouse of the eukaryotic cell?',
+      options: ['Nucleus', 'Mitochondria', 'Ribosome', 'Endoplasmic Reticulum'],
+      correct: 'Mitochondria'
+    },
+    {
+      id: 2,
+      q: 'Solve for x in the algebraic equation: 3x - 7 = 14',
+      options: ['x = 5', 'x = 7', 'x = 8', 'x = 21'],
+      correct: 'x = 7'
+    },
+    {
+      id: 3,
+      q: 'What is the balanced equation representing plant photosynthesis?',
+      options: ['6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂', 'C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O', '2H₂ + O₂ → 2H₂O', 'NaCl + H₂O → NaOH + HCl'],
+      correct: '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂'
+    },
+    {
+      id: 4,
+      q: 'Which Nigerian state is widely acclaimed as the "Heart Beat of the Nation"?',
+      options: ['Lagos State', 'Edo State', 'Delta State', 'Ogun State'],
+      correct: 'Edo State'
+    }
+  ])
   const [currentCbtQ, setCurrentCbtQ] = useState(0)
   const [selectedAns, setSelectedAns] = useState<Record<number, string>>({})
   const [cbtSubmitted, setCbtSubmitted] = useState(false)
@@ -130,9 +173,7 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
     loadData()
   }, [])
 
-  const [cbtSimulatorQuestions, setCbtSimulatorQuestions] = useState<Array<{ id: number; q: string; options: string[]; correct: string }>>([])
-
-  const handleCreateExam = async (e: React.FormEvent, isCbt: boolean = false) => {
+  const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!examName.trim()) {
       showSystemStatus({
@@ -152,6 +193,7 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
         durationMs: 0
       })
 
+      const isCbt = examTypeMode === 'cbt'
       const payload = {
         name: examName.trim(),
         termId: Number(termId || 1),
@@ -221,35 +263,71 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
     }, 1000)
   }
 
+  const filteredExams = publishedExams.filter(e => 
+    !searchExamQuery || e.name.toLowerCase().includes(searchExamQuery.toLowerCase()) ||
+    (e.remark && e.remark.toLowerCase().includes(searchExamQuery.toLowerCase()))
+  )
+
   return (
     <div className="space-y-6 font-sans">
       {/* Header Banner */}
       <div className="relative rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute right-0 top-0 w-64 h-64 bg-cyan-50/60 rounded-full blur-3xl opacity-60" />
+          <div className="absolute right-0 top-0 w-80 h-80 bg-gradient-to-bl from-cyan-100/50 via-blue-50/30 to-transparent rounded-full blur-3xl opacity-70" />
         </div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Award className="text-cyan-600" size={24} /> Examinations & CBT Suite
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+              <span className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 text-white rounded-xl shadow-sm">
+                <Award size={22} />
+              </span>
+              Assessments & CBT Suite
             </h1>
-            <p className="text-slate-500 text-sm font-medium">
-              CBT & Manual exam setups, AI question generator, Continuous Assessment matrix, result processing, and hall seating.
+            <p className="text-slate-500 text-xs md:text-sm font-medium">
+              Unified command center for Online CBT tests, Question Bank, Continuous Assessment (CA) marks, Exam Timetables, Exam Halls, and Evaluation Matrices.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setActiveTab('cbt-exam')}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer"
+              onClick={() => setActiveTab('cbt-manager')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs ${
+                activeTab === 'cbt-manager'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
             >
-              <Monitor size={15} className="text-cyan-400" /> CBT Test Simulator
+              <Monitor size={15} className="text-cyan-400" /> CBT Engine
+            </button>
+            <button
+              onClick={() => setActiveTab('marks-ca')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs ${
+                activeTab === 'marks-ca'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <FileSpreadsheet size={15} className="text-emerald-500" /> CA & Marks
+            </button>
+            <button
+              onClick={() => setActiveTab('exam-setup')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs ${
+                activeTab === 'exam-setup'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Plus size={15} className="text-blue-500" /> Master Setup
             </button>
             <button
               onClick={() => setActiveTab('ai-generator')}
-              className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer"
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs ${
+                activeTab === 'ai-generator'
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800'
+              }`}
             >
-              <Sparkles size={15} /> AI Question Generator
+              <Sparkles size={15} /> AI Generator
             </button>
           </div>
         </div>
@@ -257,61 +335,147 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
 
       {/* Sub-Module Tabs Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs">
-        <button onClick={() => setActiveTab('evaluation-matrix')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'evaluation-matrix' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          ⚖️ Evaluation Matrix
+        <button
+          onClick={() => setActiveTab('cbt-manager')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'cbt-manager' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Monitor size={14} /> CBT & Online Exams
         </button>
-        <button onClick={() => setActiveTab('exam-setup-manual')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'exam-setup-manual' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📝 Exam Setup (Manual)
+
+        <button
+          onClick={() => setActiveTab('marks-ca')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'marks-ca' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileSpreadsheet size={14} /> CA & Marks Entry
         </button>
-        <button onClick={() => setActiveTab('exam-setup-cbt')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'exam-setup-cbt' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          💻 Exam Setup (CBT)
+
+        <button
+          onClick={() => setActiveTab('exam-setup')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'exam-setup' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Edit3 size={14} /> Master Exam Setup
         </button>
-        <button onClick={() => setActiveTab('ca-entry')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'ca-entry' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📊 CA Entry (+CBT Score)
+
+        <button
+          onClick={() => setActiveTab('exam-schedule')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'exam-schedule' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Calendar size={14} /> Exam Timetable
         </button>
-        <button onClick={() => setActiveTab('cbt-exam')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'cbt-exam' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🖥️ CBT Exam Portal
+
+        <button
+          onClick={() => setActiveTab('exam-halls')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'exam-halls' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Building2 size={14} /> Exam Halls
         </button>
-        <button onClick={() => setActiveTab('question-bank')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'question-bank' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📚 Question Bank
+
+        <button
+          onClick={() => setActiveTab('evaluation-matrix')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'evaluation-matrix' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Layers size={14} /> Evaluation Matrix
         </button>
-        <button onClick={() => setActiveTab('ai-generator')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'ai-generator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          🤖 AI Question Generator
+
+        <button
+          onClick={() => setActiveTab('cbt-simulator')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'cbt-simulator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Play size={14} /> CBT Simulator
         </button>
-        <button onClick={() => setActiveTab('results-processing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'results-processing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          ⚙️ Results Processing
+
+        <button
+          onClick={() => setActiveTab('ai-generator')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'ai-generator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Sparkles size={14} /> AI Generator
         </button>
-        <button onClick={() => setActiveTab('result-publishing')} className={`px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer ${activeTab === 'result-publishing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}>
-          📢 Result Publishing
+
+        <button
+          onClick={() => setActiveTab('result-publishing')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'result-publishing' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileCheck size={14} /> Result Publishing
         </button>
       </div>
 
-      {/* 0. EVALUATION MATRIX */}
-      {activeTab === 'evaluation-matrix' && (
-        <EvaluationMatrices />
+      {/* 1. CBT & ONLINE EXAMS (AdminCbtManager) */}
+      {activeTab === 'cbt-manager' && (
+        <div className="space-y-4">
+          <AdminCbtManager />
+        </div>
       )}
 
-      {/* 1. EXAM SETUP MANUAL */}
-      {activeTab === 'exam-setup-manual' && (
-        <div className="space-y-6 max-w-4xl mx-auto">
+      {/* 2. CONTINUOUS ASSESSMENT & MARKS ENTRY (MarksEntry) */}
+      {activeTab === 'marks-ca' && (
+        <div className="space-y-4">
+          <MarksEntry />
+        </div>
+      )}
+
+      {/* 3. MASTER EXAM SETUP & PUBLISHED EXAMS */}
+      {activeTab === 'exam-setup' && (
+        <div className="space-y-6 max-w-5xl mx-auto">
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-base text-slate-900">Manual Paper Exam Configuration</h3>
-            <p className="text-xs text-slate-500">Configure paper-based written examinations and hall distribution.</p>
-            
-            <form onSubmit={(e) => handleCreateExam(e, false)} className="space-y-4 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Create Academic Examination</h3>
+                <p className="text-xs text-slate-500">Configure unified examinations for manual paper writing or automated CBT assessment.</p>
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setExamTypeMode('cbt')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    examTypeMode === 'cbt' ? 'bg-white text-cyan-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  💻 CBT Online
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExamTypeMode('manual')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    examTypeMode === 'manual' ? 'bg-white text-cyan-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  📝 Manual Paper
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateExam} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Exam Title *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 1st Term Mathematics Theory Examination"
+                  placeholder={examTypeMode === 'cbt' ? 'e.g. 1st Term General Science CBT Examination' : 'e.g. 1st Term Mathematics Theory Examination'}
                   value={examName}
                   onChange={(e) => setExamName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold focus:outline-cyan-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
                   <select
@@ -338,145 +502,93 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
                     <option value="3">3rd Term</option>
                   </select>
                 </div>
+
+                {examTypeMode === 'cbt' ? (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Duration (Mins) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={durationMins}
+                      onChange={(e) => setDurationMins(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Mark Allocation</label>
+                    <div className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-600 font-mono">
+                      Theory (60) + Objective (40)
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingExam}
-                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
-              >
-                {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                <span>{isSubmittingExam ? 'Creating Exam...' : 'Create Manual Exam'}</span>
-              </button>
+              {examTypeMode === 'cbt' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Total Question Count *</label>
+                    <input
+                      type="number"
+                      required
+                      value={totalQuestions}
+                      onChange={(e) => setTotalQuestions(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                    />
+                  </div>
+                  <div className="flex items-center pt-5">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input type="checkbox" defaultChecked className="rounded text-cyan-600" /> Randomize Questions per Student
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmittingExam}
+                  className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
+                >
+                  {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  <span>{isSubmittingExam ? 'Creating Exam...' : (examTypeMode === 'cbt' ? 'Publish CBT Exam' : 'Create Paper Exam')}</span>
+                </button>
+              </div>
             </form>
           </div>
 
           {/* Published Exams Table */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-            <h4 className="font-bold text-sm text-slate-900">Published Branch Exams ({publishedExams.length})</h4>
-            {loadingExams ? (
-              <div className="py-8 text-center text-slate-400 text-xs flex justify-center items-center gap-2">
-                <Loader2 size={16} className="animate-spin text-cyan-600" />
-                <span>Loading exams records...</span>
-              </div>
-            ) : publishedExams.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b">
-                    <tr>
-                      <th className="p-3">Exam Name</th>
-                      <th className="p-3">Term</th>
-                      <th className="p-3">Type</th>
-                      <th className="p-3">Created Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {publishedExams.map((ex) => (
-                      <tr key={ex.id}>
-                        <td className="p-3 font-bold text-slate-900">{ex.name}</td>
-                        <td className="p-3 font-semibold text-cyan-600">{ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}</td>
-                        <td className="p-3 font-mono">{ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}</td>
-                        <td className="p-3 text-slate-500">{new Date(ex.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-slate-400 text-xs italic">
-                No exams published in database yet.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 2. EXAM SETUP CBT */}
-      {activeTab === 'exam-setup-cbt' && (
-        <div className="space-y-6 max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-            <h3 className="font-black text-base text-slate-900">Computer Based Test (CBT) Setup</h3>
-            <p className="text-xs text-slate-500">Set up online CBT exams with instant automated scoring, timers, and question randomization.</p>
-            
-            <form onSubmit={(e) => handleCreateExam(e, true)} className="space-y-4 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">CBT Exam Title *</label>
+                <h4 className="font-bold text-sm text-slate-900">
+                  Published Branch Exams ({publishedExams.length})
+                </h4>
+                <p className="text-slate-400 text-xs">Exams configured and recorded in master database.</p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. 1st Term General Science CBT Examination"
-                  value={examName}
-                  onChange={(e) => setExamName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  placeholder="Search exams..."
+                  value={searchExamQuery}
+                  onChange={(e) => setSearchExamQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs bg-slate-50 focus:bg-white"
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
-                  <select
-                    value={selectedClassId}
-                    onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
-                  >
-                    <option value="">All Branch Classes</option>
-                    {classesList.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Duration (Mins) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={durationMins}
-                    onChange={(e) => setDurationMins(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Total Questions *</label>
-                  <input
-                    type="number"
-                    required
-                    value={totalQuestions}
-                    onChange={(e) => setTotalQuestions(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-1">
-                <input type="checkbox" defaultChecked /> Randomize Questions per Student
-              </label>
-
-              <button
-                type="submit"
-                disabled={isSubmittingExam}
-                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
-              >
-                {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Monitor size={16} />}
-                <span>{isSubmittingExam ? 'Publishing CBT Exam...' : 'Publish CBT Exam'}</span>
-              </button>
-            </form>
-          </div>
-
-          {/* Published Exams Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-            <h4 className="font-bold text-sm text-slate-900">Published Branch Exams ({publishedExams.length})</h4>
             {loadingExams ? (
               <div className="py-8 text-center text-slate-400 text-xs flex justify-center items-center gap-2">
                 <Loader2 size={16} className="animate-spin text-cyan-600" />
                 <span>Loading exams records...</span>
               </div>
-            ) : publishedExams.length > 0 ? (
+            ) : filteredExams.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b">
                     <tr>
+                      <th className="p-3">Exam ID</th>
                       <th className="p-3">Exam Name</th>
                       <th className="p-3">Term</th>
                       <th className="p-3">Type</th>
@@ -485,11 +597,20 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {publishedExams.map((ex) => (
-                      <tr key={ex.id}>
+                    {filteredExams.map((ex) => (
+                      <tr key={ex.id} className="hover:bg-slate-50/80 transition">
+                        <td className="p-3 font-mono font-bold text-slate-400">#{ex.id}</td>
                         <td className="p-3 font-bold text-slate-900">{ex.name}</td>
-                        <td className="p-3 font-semibold text-cyan-600">{ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}</td>
-                        <td className="p-3 font-mono">{ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}</td>
+                        <td className="p-3 font-semibold text-cyan-600">
+                          {ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}
+                        </td>
+                        <td className="p-3 font-mono">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            ex.typeId === 3 ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}
+                          </span>
+                        </td>
                         <td className="p-3 text-slate-500">{ex.remark || 'N/A'}</td>
                         <td className="p-3 text-slate-500">{new Date(ex.createdAt).toLocaleDateString()}</td>
                       </tr>
@@ -499,62 +620,48 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
               </div>
             ) : (
               <div className="py-6 text-center text-slate-400 text-xs italic">
-                No exams published in database yet.
+                {searchExamQuery ? 'No exams matched your search.' : 'No exams published in database yet.'}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* 3. CONTINUOUS ASSESSMENT MANUAL + CBT */}
-      {activeTab === 'ca-entry' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900">Continuous Assessment (CA) Entry Matrix (+ CBT Scores)</h3>
-          <p className="text-xs text-slate-500">CA score spreadsheet (1st Test + 2nd Test + CBT Test + Assignment = 30 Marks Total).</p>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student Name</TableHead>
-                <TableHead>1st Test (10m)</TableHead>
-                <TableHead>2nd Test (10m)</TableHead>
-                <TableHead>CBT Score (10m)</TableHead>
-                <TableHead>Total CA (30m)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {['Chinedu Joseph Okafor', 'Amina Abubakar Bello', 'David Oluwaseun Adeleke'].map((name, idx) => (
-                <TableRow key={idx}>
-                  <TableCell className="font-bold text-slate-900">{name}</TableCell>
-                  <TableCell className="font-mono text-xs">8 / 10</TableCell>
-                  <TableCell className="font-mono text-xs">9 / 10</TableCell>
-                  <TableCell className="font-mono font-bold text-cyan-700">10 / 10 (Auto-CBT)</TableCell>
-                  <TableCell className="font-mono font-black text-slate-900">27 / 30</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      {/* 4. EXAM TIMETABLE & SCHEDULE */}
+      {activeTab === 'exam-schedule' && (
+        <div className="space-y-4">
+          <ExamScheduleManager />
         </div>
       )}
 
-      {/* 4. CBT EXAM PORTAL SIMULATOR */}
-      {activeTab === 'cbt-exam' && (
+      {/* 5. EXAM HALLS */}
+      {activeTab === 'exam-halls' && (
+        <div className="space-y-4">
+          <ExamHalls />
+        </div>
+      )}
+
+      {/* 6. EVALUATION MATRIX */}
+      {activeTab === 'evaluation-matrix' && (
+        <div className="space-y-4">
+          <EvaluationMatrices />
+        </div>
+      )}
+
+      {/* 7. CBT EXAM PORTAL SIMULATOR */}
+      {activeTab === 'cbt-simulator' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-3xl mx-auto space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="font-black text-base text-slate-900">CBT Live Exam Portal</h3>
-              <p className="text-xs text-slate-500">Simulated student computer-based test session.</p>
+              <h3 className="font-black text-base text-slate-900">CBT Live Exam Simulator</h3>
+              <p className="text-xs text-slate-500">Interactive preview of student testing experience with timer, navigation, and submission.</p>
             </div>
             <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-full">
-              Time Remaining: 42:18
+              ⏱️ Time Remaining: 42:18
             </span>
           </div>
 
-          {cbtSimulatorQuestions.length === 0 ? (
-            <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
-              <p className="text-sm text-slate-500 font-medium">No CBT questions configured yet for live simulation.</p>
-              <p className="text-xs text-slate-400 mt-1">Create CBT exams or import question bundles from the Exams tab to simulate the live testing environment.</p>
-            </div>
-          ) : !cbtSubmitted ? (
+          {!cbtSubmitted ? (
             <div className="space-y-4 text-xs">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Question {currentCbtQ + 1} of {cbtSimulatorQuestions.length}</span>
@@ -626,13 +733,13 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
         </div>
       )}
 
-      {/* 5. AI QUESTION GENERATOR */}
+      {/* 8. AI QUESTION GENERATOR */}
       {activeTab === 'ai-generator' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-2xl mx-auto space-y-4 text-xs">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
             <Sparkles className="text-cyan-600" size={20} /> AI Question & Test Generator
           </h3>
-          <p className="text-slate-500">Automatically compose curriculum-aligned test questions using AI.</p>
+          <p className="text-slate-500">Automatically compose curriculum-aligned test questions and export directly to question bank.</p>
 
           <form onSubmit={handleAiGenerate} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -681,12 +788,12 @@ export function ExamCbtManagement({ initialTab = 'evaluation-matrix' }: ExamCbtM
         </div>
       )}
 
-      {/* 6. RESULT PUBLISHING */}
+      {/* 9. RESULT PUBLISHING */}
       {activeTab === 'result-publishing' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-xl mx-auto text-center space-y-4 text-xs">
           <Award size={36} className="text-cyan-600 mx-auto" />
           <h3 className="font-black text-base text-slate-900">Publish Term Examination Results</h3>
-          <p className="text-slate-500">Publishing makes exam report cards visible on the Student and Parent portals.</p>
+          <p className="text-slate-500">Publishing makes exam report cards visible on the Student and Parent portals with EduChat alerts.</p>
 
           <button
             onClick={handlePublishResults}

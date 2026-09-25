@@ -40,6 +40,11 @@ import { toast } from 'sonner'
 
 type ReportCardTab = 'generate' | 'ai-comments' | 'psychomotor' | 'affective' | 'history'
 
+interface SessionItem {
+  id: number
+  name: string
+}
+
 interface ClassSectionItem {
   id: number
   name: string
@@ -108,6 +113,10 @@ interface StudentReportPreview {
 export function ReportCardManagement() {
   const [activeTab, setActiveTab] = useState<ReportCardTab>('generate')
   
+  // Session selection state
+  const [sessions, setSessions] = useState<SessionItem[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null)
+
   // Class selection state
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null)
@@ -162,20 +171,37 @@ export function ReportCardManagement() {
     fetchClasses()
   }, [])
 
-  const fetchClasses = async () => {
+  const fetchClasses = async (sessionId?: number) => {
     setLoadingClasses(true)
     try {
-      const res = await apiSlice.get<{ success: boolean; classes: ClassItem[] }>(
-        endpoints.admin.reportCards.classes
-      )
+      const res = await apiSlice.get<{
+        success: boolean
+        sessionId?: number
+        sessions?: SessionItem[]
+        classes: ClassItem[]
+      }>(endpoints.admin.reportCards.classes(sessionId))
+
       if (res.success && res.classes) {
+        if (res.sessions && res.sessions.length > 0) {
+          setSessions(res.sessions)
+        }
+        if (res.sessionId && (!selectedSessionId || sessionId)) {
+          setSelectedSessionId(res.sessionId)
+        }
         setClasses(res.classes)
         if (res.classes.length > 0) {
-          const firstCls = res.classes[0]
-          setSelectedClassId(firstCls.id)
-          if (firstCls.sections.length > 0) {
-            setSelectedSectionId(firstCls.sections[0].id)
+          const foundCls = selectedClassId ? res.classes.find(c => c.id === selectedClassId) : null
+          const activeCls = foundCls || res.classes[0]
+          setSelectedClassId(activeCls.id)
+          if (activeCls.sections.length > 0) {
+            const foundSec = selectedSectionId ? activeCls.sections.find(s => s.id === selectedSectionId) : null
+            setSelectedSectionId(foundSec ? foundSec.id : activeCls.sections[0].id)
+          } else {
+            setSelectedSectionId(null)
           }
+        } else {
+          setSelectedClassId(null)
+          setSelectedSectionId(null)
         }
       }
     } catch (err: any) {
@@ -185,27 +211,31 @@ export function ReportCardManagement() {
     }
   }
 
-  // Fetch Students when selected class/section changes
+  // Fetch Students when selected class/section/session changes
   useEffect(() => {
     if (selectedClassId && selectedSectionId) {
-      fetchStudents(selectedClassId, selectedSectionId)
+      fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined)
     } else {
       setStudents([])
     }
-  }, [selectedClassId, selectedSectionId])
+  }, [selectedClassId, selectedSectionId, selectedSessionId])
 
-  const fetchStudents = async (classId: number, sectionId: number) => {
+  const fetchStudents = async (classId: number, sectionId: number, sessionId?: number) => {
     setLoadingStudents(true)
     try {
       const res = await apiSlice.get<{
         success: boolean
+        sessionId?: number
         className: string
         isEcd: boolean
         totalStudents: number
         students: StudentReportPreview[]
-      }>(endpoints.admin.reportCards.students(classId, sectionId))
+      }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId))
 
       if (res.success && res.students) {
+        if (res.sessionId && !selectedSessionId) {
+          setSelectedSessionId(res.sessionId)
+        }
         setStudents(res.students)
         
         // Populate initial AI selection
@@ -261,7 +291,8 @@ export function ReportCardManagement() {
         selectedClassId,
         selectedSectionId,
         rankingType,
-        rankingLimit
+        rankingLimit,
+        selectedSessionId || undefined
       )
       const safeName = (st.lastName || 'Student').replace(/\s+/g, '_')
       const safeFirst = (st.firstName || 'Record').replace(/\s+/g, '_')
@@ -299,7 +330,8 @@ export function ReportCardManagement() {
         selectedClassId,
         selectedSectionId,
         rankingType,
-        rankingLimit
+        rankingLimit,
+        selectedSessionId || undefined
       )
       const safeCls = className.replace(/\s+/g, '_')
       const safeSec = sectionName.replace(/\s+/g, '_')
@@ -356,6 +388,7 @@ export function ReportCardManagement() {
           studentId: selectedAiStudentId,
           classId: selectedClassId,
           sectionId: selectedSectionId,
+          sessionId: selectedSessionId || undefined,
           remark: teacherComment,
           principalRemark: principalComment,
           status: 'PRINCIPAL_SIGNED_OFF'
@@ -403,6 +436,7 @@ export function ReportCardManagement() {
       }>(endpoints.admin.batchGenerateCommentary, {
         classId: selectedClassId,
         sectionId: selectedSectionId,
+        sessionId: selectedSessionId || undefined,
         tone: batchTone,
         behavioralTags: batchBehavioralTags
       })
@@ -445,6 +479,7 @@ export function ReportCardManagement() {
         {
           classId: selectedClassId,
           sectionId: selectedSectionId,
+          sessionId: selectedSessionId || undefined,
           commentaries: payload,
           status: 'APPROVED_BY_PRINCIPAL'
         }
@@ -453,7 +488,7 @@ export function ReportCardManagement() {
       if (res.success) {
         toast.success(res.message || `Saved & authorized ${res.savedCount} report card remarks!`)
         setShowBatchAiModal(false)
-        fetchStudents(selectedClassId, selectedSectionId)
+        fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined)
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to batch save commentaries.')
@@ -488,6 +523,7 @@ export function ReportCardManagement() {
           studentId,
           classId: selectedClassId,
           sectionId: selectedSectionId,
+          sessionId: selectedSessionId || undefined,
           psychomotor: psych,
           affective: aff,
           narrativeComment: teacherComment
@@ -528,6 +564,7 @@ export function ReportCardManagement() {
           studentId: st.id,
           classId: selectedClassId,
           sectionId: selectedSectionId,
+          sessionId: selectedSessionId || undefined,
           psychomotor: psych,
           affective: aff
         })
@@ -655,6 +692,30 @@ export function ReportCardManagement() {
       {/* Classroom & Ranking Selector Strip */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
+          {/* Academic Session */}
+          {sessions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                <Calendar size={13} className="text-rose-600" /> Session:
+              </span>
+              <select
+                value={selectedSessionId || ''}
+                onChange={e => {
+                  const sid = Number(e.target.value)
+                  setSelectedSessionId(sid)
+                  fetchClasses(sid)
+                }}
+                className="px-3 py-1.5 rounded-xl border border-rose-200 text-xs font-bold bg-rose-50/50 text-slate-800 focus:outline-rose-500"
+              >
+                {sessions.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500">Classroom:</span>
             <select
@@ -734,7 +795,7 @@ export function ReportCardManagement() {
           <button
             onClick={() => {
               if (selectedClassId && selectedSectionId) {
-                fetchStudents(selectedClassId, selectedSectionId)
+                fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined)
               }
             }}
             className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
@@ -1249,7 +1310,7 @@ export function ReportCardManagement() {
                     </TableCell>
                     <TableCell>
                       <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        ACTIVE SESSION
+                        {sessions.find(s => s.id === selectedSessionId)?.name || 'ACTIVE SESSION'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
@@ -1258,7 +1319,7 @@ export function ReportCardManagement() {
                           onClick={async () => {
                             try {
                               toast.info(`Preparing Batch PDF for ${c.name}…`)
-                              const url = endpoints.admin.reportCards.exportBatchPdf(c.id, sec.id)
+                              const url = endpoints.admin.reportCards.exportBatchPdf(c.id, sec.id, 'full', 3, selectedSessionId || undefined)
                               await apiSlice.download(url, `Batch_${c.name.replace(/\s+/g, '_')}_${sec.name}.pdf`)
                               toast.success(`Batch report cards downloaded for ${c.name}!`)
                             } catch (e: any) {

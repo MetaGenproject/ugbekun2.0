@@ -119,7 +119,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'curriculum', label: 'Academics', icon: GraduationCap, hasSub: true },
         { id: 'lesson-management', label: 'Lesson Management', icon: BookOpen, hasSub: true },
         { id: 'homework', label: 'Homework', icon: FileText, hasSub: true },
-        { id: 'examinations-cbt', label: 'Examinations & CBT', icon: Award, hasSub: true },
+        { id: 'assessments-cbt', label: 'Assessments & CBT', icon: Award, hasSub: true },
         { id: 'report-cards', label: 'Report Cards', icon: FileText, hasSub: true },
         { id: 'timetable', label: 'Timetable', icon: Calendar, hasSub: true },
         { id: 'attendance', label: 'Attendance', icon: CheckSquare, hasSub: true },
@@ -390,7 +390,7 @@ export default function DashboardPage() {
             ? 'Form Teacher'
             : 'Teacher'
         setHeaderIdentity({
-          name: res.name || user.username,
+          name: res.name || user?.username || 'Teacher',
           photo: res.photo || null,
           title,
         })

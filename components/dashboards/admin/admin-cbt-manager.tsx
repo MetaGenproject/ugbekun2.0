@@ -448,7 +448,7 @@ export function AdminCbtManager() {
         endDate: distEndDate ? new Date(distEndDate).toISOString() : null,
       }
 
-      const res = await apiSlice.post<{ success: boolean; distribution: CbtDistributionItem }>(
+      const res = await apiSlice.post<{ success: boolean; message?: string; distribution: CbtDistributionItem }>(
         endpoints.admin.cbtDistributions(),
         payload
       )

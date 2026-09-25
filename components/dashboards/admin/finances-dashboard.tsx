@@ -57,6 +57,9 @@ export interface OverviewData {
     paid: number
     balance: number
   }>
+  sessionId?: number
+  sessionName?: string
+  sessions?: Array<{ id: number; schoolYear: string }>
 }
 
 export interface Invoice {
@@ -191,6 +194,10 @@ export function FinancesDashboard() {
   const [schoolBank, setSchoolBank] = useState<SchoolBank | null>(null)
   const [reportsData, setReportsData] = useState<any>(null)
 
+  // Academic Sessions
+  const [sessions, setSessions] = useState<Array<{ id: number; schoolYear: string }>>([])
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+
   // Loading & Filter States
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -279,24 +286,43 @@ export function FinancesDashboard() {
     fetchInitialData()
   }, [])
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = async (targetSessionId?: string) => {
     setLoading(true)
     try {
+      const sQuery = targetSessionId
+        ? `?sessionId=${targetSessionId}`
+        : (selectedSessionId ? `?sessionId=${selectedSessionId}` : '')
       const [ovRes, invRes, ftRes, fgRes, clsRes, asgRes, vhRes, txRes, sbRes, repRes] = await Promise.all([
-        apiSlice.get<{ success: boolean; data: OverviewData }>(endpoints.admin.financesOverview).catch(() => null),
-        apiSlice.get<{ success: boolean; data: Invoice[] }>(endpoints.admin.invoices()).catch(() => null),
+        apiSlice.get<{ success: boolean; data: OverviewData }>(endpoints.admin.financesOverview(sQuery)).catch(() => null),
+        apiSlice.get<{ success: boolean; data: Invoice[]; sessions?: Array<{ id: number; schoolYear: string }>; sessionId?: number }>(endpoints.admin.invoices(sQuery)).catch(() => null),
         apiSlice.get<{ success: boolean; data: FeeType[] }>(endpoints.admin.feeTypes).catch(() => null),
         apiSlice.get<{ success: boolean; data: FeeGroup[] }>(endpoints.admin.feeGroups).catch(() => null),
         apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections).catch(() => null),
-        apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.feeAssignments).catch(() => null),
+        apiSlice.get<{ success: boolean; data: any[] }>(endpoints.admin.feeAssignments(sQuery)).catch(() => null),
         apiSlice.get<{ success: boolean; data: VoucherHead[] }>(`${endpoints.admin.voucherHeads}?includeArchived=1`).catch(() => null),
         apiSlice.get<{ success: boolean; data: OfficeTransaction[] }>(`${endpoints.admin.officeTransactions}?includeVoided=1`).catch(() => null),
         apiSlice.get<{ success: boolean; data: SchoolBank }>(endpoints.admin.schoolBank).catch(() => null),
-        apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.financesCollectionsReport).catch(() => null)
+        apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.financesCollectionsReport(sQuery)).catch(() => null)
       ])
 
-      if (ovRes && ovRes.success) setOverview(ovRes.data)
-      if (invRes && invRes.success) setInvoices(invRes.data || [])
+      if (ovRes && ovRes.success && ovRes.data) {
+        setOverview(ovRes.data)
+        if (ovRes.data.sessions && ovRes.data.sessions.length > 0) {
+          setSessions(ovRes.data.sessions)
+        }
+        if (ovRes.data.sessionId && !targetSessionId && !selectedSessionId) {
+          setSelectedSessionId(String(ovRes.data.sessionId))
+        }
+      }
+      if (invRes && invRes.success) {
+        setInvoices(invRes.data || [])
+        if (invRes.sessions && invRes.sessions.length > 0 && (!sessions || sessions.length === 0)) {
+          setSessions(invRes.sessions)
+        }
+        if (invRes.sessionId && !targetSessionId && !selectedSessionId) {
+          setSelectedSessionId(String(invRes.sessionId))
+        }
+      }
       if (ftRes && ftRes.success) setFeeTypes(ftRes.data || [])
       if (fgRes && fgRes.success) setFeeGroups(fgRes.data || [])
       if (asgRes && asgRes.success) setAssignments(asgRes.data || [])
@@ -331,19 +357,28 @@ export function FinancesDashboard() {
     }
   }
 
+  const handleSessionChange = (newSessionId: string) => {
+    setSelectedSessionId(newSessionId)
+    fetchInitialData(newSessionId)
+  }
+
   // Load Invoices with Filter
   const fetchFilteredInvoices = async () => {
     try {
       const params = new URLSearchParams()
+      if (selectedSessionId) params.append('sessionId', selectedSessionId)
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter)
       if (classFilter) params.append('classId', classFilter)
       if (sectionFilter) params.append('sectionId', sectionFilter)
       if (searchQuery) params.append('search', searchQuery)
 
       const queryString = params.toString() ? `?${params.toString()}` : ''
-      const res = await apiSlice.get<{ success: boolean; data: Invoice[] }>(endpoints.admin.invoices(queryString))
+      const res = await apiSlice.get<{ success: boolean; data: Invoice[]; sessions?: any[]; sessionId?: number }>(endpoints.admin.invoices(queryString))
       if (res.success) {
         setInvoices(res.data || [])
+        if (res.sessions && res.sessions.length > 0 && (!sessions || sessions.length === 0)) {
+          setSessions(res.sessions)
+        }
       }
     } catch (err: any) {
       console.error('Failed to filter invoices:', err)
@@ -352,7 +387,7 @@ export function FinancesDashboard() {
 
   useEffect(() => {
     fetchFilteredInvoices()
-  }, [statusFilter, classFilter, sectionFilter, searchQuery])
+  }, [statusFilter, classFilter, sectionFilter, searchQuery, selectedSessionId])
 
   // Fetch Batch Preview when Class, Section, or Term changes in modal
   const fetchBatchPreview = async (cId: string, sId: string, term: string, feeIds: number[]) => {
@@ -367,6 +402,7 @@ export function FinancesDashboard() {
       if (sId) params.append('sectionId', sId)
       if (term) params.append('termLabel', term)
       if (feeIds.length > 0) params.append('feeTypeIds', feeIds.join(','))
+      if (selectedSessionId) params.append('sessionId', selectedSessionId)
 
       const res = await apiSlice.get<BatchPreviewData & { success: boolean }>(
         endpoints.admin.batchInvoicesPreview(`?${params.toString()}`)
@@ -441,7 +477,8 @@ export function FinancesDashboard() {
         dueDate: batchDueDate || null,
         feeTypeIds: batchSelectedFeeTypeIds,
         studentIds: batchSelectedStudentIds,
-        overwriteExisting: batchOverwrite
+        overwriteExisting: batchOverwrite,
+        sessionId: selectedSessionId ? parseInt(selectedSessionId, 10) : undefined
       })
 
       if (res.success) {
@@ -500,6 +537,7 @@ export function FinancesDashboard() {
       params.append('classId', targetClassId)
       if (targetSectionId) params.append('sectionId', targetSectionId)
       if (targetTerm) params.append('termLabel', targetTerm)
+      if (selectedSessionId) params.append('sessionId', selectedSessionId)
 
       const safeCls = clsName.replace(/\s+/g, '_')
       const safeSec = secName ? `_${secName.replace(/\s+/g, '_')}` : ''
@@ -861,7 +899,28 @@ export function FinancesDashboard() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Session Selector */}
+            {sessions.length > 0 && (
+              <div className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200/70 transition border border-slate-200 px-3 py-1.5 rounded-xl">
+                <Calendar size={14} className="text-indigo-600 shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 leading-none">Session</span>
+                  <select
+                    value={selectedSessionId}
+                    onChange={(e) => handleSessionChange(e.target.value)}
+                    className="bg-transparent text-xs font-black text-slate-900 outline-none cursor-pointer pr-1"
+                  >
+                    {sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.schoolYear}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setShowBatchInvoiceModal(true)
@@ -1059,6 +1118,24 @@ export function FinancesDashboard() {
           {/* Action & Filter Strip */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex flex-wrap items-center gap-3">
+              {/* Session Filter */}
+              {sessions.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-500">Session:</span>
+                  <select
+                    value={selectedSessionId}
+                    onChange={(e) => handleSessionChange(e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-indigo-200 text-xs font-bold bg-indigo-50/50 text-indigo-900"
+                  >
+                    {sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.schoolYear}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Classroom Filter */}
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-500">Class:</span>

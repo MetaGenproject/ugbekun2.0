@@ -715,7 +715,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <HomeworkManagement />
   }
 
-  if (activeSection === 'examinations-cbt' || activeSection === 'cbt' || activeSection === 'exams') {
+  if (
+    activeSection === 'assessments-cbt' ||
+    activeSection === 'assessments' ||
+    activeSection === 'examinations-cbt' ||
+    activeSection === 'cbt' ||
+    activeSection === 'exams' ||
+    activeSection === 'cbt-exams'
+  ) {
     return <ExamCbtManagement />
   }
 
