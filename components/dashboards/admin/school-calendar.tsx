@@ -37,7 +37,7 @@ interface SchoolCalendarProps {
 }
 
 export default function SchoolCalendar({ user, embedded = false }: SchoolCalendarProps) {
-  const isAdmin = user?.role === 2
+  const isAdmin = user?.role === 2 || user?.role === 9
 
   const [events, setEvents] = useState<SchoolEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,6 +63,7 @@ export default function SchoolCalendar({ user, embedded = false }: SchoolCalenda
   const getEventsEndpoint = useMemo(() => {
     switch (user?.role) {
       case 2:
+      case 9:
         return endpoints.admin.events
       case 3:
         return endpoints.teacher.events

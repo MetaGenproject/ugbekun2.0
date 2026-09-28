@@ -110,6 +110,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'settings', label: 'Global Settings', icon: Settings },
       ]
     case 2: // Branch Admin — exact structure matching reference image UI
+    case 9: // Proprietor (School Owner / Executive Administrator)
       return [
         { id: 'overview', label: 'Dashboard', icon: LayoutGrid, hasSub: false },
         { id: 'classrooms', label: 'Campus & Students', icon: Building2, hasSub: true },
@@ -337,7 +338,7 @@ export default function DashboardPage() {
 
     async function loadSchoolInfo() {
       try {
-        if (user?.role === 2) {
+        if (user?.role === 2 || user?.role === 9) {
           const res = await apiSlice.get<{ success: boolean; data: BranchStats }>(endpoints.admin.stats)
           if (!cancelled && res.data) {
             setBranchStats(res.data)
@@ -450,6 +451,7 @@ export default function DashboardPage() {
       case 1:
         return <SuperAdminDashboard user={user} activeSection={activeSection} />
       case 2:
+      case 9:
         return (
           <AdminDashboard
             user={user}
