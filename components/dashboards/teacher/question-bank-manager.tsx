@@ -142,11 +142,12 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [isAssignTestModalOpen, setIsAssignTestModalOpen] = useState(false)
 
   // Assign to Class Form State
+  const [editingOnlineExamId, setEditingOnlineExamId] = useState<number | null>(null)
   const [assignTitle, setAssignTitle] = useState('')
   const [assignSubjectId, setAssignSubjectId] = useState<number>(0)
   const [assignClassId, setAssignClassId] = useState<string>('')
-  const [assignDuration, setAssignDuration] = useState<number>(30)
-  const [assignPassingMark, setAssignPassingMark] = useState<number>(50)
+  const [assignDuration, setAssignDuration] = useState<number | string>(30)
+  const [assignPassingMark, setAssignPassingMark] = useState<number | string>(50)
   const [assignExamDate, setAssignExamDate] = useState<string>('')
   const [assignStartDate, setAssignStartDate] = useState('')
   const [assignEndDate, setAssignEndDate] = useState('')
@@ -424,8 +425,17 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     return selectedQuestionsObjects.reduce((acc, q) => acc + Number(q.marks || 1), 0)
   }, [selectedQuestionsObjects])
 
+  const toLocalInput = (iso?: string | null) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   // Open Assign Modal with selected questions pre-filled
   const handleOpenAssignModal = () => {
+    setEditingOnlineExamId(null)
     const approvedSelected = selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED')
     if (approvedSelected.length === 0) {
       alert('Select approved Question Bank items. Review AI/scanned/uploaded drafts and save them first.')
@@ -441,6 +451,22 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     setIsAssignTestModalOpen(true)
   }
 
+  // Open Edit Modal for an already distributed assessment
+  const handleOpenEditOnlineExam = (exam: OnlineExam) => {
+    setEditingOnlineExamId(exam.id)
+    setAssignTitle(exam.title || '')
+    setAssignSubjectId(exam.subjectId || (subjects[0]?.id ?? 0))
+    setAssignClassId(exam.classId ? String(exam.classId) : (classesList[0]?.id ? String(classesList[0].id) : ''))
+    setAssignDuration(exam.duration || 30)
+    setAssignPassingMark(exam.passingMark || 50)
+    setAssignStartDate(toLocalInput(exam.startDate || exam.examDate))
+    setAssignEndDate(toLocalInput(exam.endDate))
+    setAssignExamDate(exam.examDate ? String(exam.examDate).slice(0, 10) : '')
+    setAssignShuffle(exam.shuffleQuestions ?? true)
+    setAssignShowResults(exam.showResults ?? true)
+    setIsAssignTestModalOpen(true)
+  }
+
   // Submit and Distribute CBT Assessment to Class
   const handlePublishCbtAssessment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -449,7 +475,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       return
     }
 
-    if (selectedQuestionsObjects.length === 0) {
+    if (!editingOnlineExamId && selectedQuestionsObjects.length === 0) {
       alert('No questions collected in this assessment.')
       return
     }
@@ -465,14 +491,12 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         marks: q.marks,
       }))
 
-      const payload = {
+      const payload: any = {
         title: assignTitle.trim(),
         classId: Number(assignClassId),
         subjectId: Number(assignSubjectId),
         passingMark: Number(assignPassingMark) || 50,
         duration: Number(assignDuration) || 30,
-        questionBankIds: selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED').map((q) => q.id),
-        questions: formattedQuestions,
         startDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
         endDate: assignEndDate ? new Date(assignEndDate).toISOString() : null,
         examDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
@@ -481,20 +505,41 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         isPublished: true,
       }
 
+      if (selectedQuestionsObjects.length > 0) {
+        payload.questionBankIds = selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED').map((q) => q.id)
+        payload.questions = formattedQuestions
+      }
+
       if (payload.endDate && payload.startDate && new Date(payload.endDate) <= new Date(payload.startDate)) {
         alert('Attempt period must close after it opens.')
         setIsPublishingExam(false)
         return
       }
 
-      const res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
-        isAdminPortal ? endpoints.admin.cbtDistributions() : endpoints.teacher.onlineExams,
-        payload
-      )
+      let res: { success: boolean; exam?: any; message?: string }
+      if (editingOnlineExamId) {
+        if (isAdminPortal) {
+          res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
+            endpoints.admin.cbtDistributions(),
+            { id: editingOnlineExamId, ...payload }
+          )
+        } else {
+          res = await apiSlice.put<{ success: boolean; exam: any; message?: string }>(
+            `${endpoints.teacher.onlineExams}/${editingOnlineExamId}`,
+            payload
+          )
+        }
+      } else {
+        res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
+          isAdminPortal ? endpoints.admin.cbtDistributions() : endpoints.teacher.onlineExams,
+          payload
+        )
+      }
 
       if (res.success) {
-        showNotification(res.message || 'CBT Assessment successfully distributed to classroom!')
+        showNotification(res.message || (editingOnlineExamId ? 'CBT Assessment successfully updated!' : 'CBT Assessment successfully distributed to classroom!'))
         setIsAssignTestModalOpen(false)
+        setEditingOnlineExamId(null)
         setSelectedIds([])
         fetchOnlineExams()
         setActiveTab('assigned')
@@ -510,7 +555,8 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const handleDeleteOnlineExam = async (id: number) => {
     if (!confirm('Are you sure you want to delete this CBT assessment?')) return
     try {
-      const res = await apiSlice.delete<{ success: boolean }>(`${endpoints.teacher.onlineExams}/${id}`)
+      const deleteUrl = isAdminPortal ? `${endpoints.admin.cbtDistributions()}/${id}` : `${endpoints.teacher.onlineExams}/${id}`
+      const res = await apiSlice.delete<{ success: boolean }>(deleteUrl)
       if (res.success) {
         setOnlineExams((prev) => prev.filter((ex) => ex.id !== id))
         showNotification('CBT Assessment deleted.')
@@ -1557,14 +1603,24 @@ ANSWER: A`)
                         <span className="text-[10px] text-slate-400 font-medium">
                           {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'Active'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteOnlineExam(exam.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          title="Delete Assessment"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditOnlineExam(exam)}
+                            className="px-2.5 py-1 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                            title="Edit Assessment & Timing"
+                          >
+                            <Edit3 size={13} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOnlineExam(exam.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Delete Assessment"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )
@@ -1613,10 +1669,14 @@ ANSWER: A`)
           <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
               <div className="flex items-center gap-2 font-black text-sm">
-                <Send size={18} className="text-amber-400" /> Distribute CBT Assessment to Classroom
+                <Send size={18} className="text-amber-400" />
+                {editingOnlineExamId ? 'Edit CBT Assessment & Settings' : 'Distribute CBT Assessment to Classroom'}
               </div>
               <button
-                onClick={() => setIsAssignTestModalOpen(false)}
+                onClick={() => {
+                  setIsAssignTestModalOpen(false)
+                  setEditingOnlineExamId(null)
+                }}
                 className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
               >
                 <X size={18} />
@@ -1626,11 +1686,15 @@ ANSWER: A`)
             <form onSubmit={handlePublishCbtAssessment} className="p-6 space-y-4">
               <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-blue-900 text-xs flex items-center justify-between">
                 <div>
-                  <span className="font-extrabold block">Collected Pool: {selectedIds.length} Questions</span>
-                  <span className="text-[11px] text-blue-700">Total Marks: {totalSelectedMarks} pts</span>
+                  <span className="font-extrabold block">
+                    {editingOnlineExamId ? 'Editing Assessment' : `Collected Pool: ${selectedIds.length} Questions`}
+                  </span>
+                  <span className="text-[11px] text-blue-700">
+                    {editingOnlineExamId ? 'Adjust title, duration, pass mark, dates or settings' : `Total Marks: ${totalSelectedMarks} pts`}
+                  </span>
                 </div>
                 <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold">
-                  Ready to Deploy
+                  {editingOnlineExamId ? 'Edit Mode' : 'Ready to Deploy'}
                 </span>
               </div>
 
@@ -1706,10 +1770,16 @@ ANSWER: A`)
                   <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Mins)</label>
                   <input
                     type="number"
-                    min={5}
-                    max={240}
+                    min={1}
+                    max={360}
                     value={assignDuration}
-                    onChange={(e) => setAssignDuration(parseInt(e.target.value) || 30)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setAssignDuration(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
+                    }}
+                    onBlur={() => {
+                      if (!assignDuration || Number(assignDuration) < 1) setAssignDuration(30)
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
                   />
                 </div>
@@ -1721,7 +1791,13 @@ ANSWER: A`)
                     min={1}
                     max={100}
                     value={assignPassingMark}
-                    onChange={(e) => setAssignPassingMark(parseInt(e.target.value) || 50)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setAssignPassingMark(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
+                    }}
+                    onBlur={() => {
+                      if (!assignPassingMark || Number(assignPassingMark) < 1) setAssignPassingMark(50)
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
                   />
                 </div>
@@ -1749,7 +1825,10 @@ ANSWER: A`)
               <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsAssignTestModalOpen(false)}
+                  onClick={() => {
+                    setIsAssignTestModalOpen(false)
+                    setEditingOnlineExamId(null)
+                  }}
                   className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                 >
                   Cancel
@@ -1760,7 +1839,7 @@ ANSWER: A`)
                   className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isPublishingExam ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  Publish & Assign to Class
+                  {editingOnlineExamId ? 'Save Changes' : 'Publish & Assign to Class'}
                 </button>
               </div>
             </form>

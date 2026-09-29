@@ -153,8 +153,8 @@ export function AdminCbtManager() {
   const [distSectionId, setDistSectionId] = useState('')
   const [distSubjectId, setDistSubjectId] = useState('')
   const [distGroupId, setDistGroupId] = useState('')
-  const [distDuration, setDistDuration] = useState(30)
-  const [distPassingMark, setDistPassingMark] = useState(50)
+  const [distDuration, setDistDuration] = useState<number | string>(30)
+  const [distPassingMark, setDistPassingMark] = useState<number | string>(50)
   const [distShuffle, setDistShuffle] = useState(true)
   const [distShowResults, setDistShowResults] = useState(true)
   const [distPublished, setDistPublished] = useState(true)
@@ -996,10 +996,16 @@ export function AdminCbtManager() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Minutes)</label>
                   <input
                     type="number"
-                    min={5}
-                    max={180}
+                    min={1}
+                    max={360}
                     value={distDuration}
-                    onChange={(e) => setDistDuration(parseInt(e.target.value, 10) || 30)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setDistDuration(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
+                    }}
+                    onBlur={() => {
+                      if (!distDuration || Number(distDuration) < 1) setDistDuration(30)
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
                   />
                 </div>
@@ -1008,10 +1014,16 @@ export function AdminCbtManager() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Passing Mark (%)</label>
                   <input
                     type="number"
-                    min={10}
+                    min={1}
                     max={100}
                     value={distPassingMark}
-                    onChange={(e) => setDistPassingMark(parseInt(e.target.value, 10) || 50)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setDistPassingMark(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
+                    }}
+                    onBlur={() => {
+                      if (!distPassingMark || Number(distPassingMark) < 1) setDistPassingMark(50)
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
                   />
                 </div>

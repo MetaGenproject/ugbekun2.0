@@ -182,6 +182,8 @@ export const endpoints = {
     cbtQuestionBankAiGenerate: `${BASE_URL}/admin/cbt/question-bank/ai-generate`,
     homeworks: `${BASE_URL}/admin/homeworks`,
     homeworkSubmissions: (id: number) => `${BASE_URL}/admin/homeworks/${id}/submissions`,
+    gradeHomework: (submissionId: number) => `${BASE_URL}/admin/homeworks/submissions/${submissionId}/grade`,
+    deleteHomework: (id: number) => `${BASE_URL}/admin/homeworks/${id}`,
     cbtDistributionAnalytics: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/analytics`,
     cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/sync-marks`,
     cbtDistributionOverrideMark: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/override-mark`,
