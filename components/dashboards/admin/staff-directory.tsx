@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
+import { getValidPhotoUrl } from '@/lib/utils'
 import { UserCredentialModal } from './user-credential-modal'
 import {
   Users,
@@ -552,16 +553,20 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                   <TableBody>
                     {filteredTeachers.map((t) => {
                       const teacherDisplayName = [t.firstName, t.lastName].filter(Boolean).join(' ') || t.name || 'Teacher'
+                      const validPhoto = getValidPhotoUrl(t.photo)
                       return (
                         <TableRow key={t.id} className="hover:bg-slate-50/50">
                           <TableCell className="w-12">
                             <div className="relative group/avatar w-10 h-10">
-                              {t.photo ? (
+                              {validPhoto ? (
                                 <img
-                                  src={t.photo}
+                                  src={validPhoto}
                                   alt={teacherDisplayName}
                                   className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-blue-500 transition"
-                                  onClick={() => setPreviewEnlargePhoto({ url: t.photo!, name: teacherDisplayName })}
+                                  onClick={() => setPreviewEnlargePhoto({ url: validPhoto, name: teacherDisplayName })}
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                  }}
                                 />
                               ) : (
                                 <div
@@ -623,7 +628,7 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                                   className="flex items-center gap-2 px-2.5 py-2 text-xs font-bold text-slate-700 hover:text-amber-700 hover:bg-amber-50 rounded-lg cursor-pointer transition"
                                 >
                                   <KeyRound size={14} className="text-amber-600" />
-                                  <span>Credentials Slip</span>
+                                  <span>Manage Credentials</span>
                                 </DropdownMenuItem>
 
                                 <DropdownMenuItem
@@ -730,16 +735,20 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                       const teacherDisplayName = teacherFullName(t)
                       const classesManaged = formClassLabels(t)
                       const subjectsTaught = uniqueSubjectNames(t)
+                      const validPhoto = getValidPhotoUrl(t.photo)
                       return (
                         <TableRow key={t.id} className="hover:bg-slate-50/50">
                           <TableCell className="w-12">
                             <div className="relative group/avatar w-10 h-10">
-                              {t.photo ? (
+                              {validPhoto ? (
                                 <img
-                                  src={t.photo}
+                                  src={validPhoto}
                                   alt={teacherDisplayName}
                                   className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-purple-500 transition"
-                                  onClick={() => setPreviewEnlargePhoto({ url: t.photo!, name: teacherDisplayName })}
+                                  onClick={() => setPreviewEnlargePhoto({ url: validPhoto, name: teacherDisplayName })}
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                  }}
                                 />
                               ) : (
                                 <div
@@ -931,16 +940,20 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                   const contactPhoneText = s.phone || s.mobileno || '—'
                   const emailAddressText = s.email || '—'
 
+                  const validPhoto = getValidPhotoUrl(s.photo)
                   return (
                     <TableRow key={s.id} className="hover:bg-slate-50/50">
                       <TableCell className="w-12">
                         <div className="relative group/avatar w-10 h-10">
-                          {s.photo ? (
+                          {validPhoto ? (
                             <img
-                              src={s.photo}
+                              src={validPhoto}
                               alt={staffDisplayName}
                               className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-2xs cursor-pointer hover:ring-2 hover:ring-blue-500 transition"
-                              onClick={() => setPreviewEnlargePhoto({ url: s.photo!, name: staffDisplayName })}
+                              onClick={() => setPreviewEnlargePhoto({ url: validPhoto, name: staffDisplayName })}
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                              }}
                             />
                           ) : (
                             <div

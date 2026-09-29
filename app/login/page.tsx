@@ -25,7 +25,6 @@ export default function LoginPage() {
           alt="School Campus Background"
           fill
           className="object-cover object-center opacity-100 filter brightness-105"
-          priority
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#081026]/35 via-[#0B1536]/25 to-[#081026]/45" />
       </div>

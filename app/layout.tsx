@@ -1,12 +1,11 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SystemStatusToastContainer } from '@/components/ui/status-notifier'
 import { SchoolBrandingProvider } from '@/lib/schoolBrandingContext'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'Ugbekun - School Management System',
@@ -31,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning>
       <head />
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <body className={`${geist.className} font-sans antialiased`} suppressHydrationWarning>
         <SchoolBrandingProvider>
           {children}
           <SystemStatusToastContainer />
