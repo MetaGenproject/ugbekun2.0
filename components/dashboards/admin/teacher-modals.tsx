@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
+import { getValidPhotoUrl } from '@/lib/utils'
 import {
   X,
   Loader2,
@@ -808,9 +809,16 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                       )}
                     </div>
                     <div className="flex items-center gap-4">
-                      {photo ? (
+                      {getValidPhotoUrl(photo) ? (
                         <div className="relative w-16 h-16 rounded-2xl border-2 border-blue-500 overflow-hidden shadow-sm shrink-0 bg-white">
-                          <img src={photo} alt="Staff preview" className="w-full h-full object-cover" />
+                          <img
+                            src={getValidPhotoUrl(photo)!}
+                            alt="Staff preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none';
+                            }}
+                          />
                         </div>
                       ) : (
                         <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0">
@@ -1669,9 +1677,16 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
                 )}
               </div>
               <div className="flex items-center gap-4">
-                {photo ? (
+                {getValidPhotoUrl(photo) ? (
                   <div className="relative w-16 h-16 rounded-2xl border-2 border-blue-500 overflow-hidden shadow-sm shrink-0 bg-white">
-                    <img src={photo} alt="Staff preview" className="w-full h-full object-cover" />
+                    <img
+                      src={getValidPhotoUrl(photo)!}
+                      alt="Staff preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                      }}
+                    />
                   </div>
                 ) : (
                   <div className="w-16 h-16 rounded-2xl border-2 border-dashed border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0">

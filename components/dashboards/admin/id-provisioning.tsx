@@ -9,6 +9,7 @@ import {
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { toast } from 'sonner'
+import { getValidPhotoUrl } from '@/lib/utils'
 
 interface IdCard {
   id: number
@@ -516,8 +517,15 @@ export function IdProvisioning() {
                       <TableCell className="text-xs">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center font-bold text-[9px] overflow-hidden border border-slate-200">
-                            {card.photo ? (
-                              <img src={card.photo} alt={card.name} className="w-full h-full object-cover" />
+                            {getValidPhotoUrl(card.photo) ? (
+                              <img
+                                src={getValidPhotoUrl(card.photo)!}
+                                alt={card.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                              />
                             ) : (
                               card.name.substring(0, 2).toUpperCase()
                             )}

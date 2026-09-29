@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints, BASE_URL } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
+import { getValidPhotoUrl } from '@/lib/utils'
 import {
   UserPlus,
   Users,
@@ -2350,7 +2351,18 @@ export function StudentOnboarding() {
                               <div key={p.id} className="p-3 hover:bg-slate-50 flex items-center justify-between gap-3 transition">
                                 <div className="min-w-0 flex items-center gap-2.5">
                                   <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-                                    {p.photo ? <img src={p.photo} alt={p.name} className="w-full h-full object-cover" /> : p.name.charAt(0)}
+                                    {getValidPhotoUrl(p.photo) ? (
+                                      <img
+                                        src={getValidPhotoUrl(p.photo)!}
+                                        alt={p.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      p.name.charAt(0)
+                                    )}
                                   </div>
                                   <div className="min-w-0">
                                     <h5 className="font-bold text-xs text-slate-900 truncate">{p.name}</h5>
@@ -2380,9 +2392,18 @@ export function StudentOnboarding() {
                       <div className="p-3 bg-white border border-emerald-300 rounded-xl flex items-center justify-between gap-3 shadow-sm">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm overflow-hidden shrink-0">
-                            {selectedParentPreview.photo ? (
-                              <img src={selectedParentPreview.photo} alt={selectedParentPreview.name} className="w-full h-full object-cover" />
-                            ) : selectedParentPreview.name.charAt(0)}
+                            {getValidPhotoUrl(selectedParentPreview.photo) ? (
+                              <img
+                                src={getValidPhotoUrl(selectedParentPreview.photo)!}
+                                alt={selectedParentPreview.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              selectedParentPreview.name.charAt(0)
+                            )}
                           </div>
                           <div>
                             <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
