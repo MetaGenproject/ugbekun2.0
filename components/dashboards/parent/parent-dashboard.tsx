@@ -71,6 +71,9 @@ interface ChildProfile {
   schoolName?: string | null
   schoolTagline?: string | null
   schoolLogoUrl?: string | null
+  schoolAddress?: string | null
+  schoolPhone?: string | null
+  schoolEmail?: string | null
   academicSession?: string | null
   currentTerm?: string | null
   primaryColor?: string | null
@@ -985,6 +988,9 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                 schoolName: profile.schoolName || profile.branchName || undefined,
                 tagline: profile.schoolTagline || undefined,
                 logoUrl: profile.schoolLogoUrl || undefined,
+                address: profile.schoolAddress || undefined,
+                phone: profile.schoolPhone || undefined,
+                email: profile.schoolEmail || undefined,
                 academicSession: profile.academicSession || undefined,
                 currentTerm: profile.currentTerm || undefined,
                 primaryColor: profile.primaryColor || undefined,
@@ -1680,6 +1686,134 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                       All parent checklist items clear.
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* School Campus & Official Contact Information Card */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    <Building2 size={15} className="text-blue-600" />
+                    School Campus & Contact
+                  </h3>
+                  <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                    {profile?.branchName || 'Campus Info'}
+                  </span>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  {/* Name & Tagline */}
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    {profile?.schoolLogoUrl ? (
+                      <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden shadow-2xs">
+                        <img
+                          src={profile.schoolLogoUrl}
+                          alt={profile.schoolName || 'School Logo'}
+                          className="w-full h-full object-contain rounded-lg"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black shrink-0 shadow-2xs">
+                        <Building2 size={18} />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h4 className="font-extrabold text-slate-900 text-sm truncate">
+                        {profile?.schoolName || profile?.branchName || 'School Administration'}
+                      </h4>
+                      {profile?.schoolTagline && (
+                        <p className="text-[11px] text-slate-500 font-medium italic mt-0.5">
+                          &ldquo;{profile.schoolTagline}&rdquo;
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {profile?.currentTerm && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700">
+                            {profile.currentTerm}
+                          </span>
+                        )}
+                        {profile?.academicSession && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-700">
+                            {profile.academicSession}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Details List */}
+                  <div className="space-y-2 pt-1 text-slate-600">
+                    {profile?.schoolAddress && (
+                      <div className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition">
+                        <MapPin size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                        <span className="text-[11px] font-medium leading-relaxed text-slate-700">
+                          {profile.schoolAddress}
+                        </span>
+                      </div>
+                    )}
+
+                    {profile?.schoolPhone && (
+                      <a
+                        href={`tel:${profile.schoolPhone}`}
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-700 transition font-medium group"
+                      >
+                        <Phone size={14} className="text-emerald-500 group-hover:scale-110 transition shrink-0" />
+                        <span className="text-[11px] font-bold">{profile.schoolPhone}</span>
+                        <span className="ml-auto text-[10px] text-blue-600 font-semibold opacity-0 group-hover:opacity-100 transition">
+                          Call →
+                        </span>
+                      </a>
+                    )}
+
+                    {profile?.schoolEmail && (
+                      <a
+                        href={`mailto:${profile.schoolEmail}`}
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 transition font-medium group"
+                      >
+                        <Mail size={14} className="text-indigo-500 group-hover:scale-110 transition shrink-0" />
+                        <span className="text-[11px] font-bold truncate">{profile.schoolEmail}</span>
+                        <span className="ml-auto text-[10px] text-indigo-600 font-semibold opacity-0 group-hover:opacity-100 transition shrink-0">
+                          Email →
+                        </span>
+                      </a>
+                    )}
+
+                    {profile?.whatsappNo && (
+                      <a
+                        href={`https://wa.me/${profile.whatsappNo.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 transition font-medium group"
+                      >
+                        <MessageSquare size={14} className="text-emerald-600 group-hover:scale-110 transition shrink-0" />
+                        <span className="text-[11px] font-bold">WhatsApp Support</span>
+                        <span className="ml-auto text-[10px] text-emerald-600 font-semibold opacity-0 group-hover:opacity-100 transition shrink-0">
+                          Chat →
+                        </span>
+                      </a>
+                    )}
+
+                    {profile?.website && (
+                      <a
+                        href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-sky-50 text-slate-700 hover:text-sky-700 transition font-medium group"
+                      >
+                        <Globe size={14} className="text-sky-500 group-hover:scale-110 transition shrink-0" />
+                        <span className="text-[11px] font-bold truncate">{profile.website.replace(/^https?:\/\//, '')}</span>
+                        <span className="ml-auto text-[10px] text-sky-600 font-semibold opacity-0 group-hover:opacity-100 transition shrink-0">
+                          Visit →
+                        </span>
+                      </a>
+                    )}
+
+                    {!profile?.schoolAddress && !profile?.schoolPhone && !profile?.schoolEmail && (
+                      <p className="text-[11px] text-slate-400 italic py-2 text-center">
+                        Official campus contact information will appear here once saved by administration.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

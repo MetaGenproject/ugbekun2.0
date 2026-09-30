@@ -289,6 +289,24 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         </button>
       </div>
 
+      {/* School Campus Isolation & Parent Visibility Notice */}
+      <div className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 text-blue-900 shadow-2xs">
+        <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
+          <Building2 size={18} />
+        </div>
+        <div className="text-xs space-y-0.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold text-blue-950 text-sm">School Campus Configuration</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-200/70 text-blue-800">
+              Campus Scoped
+            </span>
+          </div>
+          <p className="text-blue-800/90 leading-relaxed font-medium">
+            This configuration is strictly for <strong>your school campus</strong>. The official name, contact numbers, address, logo, and branding saved here will be synchronized directly to your school branch profile, printed on official student fee receipts, and displayed on your parents&apos; portal overview.
+          </p>
+        </div>
+      </div>
+
       {/* 1. SCHOOL INFORMATION */}
       {activeTab === 'school-info' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-3xl mx-auto space-y-6">

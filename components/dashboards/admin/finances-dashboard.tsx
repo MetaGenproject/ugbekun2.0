@@ -33,11 +33,15 @@ import {
   AlertCircle,
   BookOpen,
   Pencil,
-  Ban
+  Ban,
+  Receipt,
+  Edit3
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { toast } from 'sonner'
+import { FeesCollectionDesk } from './fees-collection-desk'
+import { EditFeeTypeModal, EditFeeGroupModal, FeeReceiptModal } from './fee-management-modals'
 import { IncomeVsExpensesChart, AnnualFeeSummaryCard } from './financial-visuals'
 
 export interface OverviewData {
@@ -177,7 +181,7 @@ export interface BatchPreviewData {
 
 export function FinancesDashboard() {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'invoices' | 'bulk-collections' | 'feetypes' | 'allocation' | 'reports' | 'office-finance'
+    'overview' | 'collections' | 'invoices' | 'bulk-collections' | 'feetypes' | 'allocation' | 'reports' | 'office-finance'
   >('overview')
 
   // Core Data
@@ -279,6 +283,35 @@ export function FinancesDashboard() {
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('Bank Transfer')
   const [payReference, setPayReference] = useState('')
+
+  // Edit Fee Type & Fee Group Modal State
+  const [editingFeeType, setEditingFeeType] = useState<FeeType | null>(null)
+  const [isEditFeeTypeOpen, setIsEditFeeTypeOpen] = useState(false)
+  const [editingFeeGroup, setEditingFeeGroup] = useState<FeeGroup | null>(null)
+  const [isEditFeeGroupOpen, setIsEditFeeGroupOpen] = useState(false)
+  const [activeReceiptModalData, setActiveReceiptModalData] = useState<any | null>(null)
+
+  const handleDeleteFeeType = async (id: number, name: string) => {
+    if (!confirm(`Are you sure you want to delete or deactivate Fee Type '${name}'?`)) return
+    try {
+      await apiSlice.delete(endpoints.admin.feeTypeItem(id))
+      toast.success(`Fee Type '${name}' deleted successfully.`)
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete fee type.')
+    }
+  }
+
+  const handleDeleteFeeGroup = async (id: number, name: string) => {
+    if (!confirm(`Are you sure you want to delete Fee Group '${name}'?`)) return
+    try {
+      await apiSlice.delete(endpoints.admin.feeGroupItem(id))
+      toast.success(`Fee Group '${name}' deleted successfully.`)
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete fee group.')
+    }
+  }
 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -679,19 +712,31 @@ export function FinancesDashboard() {
 
   const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!payInvoice || !payAmount) return
+    if (!payInvoice) return
     try {
-      await apiSlice.post(endpoints.admin.bulkPaymentsPost, {
-        payments: [
-          {
-            invoiceId: payInvoice.id,
-            amountPaid: parseFloat(payAmount),
-            paymentMethod: payMethod,
-            reference: payReference
-          }
-        ]
-      })
-      toast.success(`Payment receipt logged for Invoice #${payInvoice.invoiceNo}.`)
+      const amt = parseFloat(payAmount)
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.feeInvoicePayments(payInvoice.id),
+        {
+          amount: amt,
+          paymentMethod: payMethod,
+          reference: payReference || `REC-${Date.now().toString().slice(-6)}`,
+          note: payNote,
+        }
+      )
+      const receiptData = {
+        amount: amt,
+        method: payMethod,
+        reference: payReference || `REC-${Date.now().toString().slice(-6)}`,
+        paidAt: new Date().toISOString(),
+        student: payInvoice.student,
+        invoice: {
+          ...payInvoice,
+          balanceAmount: Math.max(0, Number(payInvoice.balanceAmount || payInvoice.totalAmount) - amt),
+        },
+      }
+      setActiveReceiptModalData(receiptData)
+      toast.success(res?.message || `Payment receipt logged for Invoice #${payInvoice.invoiceNo}.`)
       setPayInvoice(null)
       fetchInitialData()
       fetchFilteredInvoices()
@@ -1004,6 +1049,14 @@ export function FinancesDashboard() {
           <BarChart3 size={18} /> Overview & Analytics
         </button>
         <button
+          onClick={() => setActiveTab('collections')}
+          className={`flex items-center gap-2 px-5 py-3.5 border-b-2 font-semibold text-sm transition cursor-pointer whitespace-nowrap ${
+            activeTab === 'collections' ? 'border-emerald-600 text-emerald-700 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Receipt size={18} /> Fees Collection Desk
+        </button>
+        <button
           onClick={() => setActiveTab('invoices')}
           className={`flex items-center gap-2 px-5 py-3.5 border-b-2 font-semibold text-sm transition cursor-pointer whitespace-nowrap ${
             activeTab === 'invoices' ? 'border-emerald-600 text-emerald-700 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -1110,6 +1163,15 @@ export function FinancesDashboard() {
             </Table>
           </div>
         </div>
+      )}
+
+      {/* TAB: FEES COLLECTION & CASHIER DESK */}
+      {activeTab === 'collections' && (
+        <FeesCollectionDesk
+          classes={classes}
+          sessionId={selectedSessionId}
+          onRefreshParent={fetchInitialData}
+        />
       )}
 
       {/* TAB 2: INVOICES & BATCH DUES POSTING */}
@@ -1369,12 +1431,35 @@ export function FinancesDashboard() {
                   <p className="py-6 text-xs text-slate-400 text-center">No fee types yet. Use Create Fee Types to add one or more entries.</p>
                 ) : (
                   feeTypes.map((ft) => (
-                    <div key={ft.id} className="py-2.5 flex items-center justify-between text-xs">
+                    <div key={ft.id} className="py-2.5 flex items-center justify-between text-xs hover:bg-slate-50/80 px-2 rounded-xl transition">
                       <div>
                         <div className="font-bold text-slate-900">{ft.name} ({ft.code})</div>
                         <div className="text-[11px] text-slate-400 capitalize">{ft.frequency}</div>
                       </div>
-                      <div className="font-bold text-emerald-700 text-sm">₦{Number(ft.amount).toLocaleString()}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="font-bold text-emerald-700 text-sm">₦{Number(ft.amount).toLocaleString()}</div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFeeType(ft)
+                              setIsEditFeeTypeOpen(true)
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                            title="Edit Fee Type"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFeeType(ft.id, ft.name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Delete Fee Type"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))
                 )}
@@ -1410,13 +1495,32 @@ export function FinancesDashboard() {
                         <p className="text-[11px] text-slate-600">
                           Classes: {allocated.length ? allocated.map((cls) => cls.name).join(', ') : 'Not allocated yet'}
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => openAllocateModal(fg)}
-                          className="mt-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded-lg text-[11px] font-bold cursor-pointer"
-                        >
-                          Allocate to classes
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => openAllocateModal(fg)}
+                            className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded-lg text-[11px] font-bold cursor-pointer"
+                          >
+                            Allocate to classes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFeeGroup(fg)
+                              setIsEditFeeGroupOpen(true)
+                            }}
+                            className="px-3 py-1.5 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                          >
+                            <Pencil size={11} /> Edit Bundle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFeeGroup(fg.id, fg.name)}
+                            className="px-3 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        </div>
                       </div>
                     )
                   })
@@ -2568,6 +2672,37 @@ export function FinancesDashboard() {
           </div>
         </div>
       )}
+
+      {/* EDIT FEE TYPE MODAL */}
+      <EditFeeTypeModal
+        isOpen={isEditFeeTypeOpen}
+        onClose={() => {
+          setIsEditFeeTypeOpen(false)
+          setEditingFeeType(null)
+        }}
+        feeType={editingFeeType}
+        onSaved={fetchInitialData}
+      />
+
+      {/* EDIT FEE GROUP MODAL */}
+      <EditFeeGroupModal
+        isOpen={isEditFeeGroupOpen}
+        onClose={() => {
+          setIsEditFeeGroupOpen(false)
+          setEditingFeeGroup(null)
+        }}
+        feeGroup={editingFeeGroup}
+        allFeeTypes={feeTypes}
+        classes={classes}
+        onSaved={fetchInitialData}
+      />
+
+      {/* FEE RECEIPT MODAL */}
+      <FeeReceiptModal
+        isOpen={Boolean(activeReceiptModalData)}
+        onClose={() => setActiveReceiptModalData(null)}
+        receipt={activeReceiptModalData}
+      />
     </div>
   )
 }

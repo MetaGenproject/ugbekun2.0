@@ -1,7 +1,7 @@
 'use client'
 
 import { useSchoolBranding, type SchoolBrandingData } from '@/lib/schoolBrandingContext'
-import { School, MessageCircle, Globe } from 'lucide-react'
+import { School, MessageCircle, Globe, Phone, Mail, MapPin } from 'lucide-react'
 
 type SchoolHeaderOverride = Partial<
   Pick<
@@ -9,6 +9,9 @@ type SchoolHeaderOverride = Partial<
     | 'schoolName'
     | 'tagline'
     | 'logoUrl'
+    | 'address'
+    | 'phone'
+    | 'email'
     | 'academicSession'
     | 'currentTerm'
     | 'primaryColor'
@@ -25,6 +28,9 @@ export function SchoolHeader({ school }: { school?: SchoolHeaderOverride | null 
     schoolName: school?.schoolName || branding.schoolName,
     tagline: school?.tagline || branding.tagline,
     logoUrl: school?.logoUrl ?? branding.logoUrl,
+    address: school?.address ?? branding.address,
+    phone: school?.phone ?? branding.phone,
+    email: school?.email ?? branding.email,
     academicSession: school?.academicSession || branding.academicSession,
     currentTerm: school?.currentTerm || branding.currentTerm,
     primaryColor: school?.primaryColor || branding.primaryColor,
@@ -66,19 +72,41 @@ export function SchoolHeader({ school }: { school?: SchoolHeaderOverride | null 
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-black text-slate-900 tracking-tight truncate">{display.schoolName}</h2>
             <p className="text-xs text-slate-500 font-semibold truncate mt-0.5">{display.tagline}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-2 mt-1">
               <span
                 className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full text-white uppercase tracking-wider"
                 style={{ backgroundColor: display.secondaryColor || '#0284c7' }}
               >
                 {display.currentTerm} ({display.academicSession})
               </span>
+              {display.address && (
+                <span className="text-[11px] text-slate-500 font-medium truncate flex items-center gap-1 max-w-[280px]">
+                  <MapPin size={11} className="text-slate-400 shrink-0" />
+                  <span className="truncate">{display.address}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         {/* Action Contacts */}
-        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center shrink-0">
+          {display.phone && (
+            <a
+              href={`tel:${display.phone}`}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Phone size={13} className="text-blue-600" /> {display.phone}
+            </a>
+          )}
+          {display.email && (
+            <a
+              href={`mailto:${display.email}`}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Mail size={13} className="text-indigo-600" /> Email
+            </a>
+          )}
           {display.website && (
             <a
               href={display.website.startsWith('http') ? display.website : `https://${display.website}`}

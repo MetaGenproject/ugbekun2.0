@@ -26,11 +26,12 @@ import {
   Download,
   Phone,
   Mail,
-  Shield,
   Plus,
-  Award
+  Award,
+  Camera
 } from 'lucide-react'
 import { EditStudentModal } from './student-modals'
+import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
 import { StudentPromotions } from './student-promotions'
 import { IdProvisioning } from './id-provisioning'
 import {
@@ -124,6 +125,27 @@ export function ClassroomStudents() {
   // Edit student modal state
   const [editingStudentId, setEditingStudentId] = useState<number | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  // Student Photo Snap Modal State
+  const [photoStudent, setPhotoStudent] = useState<Student | null>(null)
+
+  const handleSaveStudentPhoto = async (newPhoto: string | null) => {
+    if (!photoStudent) return
+    try {
+      await apiSlice.post(endpoints.admin.uploadStudentPhoto(photoStudent.id), {
+        photoBase64: newPhoto || '',
+        photo: newPhoto || '',
+      })
+      setStudents(prev =>
+        prev.map(s => (s.id === photoStudent.id ? { ...s, photo: newPhoto } : s))
+      )
+      if (selectedStudentForProfile?.id === photoStudent.id) {
+        setSelectedStudentForProfile(prev => prev ? { ...prev, photo: newPhoto } : null)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update student photo')
+    }
+  }
 
   // Load Classes & Sections configurations
   useEffect(() => {
@@ -520,6 +542,7 @@ export function ClassroomStudents() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-14">Photo</TableHead>
                           <TableHead className="w-32">Reg. No</TableHead>
                           <TableHead>Student Name</TableHead>
                           <TableHead>Gender</TableHead>
@@ -532,6 +555,29 @@ export function ClassroomStudents() {
                       <TableBody>
                         {filteredStudents.map((student) => (
                           <TableRow key={student.id} className="hover:bg-slate-50/50">
+                            <TableCell>
+                              <div className="relative group w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center">
+                                {student.photo ? (
+                                  <img
+                                    src={student.photo}
+                                    alt={student.firstName || 'Student'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-xs font-black text-slate-500 uppercase">
+                                    {(student.firstName?.[0] || 'S') + (student.lastName?.[0] || '')}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setPhotoStudent(student)}
+                                  className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                                  title="Snap or Upload Photo"
+                                >
+                                  <Camera size={14} />
+                                </button>
+                              </div>
+                            </TableCell>
                             <TableCell className="font-bold text-slate-900">{student.registerNo || '—'}</TableCell>
                             <TableCell className="font-bold text-slate-800">
                               <button 
@@ -578,6 +624,13 @@ export function ClassroomStudents() {
                               </button>
                             </TableCell>
                             <TableCell className="text-right space-x-1">
+                              <button
+                                onClick={() => setPhotoStudent(student)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
+                                title="Snap / Upload Student Photo"
+                              >
+                                <Camera size={13} /> Photo
+                              </button>
                               <button
                                 onClick={() => setManageUserCredentials({ userId: (student as any).userId || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
@@ -979,6 +1032,16 @@ export function ClassroomStudents() {
         roleName={manageUserCredentials?.role}
         isOpen={Boolean(manageUserCredentials)}
         onClose={() => setManageUserCredentials(null)}
+      />
+
+      {/* STUDENT PHOTO CAPTURE / UPLOAD MODAL */}
+      <StudentPhotoCaptureModal
+        isOpen={Boolean(photoStudent)}
+        onClose={() => setPhotoStudent(null)}
+        studentName={[photoStudent?.firstName, photoStudent?.lastName].filter(Boolean).join(' ') || 'Student'}
+        studentRegNo={photoStudent?.registerNo}
+        currentPhoto={photoStudent?.photo}
+        onSavePhoto={handleSaveStudentPhoto}
       />
     </div>
   )

@@ -12,8 +12,12 @@ import {
   Users, 
   FileText, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  Camera,
+  Upload,
+  Trash2
 } from 'lucide-react'
+import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
 
 interface Section {
   id: number
@@ -42,6 +46,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -391,15 +396,51 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Photo URL</label>
-                    <input
-                      type="text"
-                      value={formData.photo}
-                      onChange={e => handleChange('photo', e.target.value)}
-                      className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none"
-                      placeholder="https://cloudinary.com/sample.jpg or base64"
-                    />
+                  <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                    <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                      Student Passport Photograph
+                    </label>
+                    <div className="flex items-center gap-4">
+                      {formData.photo ? (
+                        <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-sm shrink-0 bg-white">
+                          <img
+                            src={formData.photo}
+                            alt="Student Passport"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 shrink-0">
+                          <User size={28} />
+                          <span className="text-[9px] font-bold mt-1 text-slate-400">No Photo</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-2 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsPhotoModalOpen(true)}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                          >
+                            <Camera size={14} /> Snap with Camera / Upload
+                          </button>
+                          {formData.photo && (
+                            <button
+                              type="button"
+                              onClick={() => handleChange('photo', '')}
+                              className="px-2.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                              title="Remove Photo"
+                            >
+                              <Trash2 size={13} /> Remove
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Use live webcam to snap student passport, or upload image file.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -654,6 +695,17 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
           )}
         </div>
       </div>
+
+      <StudentPhotoCaptureModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        studentName={`${formData.firstName} ${formData.lastName}`.trim() || 'Student'}
+        studentRegNo={formData.registerNo}
+        currentPhoto={formData.photo}
+        onSavePhoto={(newPhoto) => {
+          handleChange('photo', newPhoto || '')
+        }}
+      />
     </div>
   )
 }
