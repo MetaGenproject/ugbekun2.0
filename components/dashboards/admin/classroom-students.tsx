@@ -89,6 +89,31 @@ interface ClassroomStats {
   female: number
 }
 
+interface AlumniStudent {
+  id: number
+  studentId: number
+  userId: number | null
+  registerNo: string
+  name: string
+  firstName: string | null
+  lastName: string | null
+  gender: string
+  photo: string | null
+  className: string
+  sectionName: string
+  classId?: number
+  sectionId?: number
+  gradYear: string
+  exitDate: string
+  active: boolean // true = account active (can log in to check results); false = blocked by school
+  userActive: boolean
+  username: string | null
+  lastLogin: string | null
+  parentName: string
+  parentMobile: string
+  parentEmail: string
+}
+
 type DirectoryTab = 'all' | 'profile' | 'promotion' | 'transfer' | 'alumni' | 'medical' | 'documents' | 'id-cards'
 
 export function ClassroomStudents() {
@@ -289,7 +314,136 @@ export function ClassroomStudents() {
     ? `${selectedClassObj.name} - Section ${selectedSectionObj.name}`
     : ''
 
-  const [alumniRecords, setAlumniRecords] = useState<Array<{ id: number; regNo: string; name: string; gradYear: string; finalGrade: string; status: string; university: string }>>([])
+  // Alumni State & Management
+  const [alumniRecords, setAlumniRecords] = useState<AlumniStudent[]>([])
+  const [isLoadingAlumni, setIsLoadingAlumni] = useState(false)
+  const [alumniSearchQuery, setAlumniSearchQuery] = useState('')
+  const [alumniCurrentPage, setAlumniCurrentPage] = useState(1)
+  const [alumniPageSize, setAlumniPageSize] = useState(10)
+  const [movingToAlumniId, setMovingToAlumniId] = useState<number | null>(null)
+  const [restoringAlumniId, setRestoringAlumniId] = useState<number | null>(null)
+
+  const loadAlumni = async () => {
+    setIsLoadingAlumni(true)
+    try {
+      const res = await apiSlice.get<{ success: boolean; alumni: AlumniStudent[] }>(endpoints.admin.alumni)
+      setAlumniRecords(res.alumni || [])
+    } catch (err) {
+      console.error('Failed to load alumni records:', err)
+    } finally {
+      setIsLoadingAlumni(false)
+    }
+  }
+
+  useEffect(() => {
+    loadAlumni()
+  }, [])
+
+  useEffect(() => {
+    setAlumniCurrentPage(1)
+  }, [alumniSearchQuery, alumniPageSize])
+
+  const handleMoveToAlumni = async (student: Student) => {
+    const sName = [student.firstName, student.lastName].filter(Boolean).join(' ') || 'this student'
+    const confirmMove = window.confirm(
+      `Move ${sName} to Alumni Account?\n\n` +
+      `• Student will be moved to the Alumni directory instead of being deleted.\n` +
+      `• They will be removed from the active classroom roster.\n` +
+      `• Their login account remains ACTIVE so they can still log in to view their results and past transcripts.\n` +
+      `• If the school blocks them, their access will be suspended.`
+    )
+    if (!confirmMove) return
+
+    setMovingToAlumniId(student.id)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.moveToAlumni(student.id),
+        {}
+      )
+      alert(res.message || `${sName} moved to Alumni successfully.`)
+      // Refresh current classroom roster
+      if (selectedClassId && selectedSectionId) {
+        const rosterRes = await apiSlice.get<{
+          success: boolean
+          students: Student[]
+          formTeacher: string
+          stats: ClassroomStats
+        }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
+        setStudents(rosterRes.students)
+        setFormTeacher(rosterRes.formTeacher)
+        setStats(rosterRes.stats)
+      }
+      loadAlumni()
+      if (selectedStudentForProfile?.id === student.id) {
+        setActiveTab('alumni')
+      }
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to move student to alumni.')
+    } finally {
+      setMovingToAlumniId(null)
+    }
+  }
+
+  const handleRestoreFromAlumni = async (alm: AlumniStudent) => {
+    const confirmRestore = window.confirm(
+      `Restore ${alm.name} to Active Student Roster?\n\n` +
+      `This will return the student to the active classroom list.`
+    )
+    if (!confirmRestore) return
+
+    setRestoringAlumniId(alm.studentId)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.restoreFromAlumni(alm.studentId),
+        {}
+      )
+      alert(res.message || `${alm.name} restored to active student roster.`)
+      loadAlumni()
+      if (selectedClassId && selectedSectionId) {
+        const rosterRes = await apiSlice.get<{
+          success: boolean
+          students: Student[]
+          formTeacher: string
+          stats: ClassroomStats
+        }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
+        setStudents(rosterRes.students)
+        setFormTeacher(rosterRes.formTeacher)
+        setStats(rosterRes.stats)
+      }
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to restore student.')
+    } finally {
+      setRestoringAlumniId(null)
+    }
+  }
+
+  const handleToggleAlumniStatus = async (alm: AlumniStudent) => {
+    setTogglingStatusId(alm.studentId)
+    try {
+      await apiSlice.post(endpoints.admin.toggleStudentStatus(alm.studentId), {})
+      setAlumniRecords(prev =>
+        prev.map(a => (a.studentId === alm.studentId ? { ...a, active: !a.active } : a))
+      )
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Status update failed.')
+    } finally {
+      setTogglingStatusId(null)
+    }
+  }
+
+  const filteredAlumni = alumniRecords.filter((alm) => {
+    const q = alumniSearchQuery.toLowerCase()
+    const name = (alm.name || '').toLowerCase()
+    const reg = (alm.registerNo || '').toLowerCase()
+    const cls = (alm.className || '').toLowerCase()
+    return name.includes(q) || reg.includes(q) || cls.includes(q)
+  })
+
+  const totalAlumni = filteredAlumni.length
+  const totalAlumniPages = Math.max(1, Math.ceil(totalAlumni / alumniPageSize))
+  const alumniStartIndex = (alumniCurrentPage - 1) * alumniPageSize
+  const alumniEndIndex = Math.min(alumniStartIndex + alumniPageSize, totalAlumni)
+  const paginatedAlumni = filteredAlumni.slice(alumniStartIndex, alumniEndIndex)
 
   return (
     <div className="space-y-6">
@@ -365,6 +519,15 @@ export function ClassroomStudents() {
           }`}
         >
           <Award size={15} /> Student Alumni
+          {alumniRecords.length > 0 && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'alumni' ? 'bg-white/25 text-white' : 'bg-purple-100 text-purple-700'
+              }`}
+            >
+              {alumniRecords.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -691,6 +854,14 @@ export function ClassroomStudents() {
                                     <Eye size={13} /> View Profile
                                   </button>
                                   <button
+                                    onClick={() => handleMoveToAlumni(student)}
+                                    disabled={movingToAlumniId === student.id}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition cursor-pointer"
+                                    title="Move to Alumni (Keep account active for results instead of deleting)"
+                                  >
+                                    <GraduationCap size={13} /> Alumni
+                                  </button>
+                                  <button
                                     onClick={() => {
                                       setEditingStudentId(student.id)
                                       setIsEditModalOpen(true)
@@ -845,12 +1016,22 @@ export function ClassroomStudents() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setActiveTab('all')}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition self-start md:self-auto cursor-pointer"
-                >
-                  ← Back to All Students
-                </button>
+                <div className="flex items-center gap-2 self-start md:self-auto">
+                  <button
+                    onClick={() => selectedStudentForProfile && handleMoveToAlumni(selectedStudentForProfile)}
+                    disabled={movingToAlumniId === selectedStudentForProfile?.id}
+                    className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition flex items-center gap-1.5 border border-purple-200 cursor-pointer"
+                    title="Move to Alumni (Keep account active for result check instead of deleting)"
+                  >
+                    <GraduationCap size={15} /> Move to Alumni
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('all')}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                  >
+                    ← Back to All Students
+                  </button>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-3 gap-6">
@@ -1016,52 +1197,303 @@ export function ClassroomStudents() {
 
       {/* TAB 5: STUDENT ALUMNI */}
       {activeTab === 'alumni' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-5">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
-                <Award className="text-amber-500" size={20} /> Graduated Alumni Directory
+                <Award className="text-amber-500" size={20} /> Graduated Alumni & Non-Enrolled Directory
               </h3>
-              <p className="text-xs text-slate-500 font-medium">Archive of past graduated students, exit records, and university placement history.</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Students who completed or left school are retained here with active result-checking privileges instead of deletion.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Search alumni by name, reg, class..."
+                  value={alumniSearchQuery}
+                  onChange={(e) => setAlumniSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={loadAlumni}
+                disabled={isLoadingAlumni}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                title="Refresh Alumni List"
+              >
+                <Loader2 size={16} className={isLoadingAlumni ? 'animate-spin' : ''} />
+              </button>
             </div>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Alumni Reg No</TableHead>
-                <TableHead>Student Name</TableHead>
-                <TableHead>Graduation Year</TableHead>
-                <TableHead>Final Grade</TableHead>
-                <TableHead>University / Placement</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {alumniRecords.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
-                    No graduated alumni records found for this school branch.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                alumniRecords.map((alm) => (
-                  <TableRow key={alm.id}>
-                    <TableCell className="font-mono font-bold text-slate-900">{alm.regNo}</TableCell>
-                    <TableCell className="font-bold text-slate-800">{alm.name}</TableCell>
-                    <TableCell><span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-xs">{alm.gradYear}</span></TableCell>
-                    <TableCell className="font-semibold text-slate-700">{alm.finalGrade}</TableCell>
-                    <TableCell className="font-medium text-slate-600">{alm.university}</TableCell>
-                    <TableCell className="text-right">
-                      <button onClick={() => alert(`Downloading exit transcript for ${alm.name}`)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition flex items-center gap-1.5 ml-auto">
-                        <Download size={13} /> Transcript
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Alumni</p>
+                <p className="text-xl font-black text-slate-900 mt-0.5">{alumniRecords.length}</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                <Users size={18} />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/40 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Active Portal Access</p>
+                <p className="text-xl font-black text-emerald-800 mt-0.5">
+                  {alumniRecords.filter((a) => a.active).length}
+                </p>
+                <p className="text-[10px] text-emerald-600">Can log in to check results</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <UserCheck size={18} />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-rose-100 bg-rose-50/40 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Blocked by School</p>
+                <p className="text-xl font-black text-rose-800 mt-0.5">
+                  {alumniRecords.filter((a) => !a.active).length}
+                </p>
+                <p className="text-[10px] text-rose-600">Login restricted</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                <EyeOff size={18} />
+              </div>
+            </div>
+          </div>
+
+          {isLoadingAlumni ? (
+            <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-2">
+              <Loader2 size={24} className="animate-spin text-blue-500" />
+              <p className="text-xs font-semibold">Loading alumni records...</p>
+            </div>
+          ) : filteredAlumni.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-sm font-semibold bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
+              <Award size={28} className="text-slate-400" />
+              {alumniRecords.length === 0
+                ? 'No students have been moved to alumni yet. Move students who are not in school to this directory from the Classroom Roster or Student Profile.'
+                : 'No matching alumni found for this search filter.'}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-slate-500 font-bold">#</TableHead>
+                      <TableHead className="w-14">Photo</TableHead>
+                      <TableHead className="w-32">Reg. No</TableHead>
+                      <TableHead>Student Name</TableHead>
+                      <TableHead>Last Class</TableHead>
+                      <TableHead>Exit Year</TableHead>
+                      <TableHead>Parent / Guardian</TableHead>
+                      <TableHead>Portal Access</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedAlumni.map((alm, idx) => (
+                      <TableRow key={alm.id} className="hover:bg-slate-50/50">
+                        <TableCell className="font-extrabold text-slate-400 text-xs">
+                          {alumniStartIndex + idx + 1}
+                        </TableCell>
+                        <TableCell>
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center">
+                            {alm.photo ? (
+                              <img src={alm.photo} alt={alm.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-xs font-black text-slate-500 uppercase">
+                                {(alm.firstName?.[0] || 'A') + (alm.lastName?.[0] || '')}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono font-bold text-slate-900">{alm.registerNo}</TableCell>
+                        <TableCell className="font-bold text-slate-800">
+                          <div>
+                            <span>{alm.name}</span>
+                            {alm.gender && (
+                              <span className="ml-2 text-[10px] font-bold text-slate-400 uppercase">({alm.gender})</span>
+                            )}
+                          </div>
+                          {alm.username && (
+                            <div className="text-[10px] text-slate-400 font-mono">User: @{alm.username}</div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-xs border border-blue-100">
+                            {alm.className} {alm.sectionName ? `(${alm.sectionName})` : ''}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold text-xs">
+                            {alm.gradYear}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-semibold text-slate-800 text-xs">{alm.parentName}</div>
+                          <div className="text-[11px] text-slate-500">{alm.parentMobile}</div>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAlumniStatus(alm)}
+                            disabled={togglingStatusId === alm.studentId}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                              alm.active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                            }`}
+                            title={
+                              alm.active
+                                ? 'Account is ACTIVE. Student can log in to check results. Click to block.'
+                                : 'Account is BLOCKED by school. Student cannot log in. Click to activate.'
+                            }
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${alm.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            {alm.active ? 'Active (Can Log In)' : 'Blocked by School'}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right space-x-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setManageUserCredentials({
+                                userId: alm.userId || alm.studentId,
+                                name: alm.name,
+                                role: 'Student',
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                            title="View / Reset Student Login Credentials"
+                          >
+                            <KeyRound size={13} /> Credentials
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRestoreFromAlumni(alm)}
+                            disabled={restoringAlumniId === alm.studentId}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
+                            title="Restore student back to active classroom roster"
+                          >
+                            <ArrowLeftRight size={13} /> Restore
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Alumni Pagination Controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-100 px-1">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Showing <span className="font-bold text-slate-800">{totalAlumni === 0 ? 0 : alumniStartIndex + 1}</span> to{' '}
+                    <span className="font-bold text-slate-800">{alumniEndIndex}</span> of{' '}
+                    <span className="font-bold text-slate-800">{totalAlumni}</span> alumni records
+                  </p>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                    <span>Per page:</span>
+                    <select
+                      value={alumniPageSize}
+                      onChange={(e) => {
+                        setAlumniPageSize(Number(e.target.value))
+                        setAlumniCurrentPage(1)
+                      }}
+                      className="px-2 py-1 rounded-md border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {totalAlumniPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setAlumniCurrentPage(1)}
+                      disabled={alumniCurrentPage === 1}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                      title="First page"
+                    >
+                      <ChevronsLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAlumniCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={alumniCurrentPage === 1}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                      title="Previous page"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+
+                    <div className="flex items-center gap-1 px-1">
+                      {Array.from({ length: totalAlumniPages }, (_, i) => i + 1)
+                        .filter((page) => {
+                          if (totalAlumniPages <= 7) return true
+                          if (page === 1 || page === totalAlumniPages) return true
+                          return Math.abs(page - alumniCurrentPage) <= 1
+                        })
+                        .map((page, idx, arr) => {
+                          const prev = arr[idx - 1]
+                          return (
+                            <div key={page} className="flex items-center gap-1">
+                              {prev && page - prev > 1 && (
+                                <span className="text-slate-400 text-xs px-1">...</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setAlumniCurrentPage(page)}
+                                className={`min-w-8 h-8 px-2 text-xs font-bold rounded-lg transition cursor-pointer ${
+                                  alumniCurrentPage === page
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </div>
+                          )
+                        })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setAlumniCurrentPage((prev) => Math.min(totalAlumniPages, prev + 1))}
+                      disabled={alumniCurrentPage === totalAlumniPages}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                      title="Next page"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAlumniCurrentPage(totalAlumniPages)}
+                      disabled={alumniCurrentPage === totalAlumniPages}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                      title="Last page"
+                    >
+                      <ChevronsRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
