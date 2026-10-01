@@ -21,6 +21,11 @@ import {
   FolderArchive,
   ArrowLeftRight,
   Eye,
+  EyeOff,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   CheckCircle2,
   KeyRound,
   Download,
@@ -110,8 +115,16 @@ export function ClassroomStudents() {
   const [rosterError, setRosterError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
 
-  // Inline filter query
+  // Inline filter query & table view state
   const [searchQuery, setSearchQuery] = useState('')
+  const [showActions, setShowActions] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reset to first page when query, class, section, or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedClassId, selectedSectionId, pageSize])
 
   // Profile Viewer State
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null)
@@ -262,6 +275,13 @@ export function ClassroomStudents() {
     const query = searchQuery.toLowerCase()
     return fullName.includes(query) || regNo.includes(query)
   })
+
+  // Pagination metrics
+  const totalStudents = filteredStudents.length
+  const totalPages = Math.max(1, Math.ceil(totalStudents / pageSize))
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, totalStudents)
+  const paginatedStudents = filteredStudents.slice(startIndex, endIndex)
 
   const selectedClassObj = classes.find(c => c.id === Number(selectedClassId))
   const selectedSectionObj = availableSections.find(s => s.id === Number(selectedSectionId))
@@ -515,15 +535,31 @@ export function ClassroomStudents() {
                     <p className="text-xs text-slate-400 font-medium">All active students in this classroom.</p>
                   </div>
 
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                    <input
-                      type="text"
-                      placeholder="Filter by name or reg no..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
-                    />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowActions(prev => !prev)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer select-none ${
+                        showActions
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                      title={showActions ? "Hide action buttons" : "Show action buttons"}
+                    >
+                      {showActions ? <EyeOff size={14} /> : <Eye size={14} />}
+                      <span>{showActions ? 'Hide Actions' : 'Show Actions'}</span>
+                    </button>
+
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <input
+                        type="text"
+                        placeholder="Filter by name or reg no..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-4 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -538,131 +574,239 @@ export function ClassroomStudents() {
                     No matching students found in this classroom roster.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-14">Photo</TableHead>
-                          <TableHead className="w-32">Reg. No</TableHead>
-                          <TableHead>Student Name</TableHead>
-                          <TableHead>Gender</TableHead>
-                          <TableHead>Parent / Guardian</TableHead>
-                          <TableHead>Contact Details</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredStudents.map((student) => (
-                          <TableRow key={student.id} className="hover:bg-slate-50/50">
-                            <TableCell>
-                              <div className="relative group w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center">
-                                {student.photo ? (
-                                  <img
-                                    src={student.photo}
-                                    alt={student.firstName || 'Student'}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-xs font-black text-slate-500 uppercase">
-                                    {(student.firstName?.[0] || 'S') + (student.lastName?.[0] || '')}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => setPhotoStudent(student)}
-                                  className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
-                                  title="Snap or Upload Photo"
-                                >
-                                  <Camera size={14} />
-                                </button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-bold text-slate-900">{student.registerNo || '—'}</TableCell>
-                            <TableCell className="font-bold text-slate-800">
-                              <button 
-                                onClick={() => {
-                                  setSelectedStudentForProfile(student)
-                                  setActiveTab('profile')
-                                }}
-                                className="hover:text-blue-600 hover:underline text-left cursor-pointer"
-                              >
-                                {[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}
-                              </button>
-                            </TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border capitalize ${student.gender?.toLowerCase() === 'male'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                  : student.gender?.toLowerCase() === 'female'
-                                    ? 'bg-purple-50 text-purple-700 border-purple-100'
-                                    : 'bg-slate-50 text-slate-700 border-slate-100'
-                                }`}>
-                                {student.gender || '—'}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-semibold text-slate-800">{student.parentName || '—'}</div>
-                              {student.parentRelation && (
-                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{student.parentRelation}</div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-xs font-medium text-slate-600">{student.parentMobile || student.mobileno || '—'}</div>
-                              <div className="text-xs text-slate-400">{student.parentEmail || student.email || '—'}</div>
-                            </TableCell>
-                            <TableCell>
-                              <button
-                                onClick={() => handleToggleStudentStatus(student.id)}
-                                disabled={togglingStatusId === student.id}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${student.active !== false
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                                    : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                                  }`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                {student.active !== false ? 'Active' : 'Suspended'}
-                              </button>
-                            </TableCell>
-                            <TableCell className="text-right space-x-1">
-                              <button
-                                onClick={() => setPhotoStudent(student)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
-                                title="Snap / Upload Student Photo"
-                              >
-                                <Camera size={13} /> Photo
-                              </button>
-                              <button
-                                onClick={() => setManageUserCredentials({ userId: (student as any).userId || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
-                                title="View / Reset Password"
-                              >
-                                <KeyRound size={13} /> Credentials
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedStudentForProfile(student)
-                                  setActiveTab('profile')
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                                title="View Student Profile"
-                              >
-                                <Eye size={13} /> View Profile
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingStudentId(student.id)
-                                  setIsEditModalOpen(true)
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-[#0063a6] bg-[#0063a6]/10 hover:bg-[#0063a6] hover:text-white rounded-lg transition"
-                              >
-                                <Edit3 size={13} /> Edit
-                              </button>
-                            </TableCell>
+                  <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12 text-slate-500 font-bold">#</TableHead>
+                            <TableHead className="w-14">Photo</TableHead>
+                            <TableHead className="w-32">Reg. No</TableHead>
+                            <TableHead>Student Name</TableHead>
+                            <TableHead>Gender</TableHead>
+                            <TableHead>Parent / Guardian</TableHead>
+                            <TableHead>Contact Details</TableHead>
+                            <TableHead>Status</TableHead>
+                            {showActions && <TableHead className="text-right">Actions</TableHead>}
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedStudents.map((student, idx) => (
+                            <TableRow key={student.id} className="hover:bg-slate-50/50">
+                              <TableCell className="font-extrabold text-slate-400 text-xs">
+                                {startIndex + idx + 1}
+                              </TableCell>
+                              <TableCell>
+                                <div className="relative group w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center">
+                                  {student.photo ? (
+                                    <img
+                                      src={student.photo}
+                                      alt={student.firstName || 'Student'}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-xs font-black text-slate-500 uppercase">
+                                      {(student.firstName?.[0] || 'S') + (student.lastName?.[0] || '')}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPhotoStudent(student)}
+                                    className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                                    title="Snap or Upload Photo"
+                                  >
+                                    <Camera size={14} />
+                                  </button>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-bold text-slate-900">{student.registerNo || '—'}</TableCell>
+                              <TableCell className="font-bold text-slate-800">
+                                <button 
+                                  onClick={() => {
+                                    setSelectedStudentForProfile(student)
+                                    setActiveTab('profile')
+                                  }}
+                                  className="hover:text-blue-600 hover:underline text-left cursor-pointer"
+                                >
+                                  {[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}
+                                </button>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border capitalize ${student.gender?.toLowerCase() === 'male'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : student.gender?.toLowerCase() === 'female'
+                                      ? 'bg-purple-50 text-purple-700 border-purple-100'
+                                      : 'bg-slate-50 text-slate-700 border-slate-100'
+                                  }`}>
+                                  {student.gender || '—'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-semibold text-slate-800">{student.parentName || '—'}</div>
+                                {student.parentRelation && (
+                                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{student.parentRelation}</div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-xs font-medium text-slate-600">{student.parentMobile || student.mobileno || '—'}</div>
+                                <div className="text-xs text-slate-400">{student.parentEmail || student.email || '—'}</div>
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  onClick={() => handleToggleStudentStatus(student.id)}
+                                  disabled={togglingStatusId === student.id}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${student.active !== false
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                                      : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                                    }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                  {student.active !== false ? 'Active' : 'Suspended'}
+                                </button>
+                              </TableCell>
+                              {showActions && (
+                                <TableCell className="text-right space-x-1">
+                                  <button
+                                    onClick={() => setPhotoStudent(student)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
+                                    title="Snap / Upload Student Photo"
+                                  >
+                                    <Camera size={13} /> Photo
+                                  </button>
+                                  <button
+                                    onClick={() => setManageUserCredentials({ userId: (student as any).userId || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                                    title="View / Reset Password"
+                                  >
+                                    <KeyRound size={13} /> Credentials
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStudentForProfile(student)
+                                      setActiveTab('profile')
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+                                    title="View Student Profile"
+                                  >
+                                    <Eye size={13} /> View Profile
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingStudentId(student.id)
+                                      setIsEditModalOpen(true)
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-[#0063a6] bg-[#0063a6]/10 hover:bg-[#0063a6] hover:text-white rounded-lg transition"
+                                  >
+                                    <Edit3 size={13} /> Edit
+                                  </button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-slate-100 px-1">
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-slate-500 font-medium">
+                          Showing <span className="font-bold text-slate-800">{totalStudents === 0 ? 0 : startIndex + 1}</span> to{' '}
+                          <span className="font-bold text-slate-800">{endIndex}</span> of{' '}
+                          <span className="font-bold text-slate-800">{totalStudents}</span> students
+                        </p>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                          <span>Per page:</span>
+                          <select
+                            value={pageSize}
+                            onChange={(e) => {
+                              setPageSize(Number(e.target.value))
+                              setCurrentPage(1)
+                            }}
+                            className="px-2 py-1 rounded-md border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                          >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {totalPages > 1 && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                            title="First page"
+                          >
+                            <ChevronsLeft size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                            title="Previous page"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+
+                          {/* Page Numbers */}
+                          <div className="flex items-center gap-1 px-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                              .filter(page => {
+                                if (totalPages <= 7) return true
+                                if (page === 1 || page === totalPages) return true
+                                return Math.abs(page - currentPage) <= 1
+                              })
+                              .map((page, idx, arr) => {
+                                const prev = arr[idx - 1]
+                                return (
+                                  <div key={page} className="flex items-center gap-1">
+                                    {prev && page - prev > 1 && (
+                                      <span className="text-slate-400 text-xs px-1">...</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setCurrentPage(page)}
+                                      className={`min-w-8 h-8 px-2 text-xs font-bold rounded-lg transition cursor-pointer ${
+                                        currentPage === page
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {page}
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                            title="Next page"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                            title="Last page"
+                          >
+                            <ChevronsRight size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
