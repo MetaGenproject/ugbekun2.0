@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SystemStatusToastContainer } from '@/components/ui/status-notifier'
 import { SchoolBrandingProvider } from '@/lib/schoolBrandingContext'
+import { GlobalErrorTracker } from '@/components/common/global-error-tracker'
 import './globals.css'
 
 const geist = Geist({ subsets: ["latin"] });
@@ -32,6 +33,7 @@ export default function RootLayout({
       <head />
       <body className={`${geist.className} font-sans antialiased`} suppressHydrationWarning>
         <SchoolBrandingProvider>
+          <GlobalErrorTracker />
           {children}
           <SystemStatusToastContainer />
           {process.env.NODE_ENV === 'production' && <Analytics />}
