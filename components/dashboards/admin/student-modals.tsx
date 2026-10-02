@@ -44,6 +44,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
   const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'contact' | 'parent' | 'additional'>('personal')
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
@@ -238,6 +239,33 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
       setErrorMsg(err instanceof Error ? err.message : 'Failed to update student information.')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!studentId) return
+    const sName = `${formData.firstName} ${formData.lastName}`.trim() || 'this student'
+    const confirmDelete = window.confirm(
+      `Permanently delete account for ${sName}?\n\n` +
+      `• Student will be completely deleted from the school system.\n` +
+      `• Their login portal access will be permanently revoked.\n` +
+      `• This action cannot be undone.\n\n` +
+      `Are you sure you want to permanently delete this account?`
+    )
+    if (!confirmDelete) return
+
+    setIsDeleting(true)
+    try {
+      const res = await apiSlice.delete<{ success: boolean; message: string }>(
+        endpoints.admin.deleteStudent(studentId)
+      )
+      alert(res.message || `${sName} deleted successfully.`)
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to delete student.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -667,28 +695,40 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
               )}
 
               {/* Modal Footer Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200/70 rounded-xl transition"
+                  onClick={handleDelete}
+                  disabled={isDeleting || isSubmitting}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 rounded-xl transition cursor-pointer disabled:opacity-50"
+                  title="Permanently Delete Student Account"
                 >
-                  Cancel
+                  {isDeleting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                  Delete Account
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-[#0063a6] hover:bg-[#00528a] active:scale-[0.98] rounded-xl shadow-md transition disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="animate-spin" size={14} />
-                      Saving Changes...
-                    </>
-                  ) : (
-                    'Save Student Changes'
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200/70 rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isDeleting}
+                    className="flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-[#0063a6] hover:bg-[#00528a] active:scale-[0.98] rounded-xl shadow-md transition disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="animate-spin" size={14} />
+                        Saving Changes...
+                      </>
+                    ) : (
+                      'Save Student Changes'
+                    )}
+                  </button>
+                </div>
               </div>
 
             </form>

@@ -33,7 +33,8 @@ import {
   Mail,
   Plus,
   Award,
-  Camera
+  Camera,
+  Trash2
 } from 'lucide-react'
 import { EditStudentModal } from './student-modals'
 import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
@@ -322,6 +323,7 @@ export function ClassroomStudents() {
   const [alumniPageSize, setAlumniPageSize] = useState(10)
   const [movingToAlumniId, setMovingToAlumniId] = useState<number | null>(null)
   const [restoringAlumniId, setRestoringAlumniId] = useState<number | null>(null)
+  const [deletingStudentId, setDeletingStudentId] = useState<number | null>(null)
 
   const loadAlumni = async () => {
     setIsLoadingAlumni(true)
@@ -428,6 +430,56 @@ export function ClassroomStudents() {
       alert(err instanceof Error ? err.message : 'Status update failed.')
     } finally {
       setTogglingStatusId(null)
+    }
+  }
+
+  const handleDeleteStudent = async (studentId: number, studentName: string, isAlumni = false) => {
+    const confirmDelete = window.confirm(
+      `Permanently delete account for ${studentName}?\n\n` +
+      `• This will completely delete the student from the school ${isAlumni ? 'Alumni directory' : 'Classroom roster'}.\n` +
+      `• Their login portal access and credentials will be removed.\n` +
+      `• This action cannot be undone.\n\n` +
+      `Are you sure you want to permanently delete this account?`
+    )
+    if (!confirmDelete) return
+
+    setDeletingStudentId(studentId)
+    try {
+      const res = await apiSlice.delete<{ success: boolean; message: string }>(
+        endpoints.admin.deleteStudent(studentId)
+      )
+      alert(res.message || `${studentName} deleted successfully.`)
+
+      // Remove from active classroom student list
+      setStudents(prev => prev.filter(s => s.id !== studentId))
+
+      // If viewing this student in profile tab, reset view
+      if (selectedStudentForProfile?.id === studentId) {
+        setSelectedStudentForProfile(null)
+        setActiveTab('all')
+      }
+
+      // Remove from alumni records
+      setAlumniRecords(prev => prev.filter(a => a.studentId !== studentId && a.id !== studentId))
+
+      // Refresh classroom stats if viewing a class
+      if (selectedClassId && selectedSectionId) {
+        apiSlice.get<{
+          success: boolean
+          students: Student[]
+          formTeacher: string
+          stats: ClassroomStats
+        }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
+          .then(rosterRes => {
+            setStudents(rosterRes.students)
+            setStats(rosterRes.stats)
+          })
+          .catch(() => {})
+      }
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to delete student account.')
+    } finally {
+      setDeletingStudentId(null)
     }
   }
 
@@ -870,6 +922,24 @@ export function ClassroomStudents() {
                                   >
                                     <Edit3 size={13} /> Edit
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteStudent(
+                                      student.id,
+                                      [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student',
+                                      false
+                                    )}
+                                    disabled={deletingStudentId === student.id}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 rounded-lg transition cursor-pointer disabled:opacity-50"
+                                    title="Permanently Delete Student Account"
+                                  >
+                                    {deletingStudentId === student.id ? (
+                                      <Loader2 size={13} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 size={13} />
+                                    )}
+                                    Delete
+                                  </button>
                                 </TableCell>
                               )}
                             </TableRow>
@@ -1024,6 +1094,24 @@ export function ClassroomStudents() {
                     title="Move to Alumni (Keep account active for result check instead of deleting)"
                   >
                     <GraduationCap size={15} /> Move to Alumni
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectedStudentForProfile && handleDeleteStudent(
+                      selectedStudentForProfile.id,
+                      [selectedStudentForProfile.firstName, selectedStudentForProfile.lastName].filter(Boolean).join(' ') || 'Student',
+                      false
+                    )}
+                    disabled={deletingStudentId === selectedStudentForProfile?.id}
+                    className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 text-xs font-bold transition flex items-center gap-1.5 border border-rose-200 hover:border-rose-600 cursor-pointer disabled:opacity-50"
+                    title="Permanently Delete Student Account"
+                  >
+                    {deletingStudentId === selectedStudentForProfile?.id ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={15} />
+                    )}
+                    Delete Account
                   </button>
                   <button
                     onClick={() => setActiveTab('all')}
@@ -1386,6 +1474,24 @@ export function ClassroomStudents() {
                             title="Restore student back to active classroom roster"
                           >
                             <ArrowLeftRight size={13} /> Restore
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStudent(
+                              alm.studentId,
+                              alm.name || 'Alumni Student',
+                              true
+                            )}
+                            disabled={deletingStudentId === alm.studentId}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 rounded-lg transition cursor-pointer disabled:opacity-50"
+                            title="Permanently Delete Alumni Account"
+                          >
+                            {deletingStudentId === alm.studentId ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                            Delete
                           </button>
                         </TableCell>
                       </TableRow>
