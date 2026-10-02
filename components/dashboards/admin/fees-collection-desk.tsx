@@ -25,7 +25,8 @@ import {
   FileText,
   BadgeCheck,
   Loader2,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react'
 import { FeeReceiptModal } from './fee-management-modals'
 
@@ -83,6 +84,10 @@ export function FeesCollectionDesk({
   // Receipt Modal State
   const [activeReceipt, setActiveReceipt] = useState<any | null>(null)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
+
+  // Deletion States
+  const [deletingPaymentId, setDeletingPaymentId] = useState<number | null>(null)
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<number | null>(null)
 
   // Fetch students with fee summaries
   const fetchStudentSummaries = async () => {
@@ -218,6 +223,58 @@ export function FeesCollectionDesk({
       toast.error(err.message || 'Failed to record payment.')
     } finally {
       setIsProcessingPayment(false)
+    }
+  }
+
+  // Delete Payment Record
+  const handleDeletePayment = async (paymentId: number, amount: number, reference?: string) => {
+    const confirmDelete = window.confirm(
+      `Delete Fee Payment of ₦${amount.toLocaleString()} ${reference ? `(Ref: ${reference})` : ''}?\n\n` +
+      `• This payment collection record will be removed.\n` +
+      `• The student's invoice balance will be reverted.\n` +
+      `• Are you sure you want to proceed?`
+    )
+    if (!confirmDelete) return
+
+    setDeletingPaymentId(paymentId)
+    try {
+      const res = await apiSlice.delete<{ success: boolean; message: string }>(
+        endpoints.admin.deletePayment(paymentId)
+      )
+      toast.success(res.message || 'Fee payment deleted successfully.')
+      fetchStudentSummaries()
+      fetchRecentPayments()
+      if (onRefreshParent) onRefreshParent()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete payment.')
+    } finally {
+      setDeletingPaymentId(null)
+    }
+  }
+
+  // Delete Invoice Record
+  const handleDeleteInvoice = async (invoiceId: number, invoiceNo: string, totalAmount: number) => {
+    const confirmDelete = window.confirm(
+      `Delete Fee Invoice #${invoiceNo} (₦${totalAmount.toLocaleString()})?\n\n` +
+      `• This will delete this fee billing record.\n` +
+      `• Any payments collected under this invoice will also be removed.\n` +
+      `• Are you sure you want to proceed?`
+    )
+    if (!confirmDelete) return
+
+    setDeletingInvoiceId(invoiceId)
+    try {
+      const res = await apiSlice.delete<{ success: boolean; message: string }>(
+        endpoints.admin.deleteInvoice(invoiceId)
+      )
+      toast.success(res.message || 'Fee invoice deleted successfully.')
+      fetchStudentSummaries()
+      fetchRecentPayments()
+      if (onRefreshParent) onRefreshParent()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete fee invoice.')
+    } finally {
+      setDeletingInvoiceId(null)
     }
   }
 
@@ -547,6 +604,19 @@ export function FeesCollectionDesk({
                                 <CheckCircle2 size={13} /> Paid in Full
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNo, Number(inv.totalAmount))}
+                              disabled={deletingInvoiceId === inv.id}
+                              className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                              title="Delete this fee invoice"
+                            >
+                              {deletingInvoiceId === inv.id ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={13} />
+                              )}
+                            </button>
                           </div>
                         </div>
                       )
@@ -577,20 +647,35 @@ export function FeesCollectionDesk({
                               Ref: {pm.reference || 'N/A'} • {new Date(pm.paidAt).toLocaleDateString('en-GB')}
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveReceipt({
-                                ...pm,
-                                student: selectedStudent,
-                                invoice: pm.invoice,
-                              })
-                              setShowReceiptModal(true)
-                            }}
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
-                          >
-                            <Printer size={12} /> Receipt
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveReceipt({
+                                  ...pm,
+                                  student: selectedStudent,
+                                  invoice: pm.invoice,
+                                })
+                                setShowReceiptModal(true)
+                              }}
+                              className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Printer size={12} /> Receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePayment(pm.id, Number(pm.amount), pm.reference)}
+                              disabled={deletingPaymentId === pm.id}
+                              className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition disabled:opacity-50"
+                              title="Delete this fee payment collection"
+                            >
+                              {deletingPaymentId === pm.id ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={12} />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ))}
                   </div>
@@ -643,7 +728,7 @@ export function FeesCollectionDesk({
                           {rp.method?.toUpperCase()} • {new Date(rp.paidAt).toLocaleDateString('en-GB')}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="font-bold text-emerald-700 text-xs">
                           ₦{Number(rp.amount).toLocaleString()}
                         </span>
@@ -657,6 +742,19 @@ export function FeesCollectionDesk({
                           title="Print Receipt"
                         >
                           <Printer size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePayment(rp.id, Number(rp.amount), rp.reference)}
+                          disabled={deletingPaymentId === rp.id}
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg cursor-pointer transition disabled:opacity-50"
+                          title="Delete this fee payment record"
+                        >
+                          {deletingPaymentId === rp.id ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={13} />
+                          )}
                         </button>
                       </div>
                     </div>

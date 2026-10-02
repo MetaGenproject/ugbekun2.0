@@ -313,6 +313,22 @@ export function FinancesDashboard() {
     }
   }
 
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<number | null>(null)
+
+  const handleDeleteInvoice = async (id: number, invoiceNo: string, totalAmount: number) => {
+    if (!confirm(`Are you sure you want to permanently delete Fee Invoice #${invoiceNo} (₦${Number(totalAmount).toLocaleString()})?\n\nAny collected payments under this invoice will also be deleted.`)) return
+    setDeletingInvoiceId(id)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteInvoice(id))
+      toast.success(`Fee Invoice #${invoiceNo} deleted successfully.`)
+      fetchInitialData()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete fee invoice.')
+    } finally {
+      setDeletingInvoiceId(null)
+    }
+  }
+
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   useEffect(() => {
@@ -1377,6 +1393,20 @@ export function FinancesDashboard() {
                               title="Send Parent Fee Reminder"
                             >
                               <Bell size={13} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNo, Number(inv.totalAmount))}
+                              disabled={deletingInvoiceId === inv.id}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 rounded-lg text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                              title="Delete Fee Invoice"
+                            >
+                              {deletingInvoiceId === inv.id ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={13} />
+                              )}
                             </button>
                           </div>
                         </td>
