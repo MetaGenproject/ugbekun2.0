@@ -655,7 +655,13 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <ExamCbtManagement initialTab="evaluation-matrix" />
   }
 
-  if (activeSection === 'marks-entry') {
+  if (
+    activeSection === 'marks-entry' ||
+    activeSection === 'student-scores' ||
+    activeSection === 'scores' ||
+    activeSection === 'gradebook' ||
+    activeSection === 'cbt-scores'
+  ) {
     return <MarksEntry />
   }
 
@@ -1236,7 +1242,7 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
             <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition">
               <CheckSquare size={18} />
             </div>
-            <span className="text-[11px] font-bold text-slate-800 leading-tight">Record Scores</span>
+            <span className="text-[11px] font-bold text-slate-800 leading-tight">Student Scores & CBT</span>
           </button>
 
           <button onClick={() => onNavigate?.('communication')} className="bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col items-center text-center space-y-2 transition shadow-2xs group cursor-pointer">

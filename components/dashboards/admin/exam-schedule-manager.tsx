@@ -69,6 +69,17 @@ export interface ExamScheduleSlotData {
   invigilator?: { id: number; name: string }
 }
 
+export interface TimetableSubjectRow {
+  tempId: string
+  subjectId: string
+  examDate: string
+  startTime: string
+  endTime: string
+  hallId: string
+  invigilatorId: string
+  instructions: string
+}
+
 export function ExamScheduleManager() {
   const [classes, setClasses] = useState<ClassData[]>([])
   const [subjects, setSubjects] = useState<SubjectData[]>([])
@@ -82,6 +93,9 @@ export function ExamScheduleManager() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
+  // Multi-subject Timetable Builder State
+  const [subjectRows, setSubjectRows] = useState<TimetableSubjectRow[]>([])
 
   // Slot Modal States
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -171,16 +185,58 @@ export function ExamScheduleManager() {
 
   const handleOpenAddModal = () => {
     setEditingSlotId(null)
-    setExamDate(new Date().toISOString().split('T')[0])
-    setStartTime('09:00')
-    setEndTime('11:30')
-    setSubjectId(subjects.length > 0 ? String(subjects[0].id) : '')
-    setHallId(halls.length > 0 ? String(halls[0].id) : '')
-    setInvigilatorId(teachers.length > 0 ? String(teachers[0].id) : '')
-    setInstructions('')
+    const defaultDate = new Date().toISOString().split('T')[0]
+    const firstSubject = subjects.length > 0 ? String(subjects[0].id) : ''
+    const firstHall = halls.length > 0 ? String(halls[0].id) : ''
+
+    setSubjectRows([
+      {
+        tempId: `row_${Date.now()}_1`,
+        subjectId: firstSubject,
+        examDate: defaultDate,
+        startTime: '09:00',
+        endTime: '11:30',
+        hallId: firstHall,
+        invigilatorId: '',
+        instructions: '',
+      },
+    ])
     setIsPublished(true)
     setModalError(null)
     setIsModalOpen(true)
+  }
+
+  const handleAddSubjectRow = () => {
+    const usedSubjectIds = new Set(subjectRows.map((r) => r.subjectId))
+    const nextSubject = subjects.find((s) => !usedSubjectIds.has(String(s.id))) || subjects[0]
+    const lastRow = subjectRows[subjectRows.length - 1]
+    const defaultDate = lastRow ? lastRow.examDate : new Date().toISOString().split('T')[0]
+    const defaultHall = lastRow ? lastRow.hallId : (halls.length > 0 ? String(halls[0].id) : '')
+
+    setSubjectRows((prev) => [
+      ...prev,
+      {
+        tempId: `row_${Date.now()}_${prev.length + 1}`,
+        subjectId: nextSubject ? String(nextSubject.id) : '',
+        examDate: defaultDate,
+        startTime: '09:00',
+        endTime: '11:30',
+        hallId: defaultHall,
+        invigilatorId: '',
+        instructions: '',
+      },
+    ])
+  }
+
+  const handleRemoveSubjectRow = (tempId: string) => {
+    if (subjectRows.length <= 1) return
+    setSubjectRows((prev) => prev.filter((r) => r.tempId !== tempId))
+  }
+
+  const handleUpdateSubjectRow = (tempId: string, field: keyof TimetableSubjectRow, value: string) => {
+    setSubjectRows((prev) =>
+      prev.map((r) => (r.tempId === tempId ? { ...r, [field]: value } : r))
+    )
   }
 
   const handleOpenEditModal = (slot: ExamScheduleSlotData) => {
@@ -203,13 +259,73 @@ export function ExamScheduleManager() {
       setModalError('Please select a class.')
       return
     }
-    if (!subjectId) {
-      setModalError('Please select a subject.')
+
+    // 1. Single slot edit mode
+    if (editingSlotId) {
+      if (!subjectId) {
+        setModalError('Please select a subject.')
+        return
+      }
+      if (endTime <= startTime) {
+        setModalError('End time must be after start time.')
+        return
+      }
+
+      setIsSavingSlot(true)
+      setModalError(null)
+
+      try {
+        const payload = {
+          id: editingSlotId,
+          classId: Number(selectedClassId),
+          sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
+          subjectId: Number(subjectId),
+          examDate,
+          startTime,
+          endTime,
+          hallId: hallId ? Number(hallId) : undefined,
+          invigilatorId: invigilatorId ? Number(invigilatorId) : undefined,
+          instructions: instructions.trim() || undefined,
+          isPublished,
+        }
+
+        await apiSlice.post(endpoints.admin.examScheduleSlot, payload)
+        await fetchExamSchedule()
+        setIsModalOpen(false)
+        setSuccessMsg('Exam timetable slot updated successfully.')
+        setTimeout(() => setSuccessMsg(null), 3000)
+      } catch (err: any) {
+        setModalError(err instanceof Error ? err.message : 'Failed to save exam schedule slot.')
+      } finally {
+        setIsSavingSlot(false)
+      }
       return
     }
-    if (endTime <= startTime) {
-      setModalError('End time must be after start time.')
+
+    // 2. Multi-subject batch timetable creation
+    if (subjectRows.length === 0) {
+      setModalError('Please add at least one subject.')
       return
+    }
+
+    for (let i = 0; i < subjectRows.length; i++) {
+      const row = subjectRows[i]
+      if (!row.subjectId) {
+        setModalError(`Subject #${i + 1}: Please select a subject.`)
+        return
+      }
+      if (!row.examDate) {
+        setModalError(`Subject #${i + 1}: Exam date is required.`)
+        return
+      }
+      if (!row.startTime || !row.endTime) {
+        setModalError(`Subject #${i + 1}: Start and end times are required.`)
+        return
+      }
+      if (row.endTime <= row.startTime) {
+        setModalError(`Subject #${i + 1}: End time must be after start time.`)
+        return
+      }
     }
 
     setIsSavingSlot(true)
@@ -217,26 +333,30 @@ export function ExamScheduleManager() {
 
     try {
       const payload = {
-        id: editingSlotId || undefined,
         classId: Number(selectedClassId),
         sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
-        subjectId: Number(subjectId),
-        examDate,
-        startTime,
-        endTime,
-        hallId: hallId ? Number(hallId) : undefined,
-        invigilatorId: invigilatorId ? Number(invigilatorId) : undefined,
-        instructions: instructions.trim() || undefined,
         isPublished,
+        slots: subjectRows.map((r) => ({
+          classId: Number(selectedClassId),
+          sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
+          subjectId: Number(r.subjectId),
+          examDate: r.examDate,
+          startTime: r.startTime,
+          endTime: r.endTime,
+          hallId: r.hallId ? Number(r.hallId) : undefined,
+          invigilatorId: r.invigilatorId ? Number(r.invigilatorId) : undefined,
+          instructions: r.instructions?.trim() || undefined,
+          isPublished,
+        })),
       }
 
-      await apiSlice.post(endpoints.admin.examScheduleSlot, payload)
+      const res: any = await apiSlice.post(endpoints.admin.examScheduleSlot, payload)
       await fetchExamSchedule()
       setIsModalOpen(false)
-      setSuccessMsg(editingSlotId ? 'Exam date and time updated on the existing slot.' : 'Exam timetable slot saved.')
-      setTimeout(() => setSuccessMsg(null), 3000)
+      setSuccessMsg(res?.message || `Successfully added ${subjectRows.length} subject(s) to the exam timetable.`)
+      setTimeout(() => setSuccessMsg(null), 3500)
     } catch (err: any) {
-      setModalError(err instanceof Error ? err.message : 'Failed to save exam schedule slot.')
+      setModalError(err instanceof Error ? err.message : 'Failed to save exam timetable slots.')
     } finally {
       setIsSavingSlot(false)
     }
@@ -342,7 +462,7 @@ export function ExamScheduleManager() {
               onClick={handleOpenAddModal}
               className="px-4 py-2.5 bg-white text-[#0063a6] hover:bg-blue-50 font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
             >
-              <Plus size={15} /> Add Exam Slot
+              <Plus size={15} /> Add Subjects to Timetable
             </button>
             <button
               onClick={() => window.print()}
@@ -458,7 +578,7 @@ export function ExamScheduleManager() {
             onClick={handleOpenAddModal}
             className="px-4 py-2 bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs rounded-xl transition cursor-pointer"
           >
-            + Add First Exam Slot
+            + Build Exam Timetable (Add Subjects)
           </button>
         </div>
       ) : (
@@ -559,151 +679,387 @@ export function ExamScheduleManager() {
 
       {/* Add / Edit Exam Slot Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-[#0063a6] to-indigo-900 text-white">
-              <h2 className="text-base font-black tracking-tight flex items-center gap-2">
-                <Calendar size={18} /> {editingSlotId ? 'Change exam date & time' : 'Add Exam Timetable Slot'}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-lg text-white/80 transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSlot} className="p-6 space-y-4">
-              {modalError && (
-                <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-2">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
-                  <span>{modalError}</span>
-                </div>
-              )}
-              {editingSlotId && (
-                <p className="text-xs text-slate-600 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-                  This updates the existing timetable slot. Students will see the new date and time — a new exam is not created.
-                </p>
-              )}
-
-              {/* Subject */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600">Subject <span className="text-rose-500">*</span></label>
-                <select
-                  required
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0063a6]"
-                >
-                  <option value="">Select Subject</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.subjectCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date & Times */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="space-y-1 sm:col-span-1">
-                  <label className="text-[10px] font-bold text-slate-400">Exam Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={examDate}
-                    onChange={(e) => setExamDate(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400">Start Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400">End Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                  />
-                </div>
-              </div>
-
-              {/* Assigned Hall */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600">Assigned Exam Hall / Venue</label>
-                <select
-                  value={hallId}
-                  onChange={(e) => setHallId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
-                >
-                  <option value="">Select Exam Hall (Optional)</option>
-                  {halls.map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.name} ({h.code} · {h.capacity} Seats)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Assigned Invigilator */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600">Chief Invigilator / Supervisor</label>
-                <select
-                  value={invigilatorId}
-                  onChange={(e) => setInvigilatorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
-                >
-                  <option value="">Select Teacher (Optional)</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Instructions */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600">Special Instructions / Rules</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Non-programmable scientific calculator permitted. Arrive 15 mins before start."
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 outline-none focus:border-[#0063a6] resize-none"
-                />
-              </div>
-
-              {/* Modal Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          {editingSlotId ? (
+            /* Single Slot Edit Modal */
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200 my-8">
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-[#0063a6] to-indigo-900 text-white">
+                <h2 className="text-base font-black tracking-tight flex items-center gap-2">
+                  <Calendar size={18} /> Change Exam Date & Time
+                </h2>
                 <button
-                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  disabled={isSavingSlot}
-                  className="flex-1 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="p-1 hover:bg-white/20 rounded-lg text-white/80 transition"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingSlot}
-                  className="flex-1 px-4 py-2.5 bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-50"
-                >
-                  {isSavingSlot ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {editingSlotId ? 'Save date & time' : 'Save exam slot'}
+                  <X size={18} />
                 </button>
               </div>
-            </form>
-          </div>
+
+              <form onSubmit={handleSaveSlot} className="p-6 space-y-4">
+                {modalError && (
+                  <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
+                <p className="text-xs text-slate-600 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                  This updates the date and time on this timetable slot.
+                </p>
+
+                {/* Subject */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600">Subject <span className="text-rose-500">*</span></label>
+                  <select
+                    required
+                    value={subjectId}
+                    onChange={(e) => setSubjectId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0063a6]"
+                  >
+                    <option value="">Select Subject</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.subjectCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date & Times */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1 sm:col-span-1">
+                    <label className="text-[10px] font-bold text-slate-400">Exam Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={examDate}
+                      onChange={(e) => setExamDate(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400">Start Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400">End Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Assigned Hall */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600">Assigned Exam Hall / Venue</label>
+                  <select
+                    value={hallId}
+                    onChange={(e) => setHallId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
+                  >
+                    <option value="">Select Exam Hall (Optional)</option>
+                    {halls.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} ({h.code} · {h.capacity} Seats)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assigned Invigilator */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600">Chief Invigilator / Supervisor</label>
+                  <select
+                    value={invigilatorId}
+                    onChange={(e) => setInvigilatorId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
+                  >
+                    <option value="">Select Teacher (Optional)</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Instructions */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600">Special Instructions / Rules</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Non-programmable scientific calculator permitted."
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-800 outline-none focus:border-[#0063a6] resize-none"
+                  />
+                </div>
+
+                {/* Modal Buttons */}
+                <div className="flex gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    disabled={isSavingSlot}
+                    className="flex-1 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingSlot}
+                    className="flex-1 px-4 py-2.5 bg-[#0063a6] hover:bg-[#003da5] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {isSavingSlot ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            /* Multi-Subject Exam Timetable Builder Modal */
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 my-4">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 text-white shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/15">
+                    <Calendar size={20} className="text-cyan-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                        Build Class Exam Timetable
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-cyan-400/20 text-cyan-200 border border-cyan-400/30">
+                        {subjectRows.length} {subjectRows.length === 1 ? 'Subject' : 'Subjects'} Added
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-200/80">
+                      Add and configure all subjects for <span className="font-bold text-white">{currentClass?.name || 'Class'}</span> before saving.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-1.5 hover:bg-white/20 rounded-xl text-white/80 transition cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Modal Form */}
+              <form onSubmit={handleSaveSlot} className="flex flex-col flex-1 overflow-hidden">
+                {modalError && (
+                  <div className="mx-6 mt-4 p-3.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 shrink-0">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
+
+                {/* Scrollable Subjects Container */}
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {subjectRows.map((row, idx) => (
+                    <div
+                      key={row.tempId}
+                      className="bg-slate-50/80 hover:bg-slate-50 border border-slate-200/90 rounded-2xl p-4 sm:p-5 transition shadow-2xs relative group"
+                    >
+                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200/60">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-[#0063a6] text-white flex items-center justify-center font-black text-xs">
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-extrabold text-slate-800">
+                            Subject #{idx + 1}
+                          </span>
+                        </div>
+
+                        {subjectRows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSubjectRow(row.tempId)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-100/70 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Remove this subject row"
+                          >
+                            <Trash2 size={14} /> Remove Subject
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
+                        {/* Subject Select */}
+                        <div className="md:col-span-4 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">
+                            Subject <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            required
+                            value={row.subjectId}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'subjectId', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#0063a6]"
+                          >
+                            <option value="">Select Subject</option>
+                            {subjects.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.subjectCode})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Exam Date */}
+                        <div className="md:col-span-3 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">
+                            Exam Date <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={row.examDate}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'examDate', e.target.value)}
+                            className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#0063a6]"
+                          />
+                        </div>
+
+                        {/* Start Time */}
+                        <div className="md:col-span-2.5 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">
+                            Start <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            value={row.startTime}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'startTime', e.target.value)}
+                            className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#0063a6]"
+                          />
+                        </div>
+
+                        {/* End Time */}
+                        <div className="md:col-span-2.5 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600">
+                            End <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            value={row.endTime}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'endTime', e.target.value)}
+                            className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#0063a6]"
+                          />
+                        </div>
+
+                        {/* Venue / Hall */}
+                        <div className="md:col-span-4 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">
+                            Venue / Hall (Optional)
+                          </label>
+                          <select
+                            value={row.hallId}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'hallId', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
+                          >
+                            <option value="">Select Exam Hall</option>
+                            {halls.map((h) => (
+                              <option key={h.id} value={h.id}>
+                                {h.name} ({h.code} · {h.capacity} seats)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Chief Invigilator */}
+                        <div className="md:col-span-4 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">
+                            Chief Invigilator (Optional)
+                          </label>
+                          <select
+                            value={row.invigilatorId}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'invigilatorId', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-[#0063a6]"
+                          >
+                            <option value="">Select Teacher</option>
+                            {teachers.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Instructions */}
+                        <div className="md:col-span-4 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">
+                            Instructions / Notes (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Non-programmable calculator permitted"
+                            value={row.instructions}
+                            onChange={(e) => handleUpdateSubjectRow(row.tempId, 'instructions', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 outline-none focus:border-[#0063a6]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add Another Subject Button */}
+                  <button
+                    type="button"
+                    onClick={handleAddSubjectRow}
+                    className="w-full py-3.5 px-4 rounded-2xl border-2 border-dashed border-[#0063a6]/40 hover:border-[#0063a6] bg-blue-50/50 hover:bg-blue-50 text-[#0063a6] font-extrabold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs group"
+                  >
+                    <Plus size={16} className="group-hover:scale-110 transition-transform" />
+                    + Add Another Subject to Timetable
+                  </button>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isPublished}
+                      onChange={(e) => setIsPublished(e.target.checked)}
+                      className="rounded border-slate-300 text-[#0063a6] focus:ring-[#0063a6] h-4 w-4"
+                    />
+                    <span>Publish timetable to students & parent portal immediately</span>
+                  </label>
+
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      disabled={isSavingSlot}
+                      className="flex-1 sm:flex-initial px-5 py-2.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingSlot}
+                      className="flex-1 sm:flex-initial px-6 py-2.5 bg-[#0063a6] hover:bg-[#003da5] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {isSavingSlot ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Check size={15} />
+                      )}
+                      Save Timetable ({subjectRows.length} {subjectRows.length === 1 ? 'Subject' : 'Subjects'})
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       )}
     </div>

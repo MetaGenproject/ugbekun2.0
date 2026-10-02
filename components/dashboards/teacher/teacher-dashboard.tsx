@@ -667,8 +667,15 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
     )
   }
 
-  // Render Sub-Views based on navigation tab
-  if (activeSection === 'gradebook' || activeSection === 'grades') {
+  if (
+    activeSection === 'gradebook' ||
+    activeSection === 'grades' ||
+    activeSection === 'scores' ||
+    activeSection === 'student-scores' ||
+    activeSection === 'marks' ||
+    activeSection === 'cbt-scores' ||
+    activeSection === 'marks-entry'
+  ) {
     return <GradebookInterface profile={profile} />
   }
 
