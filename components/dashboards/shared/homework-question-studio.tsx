@@ -417,12 +417,20 @@ export function HomeworkQuestionStudio({ role, allocations = [], onBankSaved, on
           </section>
 
           <section className="space-y-3">
-            <h4 className="text-sm font-bold text-slate-900">3. Tell the AI what to do <span className="font-medium text-slate-400">(optional)</span></h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-slate-900">3. Tell the AI what to do <span className="font-medium text-slate-400">(optional)</span></h4>
+              <span className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200/60 px-2.5 py-0.5 rounded-full">
+                Custom Instructions
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              Give specific instructions for the AI on how to handle your upload or topic (e.g. &ldquo;Extract questions 1 to 5&rdquo;, &ldquo;Convert to multiple choice with 4 options&rdquo;, &ldquo;Keep only question 3&rdquo;).
+            </p>
             <textarea
               rows={4}
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder="e.g. Extract 8 questions from this scan. Keep the original numbers. Add 2 application items."
+              placeholder="e.g. Extract questions 1 to 5 from this upload. Convert into multiple choice with 4 options and mark the correct answer."
               className={`${fieldClass} font-normal`}
             />
           </section>
@@ -431,9 +439,16 @@ export function HomeworkQuestionStudio({ role, allocations = [], onBankSaved, on
 
       {step === 2 && (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600">
-            Saving as <span className="font-semibold text-slate-900">{selectedSubjectName}</span> · <span className="font-semibold text-slate-900">{selectedClassName}</span> · <span className="font-semibold text-slate-900">{termName}</span>
-            {topic ? <> · {topic}</> : null}
+          <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              Saving as <span className="font-semibold text-slate-900">{selectedSubjectName}</span> · <span className="font-semibold text-slate-900">{selectedClassName}</span> · <span className="font-semibold text-slate-900">{termName}</span>
+              {topic ? <> · {topic}</> : null}
+            </div>
+            {drafts.length > 0 && (
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-3 py-1 rounded-full">
+                {drafts.length} Draft{drafts.length === 1 ? '' : 's'} Ready
+              </span>
+            )}
           </div>
           {drafts.length === 0 && (
             <p className="text-sm text-slate-500">No drafts yet. Add a question below, or go back and generate from a worksheet.</p>
@@ -527,7 +542,7 @@ export function HomeworkQuestionStudio({ role, allocations = [], onBankSaved, on
               </button>
               <button type="button" disabled={busy} onClick={handleGenerate} className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50">
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                {busy ? 'Generating…' : 'Generate questions'}
+                {busy ? (uploads.length > 0 ? 'Scanning & extracting…' : 'Processing with AI…') : 'Generate questions'}
               </button>
             </>
           )}
