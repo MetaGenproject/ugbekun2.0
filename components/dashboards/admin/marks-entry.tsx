@@ -382,6 +382,10 @@ export function MarksEntry() {
     }
   }
 
+  const matrixTotalMarks = currentMatrix?.totalMarks
+    ? Number(currentMatrix.totalMarks)
+    : (currentMatrix?.components?.reduce((sum, c) => sum + (Number(c.maxMarks) || 0), 0) || 100)
+
   const calculateStudentTotal = (studentId: number) => {
     const markObj = marksState[studentId]
     if (!markObj || markObj.absent || !currentMatrix) return 0
@@ -396,10 +400,12 @@ export function MarksEntry() {
   }
 
   const getGradeBadge = (score: number) => {
-    if (score >= 80) return { label: 'A1 · Distinction', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
-    if (score >= 70) return { label: 'B2 · Very Good', bg: 'bg-blue-50 text-[#0063a6] border-blue-200' }
-    if (score >= 60) return { label: 'C4 · Credit', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
-    if (score >= 50) return { label: 'P7 · Pass', bg: 'bg-amber-50 text-amber-700 border-amber-200' }
+    const totalMax = matrixTotalMarks > 0 ? matrixTotalMarks : 100
+    const pct = (score / totalMax) * 100
+    if (pct >= 80) return { label: 'A1 · Distinction', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    if (pct >= 70) return { label: 'B2 · Very Good', bg: 'bg-blue-50 text-[#0063a6] border-blue-200' }
+    if (pct >= 60) return { label: 'C4 · Credit', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+    if (pct >= 50) return { label: 'P7 · Pass', bg: 'bg-amber-50 text-amber-700 border-amber-200' }
     return { label: 'F9 · Fail', bg: 'bg-rose-50 text-rose-700 border-rose-200' }
   }
 
@@ -603,7 +609,7 @@ export function MarksEntry() {
                       {comp.name} ({comp.maxMarks} Max)
                     </th>
                   ))}
-                  <th className="py-3.5 px-4 text-center font-black text-slate-900">Total Score (100)</th>
+                  <th className="py-3.5 px-4 text-center font-black text-slate-900">Total Score ({matrixTotalMarks})</th>
                   <th className="py-3.5 px-4 text-center">Grade Status</th>
                   <th className="py-3.5 px-4 text-center">Absent</th>
                 </tr>
@@ -646,7 +652,7 @@ export function MarksEntry() {
 
                       {/* Total */}
                       <td className="py-3 px-4 text-center font-mono font-black text-base text-slate-900">
-                        {markState.absent ? <span className="text-slate-400">-</span> : totalScore}
+                        {markState.absent ? <span className="text-slate-400">-</span> : `${totalScore} / ${matrixTotalMarks}`}
                       </td>
 
                       {/* Grade Badge */}
@@ -705,11 +711,13 @@ export function MarksEntry() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600">Target Student Total Score (Out of 100)</label>
+                <label className="text-xs font-bold text-slate-600">
+                  Target Student Total Score (Out of {matrixTotalMarks})
+                </label>
                 <input
                   type="number"
                   min="0"
-                  max="100"
+                  max={matrixTotalMarks}
                   value={aiTotalTarget}
                   onChange={(e) => setAiTotalTarget(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-purple-600"

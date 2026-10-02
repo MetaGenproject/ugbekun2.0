@@ -34,7 +34,8 @@ import {
   List,
   FolderPlus,
   Users,
-  Eye
+  Eye,
+  Download
 } from 'lucide-react'
 
 interface QuestionBankItem {
@@ -187,6 +188,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [importSubjectId, setImportSubjectId] = useState<number>(0)
   const [importClassId, setImportClassId] = useState<string>('')
   const [isImporting, setIsImporting] = useState(false)
+  const [uploadedCsvFileName, setUploadedCsvFileName] = useState<string | null>(null)
 
   // AI Question Generator Form state
   const [aiTopic, setAiTopic] = useState('')
@@ -773,11 +775,50 @@ B. False
 ANSWER: A`)
   }
 
+  const downloadQuestionsCsvTemplate = () => {
+    const csvContent =
+      '\uFEFF' +
+      'question_text,question_type,option_a,option_b,option_c,option_d,correct_option,marks,explanation,topic\n' +
+      '"What is the primary function of the red blood cells?",mcq,"Produce antibodies","Carry oxygen throughout the body","Digest food nutrients","Filter waste in kidneys",B,2.0,"Red blood cells contain haemoglobin which binds and carries oxygen.","Circulatory System"\n' +
+      '"Water boils at 100 degrees Celsius under standard atmospheric pressure.",true_false,"True","False","","",A,1.0,"At 1 atm pure water boils at exactly 100°C.","States of Matter"\n' +
+      '"Solve for x: 3x + 15 = 45",mcq,"5","10","15","20",B,2.0,"3x = 45 - 15 = 30 so x = 10.","Linear Equations"\n' +
+      '"Which Nigerian city is historically renowned as the Coal City?",mcq,"Lagos","Kano","Enugu","Ibadan",C,1.0,"Enugu is known as the Coal City due to its rich coal mining heritage.","Social Studies"\n' +
+      '"Photosynthesis takes place in which plant cell organelle?",mcq,"Mitochondria","Ribosome","Chloroplast","Nucleus",C,2.0,"Chloroplasts contain chlorophyll and carry out photosynthesis.","Plant Biology"'
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'ugbekun_questions_import_template.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    showNotification('Official questions CSV template downloaded.')
+  }
+
+  const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadedCsvFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const content = event.target?.result
+      if (typeof content === 'string') {
+        setImportText(content)
+        setImportFormat('csv')
+        showNotification(`Loaded ${file.name} successfully.`)
+      }
+    }
+    reader.readAsText(file)
+  }
+
   const loadSampleCsv = () => {
-    setImportText(`question_text,question_type,option_a,option_b,option_c,option_d,correct_option,marks
-"What is 15 multiplied by 4?",mcq,"45","50","60","75",C,2.0
-"Water boils at 100 degrees Celsius at standard atmospheric pressure.",true_false,"True","False","","",A,1.0
-"Which of the following is a primary color in art?",mcq,"Green","Orange","Red","Purple",C,2.0`)
+    setImportText(`question_text,question_type,option_a,option_b,option_c,option_d,correct_option,marks,explanation,topic
+"What is the primary function of the red blood cells?",mcq,"Produce antibodies","Carry oxygen throughout the body","Digest food nutrients","Filter waste in kidneys",B,2.0,"Red blood cells contain haemoglobin which binds and carries oxygen.","Circulatory System"
+"Water boils at 100 degrees Celsius under standard atmospheric pressure.",true_false,"True","False","","",A,1.0,"At 1 atm pure water boils at exactly 100°C.","States of Matter"
+"Solve for x: 3x + 15 = 45",mcq,"5","10","15","20",B,2.0,"3x = 45 - 15 = 30 so x = 10.","Linear Equations"
+"Which Nigerian city is historically renowned as the Coal City?",mcq,"Lagos","Kano","Enugu","Ibadan",C,1.0,"Enugu is known as the Coal City due to its rich coal mining heritage.","Social Studies"`)
   }
 
   return (
@@ -810,8 +851,18 @@ ANSWER: A`)
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
+            onClick={downloadQuestionsCsvTemplate}
+            className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-300/80 text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Download official questions spreadsheet format for offline bulk preparation"
+          >
+            <Download size={15} className="text-emerald-600" /> Download CSV Format
+          </button>
+
+          <button
             onClick={() => {
               if (selectedFolderSubjectId) setImportSubjectId(selectedFolderSubjectId)
+              setImportFormat('csv')
               setIsImportModalOpen(true)
             }}
             className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -1894,16 +1945,81 @@ ANSWER: A`)
                   JSON (.json)
                 </button>
 
-                <div className="ml-auto flex gap-2">
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={downloadQuestionsCsvTemplate}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs transition cursor-pointer"
+                    title="Download official questions spreadsheet template for Excel / Google Sheets"
+                  >
+                    <Download size={13} /> Download CSV Format
+                  </button>
                   <button
                     type="button"
                     onClick={importFormat === 'aiken' ? loadSampleAiken : loadSampleCsv}
-                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer ml-1"
                   >
                     Load Sample
                   </button>
                 </div>
               </div>
+
+              {/* Dedicated CSV Template & Direct File Upload Banner */}
+              {importFormat === 'csv' && (
+                <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/90 rounded-2xl space-y-2.5">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Download size={16} />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-emerald-950">Official Questions CSV Format</h5>
+                        <p className="text-[11px] text-emerald-800 font-medium">
+                          Download template, fill in Microsoft Excel or Google Sheets, then upload the file directly.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={downloadQuestionsCsvTemplate}
+                        className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Download size={13} /> Download Format
+                      </button>
+                      <label className="flex-1 sm:flex-none px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
+                        <UploadCloud size={13} /> {uploadedCsvFileName ? 'Change File' : 'Upload File'}
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          onChange={handleCsvFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 text-[10px] text-emerald-900 font-mono bg-white/70 px-2.5 py-1.5 rounded-lg border border-emerald-200/50 flex flex-wrap items-center gap-1">
+                    <strong className="text-emerald-950 font-sans">Columns:</strong>
+                    <span>question_text</span> • <span>question_type (mcq / true_false)</span> • <span>option_a</span> • <span>option_b</span> • <span>option_c</span> • <span>option_d</span> • <span>correct_option (A/B/C/D)</span> • <span>marks</span> • <span>explanation</span> • <span>topic</span>
+                  </div>
+
+                  {uploadedCsvFileName && (
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-emerald-900 animate-in fade-in">
+                      <span className="truncate">Loaded: <strong className="font-mono text-emerald-950">{uploadedCsvFileName}</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => { setUploadedCsvFileName(null); setImportText('') }}
+                        className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                        title="Remove loaded file"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1953,9 +2069,16 @@ ANSWER: A`)
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Paste {importFormat.toUpperCase()} Data *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    {importFormat === 'csv' ? 'CSV Content (or Paste / Upload above) *' : `Paste ${importFormat.toUpperCase()} Data *`}
+                  </label>
+                  {importText.length > 0 && (
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {importText.split('\n').filter((l) => l.trim()).length} lines
+                    </span>
+                  )}
+                </div>
                 <textarea
                   rows={8}
                   required

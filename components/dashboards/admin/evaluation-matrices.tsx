@@ -84,6 +84,55 @@ export function EvaluationMatrices() {
     }
   }
 
+  const applyPresetScheme = (type: 'standard100' | 'ca40' | 'ca30' | 'exam60' | 'exam70') => {
+    if (type === 'standard100') {
+      setName('Standard Term Scheme (100 Marks)')
+      setCode('STD100')
+      setDescription('Standard 40% Continuous Assessment (CA1: 15, CA2: 25) and 60% Terminal Examination.')
+      setTotalMarks(100)
+      setComponents([
+        { name: 'Continuous Assessment 1', code: 'CA1', maxMarks: 15, passMarks: 6 },
+        { name: 'Continuous Assessment 2', code: 'CA2', maxMarks: 25, passMarks: 10 },
+        { name: 'Terminal Examination', code: 'EXAM', maxMarks: 60, passMarks: 24 },
+      ])
+    } else if (type === 'ca40') {
+      setName('Continuous Assessment Only (40/40 Marks)')
+      setCode('CA40')
+      setDescription('Mid-term Continuous Assessment only scheme (CA1: 20 marks, CA2: 20 marks = 40 Marks total).')
+      setTotalMarks(40)
+      setComponents([
+        { name: 'Continuous Assessment 1', code: 'CA1', maxMarks: 20, passMarks: 8 },
+        { name: 'Continuous Assessment 2', code: 'CA2', maxMarks: 20, passMarks: 8 },
+      ])
+    } else if (type === 'ca30') {
+      setName('Continuous Assessment Only (30/30 Marks)')
+      setCode('CA30')
+      setDescription('Continuous Assessment score only (CA1: 15 marks, CA2: 15 marks = 30 Marks total).')
+      setTotalMarks(30)
+      setComponents([
+        { name: 'Continuous Assessment 1', code: 'CA1', maxMarks: 15, passMarks: 6 },
+        { name: 'Continuous Assessment 2', code: 'CA2', maxMarks: 15, passMarks: 6 },
+      ])
+    } else if (type === 'exam60') {
+      setName('Terminal Examination Only (60/60 Marks)')
+      setCode('EXAM60')
+      setDescription('Terminal theory and practical exam only (60 Marks total).')
+      setTotalMarks(60)
+      setComponents([
+        { name: 'Terminal Examination', code: 'EXAM', maxMarks: 60, passMarks: 24 },
+      ])
+    } else if (type === 'exam70') {
+      setName('Terminal Examination Only (70/70 Marks)')
+      setCode('EXAM70')
+      setDescription('Terminal examination component only (70 Marks total).')
+      setTotalMarks(70)
+      setComponents([
+        { name: 'Terminal Examination', code: 'EXAM', maxMarks: 70, passMarks: 28 },
+      ])
+    }
+    setModalError(null)
+  }
+
   const handleOpenCreateModal = () => {
     setEditingMatrixId(null)
     setName('')
@@ -176,7 +225,7 @@ export function EvaluationMatrices() {
         name: name.trim(),
         code: code.trim().toUpperCase(),
         description: description.trim() || undefined,
-        totalMarks: Number(totalMarks) || 100,
+        totalMarks: Number(totalMarks) > 0 ? Number(totalMarks) : (currentComponentTotal > 0 ? currentComponentTotal : 100),
         isDefault,
         components,
       }
@@ -280,8 +329,10 @@ export function EvaluationMatrices() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Assessment Target</p>
-            <p className="text-2xl font-black text-slate-900">100 Marks</p>
+            <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Default Target Scale</p>
+            <p className="text-2xl font-black text-slate-900">
+              {defaultMatrix ? `${Number(defaultMatrix.totalMarks) || 100} Marks` : 'Flexible (40 / 100)'}
+            </p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
             <Percent size={20} />
@@ -349,7 +400,7 @@ export function EvaluationMatrices() {
                     </div>
 
                     <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
-                      {calculatedTotal} Marks
+                      {calculatedTotal} / {Number(matrix.totalMarks) || calculatedTotal} Marks
                     </span>
                   </div>
 
@@ -450,6 +501,46 @@ export function EvaluationMatrices() {
                 </div>
               )}
 
+              {/* Quick Assessment Scheme Presets */}
+              <div className="space-y-1.5 p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <BookOpen size={13} className="text-indigo-600" /> Quick Scheme Presets:
+                  </span>
+                  <span className="text-[10px] text-indigo-600 font-semibold">Click to auto-populate scheme</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => applyPresetScheme('standard100')}
+                    className="px-2.5 py-1 bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border border-indigo-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    🌟 Standard (100 Marks: 40 CA / 60 Exam)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetScheme('ca40')}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    🎯 CA Only (40/40 Marks)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetScheme('ca30')}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    🎯 CA Only (30/30 Marks)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetScheme('exam60')}
+                    className="px-2.5 py-1 bg-white hover:bg-purple-600 hover:text-white text-purple-900 border border-purple-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    📝 Exam Only (60 Marks)
+                  </button>
+                </div>
+              </div>
+
               {/* Grid: Name & Code */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2 space-y-1">
@@ -504,18 +595,45 @@ export function EvaluationMatrices() {
 
               {/* Assessment Components Builder Section */}
               <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div>
                     <h4 className="font-extrabold text-xs text-slate-900">Mark Distribution Components</h4>
-                    <p className="text-[10px] text-slate-500">Add or edit assessment weightings & pass marks</p>
+                    <p className="text-[10px] text-slate-500">Configure continuous assessments (CA) and examinations</p>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-lg text-xs font-black border ${
-                    currentComponentTotal === 100
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}>
-                    Total: {currentComponentTotal} / 100 Marks
-                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+                    <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Scale Target:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        value={totalMarks}
+                        onChange={(e) => setTotalMarks(Number(e.target.value) || 0)}
+                        className="w-14 px-1.5 py-0.5 bg-white border border-slate-300 rounded text-xs font-black text-slate-900 text-center"
+                        title="Set target scheme total marks (e.g. 40 for CA-only, 100 for standard term)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTotalMarks(currentComponentTotal)}
+                        className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer px-1"
+                        title="Match target total with sum of components"
+                      >
+                        Auto-sync ({currentComponentTotal})
+                      </button>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-black border flex items-center gap-1 ${
+                      currentComponentTotal === Number(totalMarks) && Number(totalMarks) > 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {currentComponentTotal === Number(totalMarks) && Number(totalMarks) > 0 ? (
+                        <Check size={12} className="text-emerald-600" />
+                      ) : null}
+                      Total: {currentComponentTotal} / {totalMarks} Marks
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
