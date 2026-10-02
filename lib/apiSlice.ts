@@ -92,6 +92,14 @@ export const endpoints = {
     platformBackup: (id: number | string) => `${BASE_URL}/superadmin/platform/backups/${id}`,
     platformAuditLogs: `${BASE_URL}/superadmin/platform/audit-logs`,
     platformAuditLog: (id: number | string) => `${BASE_URL}/superadmin/platform/audit-logs/${id}`,
+    systemLogs: (params?: { type?: string; lines?: number; search?: string }) => {
+      const sp = new URLSearchParams()
+      if (params?.type) sp.append('type', params.type)
+      if (params?.lines) sp.append('lines', String(params.lines))
+      if (params?.search) sp.append('search', params.search)
+      const qs = sp.toString()
+      return `${BASE_URL}/superadmin/system/logs${qs ? `?${qs}` : ''}`
+    },
   },
   admin: {
     stats: `${BASE_URL}/admin/stats`,

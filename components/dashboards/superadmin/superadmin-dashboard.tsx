@@ -30,6 +30,7 @@ import { EditBranchForm, type BranchDetails } from './edit-branch-form'
 import { MultiBranchRevenueAnalytics } from './multi-branch-revenue-analytics'
 import { SuperadminSchoolCmsEditor } from './superadmin-school-cms-editor'
 import { SuperadminPlatformHub } from './superadmin-platform-hub'
+import { SystemLogsConsole } from './system-logs-console'
 import { StaffDirectory } from '@/components/dashboards/admin/staff-directory'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { safeStorage } from '@/lib/safeStorage'
@@ -1204,7 +1205,7 @@ export function SuperAdminDashboard({ user, activeSection: activeSectionProp }: 
       )}
 
       {activeSection === 'logs' && (
-        <SuperadminPlatformHub initialTab="audit" />
+        <SystemLogsConsole />
       )}
 
       {/* EXTEND SUBSCRIPTION MODAL */}
