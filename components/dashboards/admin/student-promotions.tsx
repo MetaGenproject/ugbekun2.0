@@ -71,8 +71,9 @@ export function StudentPromotions() {
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [sections, setSections] = useState<SectionItem[]>([])
   const [sessions, setSessions] = useState<AcademicSessionItem[]>([
-    { id: 5, name: '2025/2026 Academic Session' },
-    { id: 6, name: '2026/2027 Academic Session' }
+    { id: 4, name: '2025/2026 Academic Session' },
+    { id: 5, name: '2026/2027 Academic Session (Current)' },
+    { id: 6, name: '2027/2028 Academic Session' },
   ])
 
   // Step 1 & 2: Source selection & students
@@ -85,7 +86,7 @@ export function StudentPromotions() {
 
   // Step 3: Target destination
   const [promotionAction, setPromotionAction] = useState<'PROMOTE' | 'REPEAT'>('PROMOTE')
-  const [targetSessionId, setTargetSessionId] = useState<string>('6')
+  const [targetSessionId, setTargetSessionId] = useState<string>('5')
   const [targetClassId, setTargetClassId] = useState<string>('')
   const [targetSectionId, setTargetSectionId] = useState<string>('')
 
@@ -138,6 +139,29 @@ export function StudentPromotions() {
       }
     } catch (e) {
       console.error('Failed to load classes or sections:', e)
+    }
+
+    // Dynamically load active academic sessions from backend
+    try {
+      const sessRes = await apiSlice.get<{
+        success: boolean
+        sessions: { id: number; name: string; isCurrent: boolean }[]
+      }>(endpoints.admin.academicSessions)
+      if (sessRes.success && sessRes.sessions && sessRes.sessions.length > 0) {
+        const sorted = [...sessRes.sessions].sort((a, b) => a.id - b.id)
+        setSessions(
+          sorted.map((s) => ({
+            id: s.id,
+            name: `${s.name} Academic Session${s.isCurrent ? ' (Current)' : ''}`,
+          }))
+        )
+        const current = sessRes.sessions.find((s) => s.isCurrent)
+        if (current) {
+          setTargetSessionId(String(current.id))
+        }
+      }
+    } catch (sessErr) {
+      console.warn('Failed to load academic sessions:', sessErr)
     }
   }
 
