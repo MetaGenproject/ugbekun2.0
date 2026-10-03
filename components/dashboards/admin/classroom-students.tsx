@@ -34,7 +34,8 @@ import {
   Plus,
   Award,
   Camera,
-  Trash2
+  Trash2,
+  UserMinus
 } from 'lucide-react'
 import { EditStudentModal } from './student-modals'
 import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
@@ -82,6 +83,8 @@ interface Student {
   allergies?: string
   medicalNotes?: string
   emergencyContact?: string
+  photo?: string | null
+  roll?: number | null
 }
 
 interface ClassroomStats {
@@ -324,6 +327,7 @@ export function ClassroomStudents() {
   const [movingToAlumniId, setMovingToAlumniId] = useState<number | null>(null)
   const [restoringAlumniId, setRestoringAlumniId] = useState<number | null>(null)
   const [deletingStudentId, setDeletingStudentId] = useState<number | null>(null)
+  const [removingEnrollmentId, setRemovingEnrollmentId] = useState<number | null>(null)
 
   const loadAlumni = async () => {
     setIsLoadingAlumni(true)
@@ -480,6 +484,48 @@ export function ClassroomStudents() {
       alert(err instanceof Error ? err.message : 'Failed to delete student account.')
     } finally {
       setDeletingStudentId(null)
+    }
+  }
+
+  const handleRemoveFromClass = async (studentId: number, studentName: string) => {
+    if (!selectedClassId) return
+    const confirmRemove = window.confirm(
+      `Remove ${studentName} from this classroom roster?\n\n` +
+      `• The student's enrollment in this class will be removed.\n` +
+      `• Their student account, login access, and enrollments in other classes will NOT be deleted.\n\n` +
+      `Do you want to proceed?`
+    )
+    if (!confirmRemove) return
+
+    setRemovingEnrollmentId(studentId)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.removeStudentEnrollment,
+        {
+          studentId,
+          classId: Number(selectedClassId),
+          sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
+        }
+      )
+      alert(res.message || `${studentName} removed from classroom roster.`)
+      setStudents(prev => prev.filter(s => s.id !== studentId))
+      if (selectedClassId && selectedSectionId) {
+        apiSlice.get<{
+          success: boolean
+          students: Student[]
+          formTeacher: string
+          stats: ClassroomStats
+        }>(endpoints.admin.classroomStudents(Number(selectedClassId), Number(selectedSectionId)))
+          .then(rosterRes => {
+            setStudents(rosterRes.students)
+            setStats(rosterRes.stats)
+          })
+          .catch(() => {})
+      }
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : 'Failed to remove student from class.')
+    } finally {
+      setRemovingEnrollmentId(null)
     }
   }
 
@@ -921,6 +967,23 @@ export function ClassroomStudents() {
                                     className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-[#0063a6] bg-[#0063a6]/10 hover:bg-[#0063a6] hover:text-white rounded-lg transition"
                                   >
                                     <Edit3 size={13} /> Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFromClass(
+                                      student.id,
+                                      [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student'
+                                    )}
+                                    disabled={removingEnrollmentId === student.id}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer disabled:opacity-50"
+                                    title="Remove student from this classroom roster without deleting account"
+                                  >
+                                    {removingEnrollmentId === student.id ? (
+                                      <Loader2 size={13} className="animate-spin" />
+                                    ) : (
+                                      <UserMinus size={13} />
+                                    )}
+                                    Unenroll
                                   </button>
                                   <button
                                     type="button"
@@ -1721,8 +1784,8 @@ export function ClassroomStudents() {
         isOpen={Boolean(photoStudent)}
         onClose={() => setPhotoStudent(null)}
         studentName={[photoStudent?.firstName, photoStudent?.lastName].filter(Boolean).join(' ') || 'Student'}
-        studentRegNo={photoStudent?.registerNo}
-        currentPhoto={photoStudent?.photo}
+        studentRegNo={photoStudent?.registerNo || undefined}
+        currentPhoto={photoStudent?.photo || undefined}
         onSavePhoto={handleSaveStudentPhoto}
       />
     </div>

@@ -114,6 +114,7 @@ export const endpoints = {
     teachersStaff: `${BASE_URL}/admin/teachers-staff`,
     classesSections: `${BASE_URL}/admin/classes-sections`,
     classroomStudents: (classId: number, sectionId: number) => `${BASE_URL}/admin/classroom-students?classId=${classId}&sectionId=${sectionId}`,
+    removeStudentEnrollment: `${BASE_URL}/admin/classrooms/remove-student-enrollment`,
     classes: `${BASE_URL}/admin/classes`,
     classDetail: (id: number | string) => `${BASE_URL}/admin/classes/${id}`,
     seedClassPreset: `${BASE_URL}/admin/classes/seed-preset`,
