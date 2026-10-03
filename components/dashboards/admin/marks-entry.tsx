@@ -765,7 +765,7 @@ export function MarksEntry() {
         </div>
         <div className="bg-white p-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 shadow-2xs">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">Average CBT Score</span>
-          <p className="text-2xl font-black text-indigo-800 mt-0.5">{avgCbtScore > 0 ? avgCbtScore : '—'} <span className="text-xs font-semibold text-indigo-600">pts</span></p>
+          <p className="text-2xl font-black text-indigo-800 mt-0.5">{Number(avgCbtScore) > 0 ? avgCbtScore : '—'} <span className="text-xs font-semibold text-indigo-600">pts</span></p>
         </div>
       </div>
 

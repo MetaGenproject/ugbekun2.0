@@ -10,6 +10,7 @@ import {
   Check,
   FolderOpen,
   Folder,
+  Edit3,
   Send,
   Loader2,
   AlertCircle,
@@ -454,7 +455,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   }
 
   // Open Edit Modal for an already distributed assessment
-  const handleOpenEditOnlineExam = (exam: OnlineExam) => {
+  const handleOpenEditOnlineExam = (exam: any) => {
     setEditingOnlineExamId(exam.id)
     setAssignTitle(exam.title || '')
     setAssignSubjectId(exam.subjectId || (subjects[0]?.id ?? 0))

@@ -127,6 +127,14 @@ export const endpoints = {
     assignSubject: `${BASE_URL}/admin/subjects/assign`,
     assignSubjectBulk: `${BASE_URL}/admin/subjects/assign-bulk`,
     deleteSubjectAssign: (id: number | string) => `${BASE_URL}/admin/subjects/assign/${id}`,
+    classAcademicOverview: (classId: number | string, sectionId?: number | string) =>
+      `${BASE_URL}/admin/classes/${classId}/academic-overview${sectionId ? `?sectionId=${sectionId}` : ''}`,
+    allocateClassSubjects: (classId: number | string) => `${BASE_URL}/admin/classes/${classId}/allocate-subjects`,
+    assignClassTeacher: (classId: number | string) => `${BASE_URL}/admin/classes/${classId}/class-teacher`,
+    removeClassTeacher: (classId: number | string, sectionId?: number | string) =>
+      `${BASE_URL}/admin/classes/${classId}/class-teacher${sectionId ? `?sectionId=${sectionId}` : ''}`,
+    assignSubjectTeacher: (classId: number | string) => `${BASE_URL}/admin/classes/${classId}/assign-subject-teacher`,
+    removeSubjectTeacher: (classId: number | string) => `${BASE_URL}/admin/classes/${classId}/remove-subject-teacher`,
     exams: `${BASE_URL}/admin/exams`,
     examDetail: (id: number | string) => `${BASE_URL}/admin/exams/${id}`,
     onboardStudent: `${BASE_URL}/admin/students/onboard`,
@@ -257,6 +265,7 @@ export const endpoints = {
     downloadBatchInvoicesPdf: (query: string) => `${BASE_URL}/admin/finances/invoices/batch-pdf${query}`,
     deleteInvoice: (id: number) => `${BASE_URL}/admin/finances/invoices/${id}`,
     recordPayment: `${BASE_URL}/admin/finances/payments`,
+    feeInvoicePayments: (id: number | string) => `${BASE_URL}/admin/finances/payments`,
     deletePayment: (id: number) => `${BASE_URL}/admin/finances/payments/${id}`,
     exportFinancesCsv: `${BASE_URL}/admin/finances/export/csv`,
     exportFinancesPdf: `${BASE_URL}/admin/finances/export/pdf`,

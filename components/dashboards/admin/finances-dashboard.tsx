@@ -283,6 +283,7 @@ export function FinancesDashboard() {
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('Bank Transfer')
   const [payReference, setPayReference] = useState('')
+  const [payNote, setPayNote] = useState('')
 
   // Edit Fee Type & Fee Group Modal State
   const [editingFeeType, setEditingFeeType] = useState<FeeType | null>(null)

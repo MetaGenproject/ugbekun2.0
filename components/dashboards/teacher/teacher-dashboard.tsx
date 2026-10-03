@@ -13,6 +13,7 @@ import {
   FileText,
   UserCheck,
   Calendar,
+  GraduationCap,
   AlertCircle,
   PlusCircle,
   Search,
@@ -170,6 +171,40 @@ interface DashboardOverviewData {
     role: string
     studentsCount: number
   }>
+  academicRoles?: {
+    isClassTeacher: boolean
+    isSubjectTeacher: boolean
+    classTeacherClasses: Array<{
+      allocationId: number
+      classId: number
+      className: string
+      sectionId: number
+      sectionName: string
+      studentCount: number
+      subjectsOffered: Array<{
+        assignmentId: number
+        subjectId: number
+        subjectName: string
+        subjectCode: string
+        subjectType: string
+        assignedTeacherId: number | null
+        assignedTeacherName: string
+      }>
+    }>
+    subjectTeacherSubjects: Array<{
+      subjectId: number
+      subjectName: string
+      subjectCode: string
+      classes: Array<{
+        assignmentId: number
+        classId: number
+        className: string
+        sectionId: number
+        sectionName: string
+        studentCount: number
+      }>
+    }>
+  }
   reminders: Array<{
     id: number
     text: string
@@ -1485,6 +1520,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
 
   const subjectsList = dashboardOverview?.subjects || []
   const myClassesList = dashboardOverview?.myClasses || []
+  const academicRoles = dashboardOverview?.academicRoles
+  const classTeacherClasses = academicRoles?.classTeacherClasses || []
+  const subjectTeacherSubjects = academicRoles?.subjectTeacherSubjects || []
   const recentActivitiesList = dashboardOverview?.recentActivities || []
 
   const subjectBarColors: Record<string, string> = {
@@ -1787,35 +1825,191 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
 
           </div>
 
-          {/* 4. My Classes Grid */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-slate-900">My Assigned Classes</h3>
-              <button 
-                onClick={() => onNavigate?.('roster')} 
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-              >
-                View Roster
-              </button>
-            </div>
-
-            {myClassesList.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                {myClassesList.map((cls, idx) => (
-                  <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{cls.name}</h4>
-                      <span className="text-[10px] font-bold text-blue-600 uppercase block">{cls.role}</span>
-                    </div>
-                    <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700">
-                      {cls.studentsCount} Students
-                    </span>
+          {/* 4. Dynamic Teacher Roles & Classes: Class Teacher vs Subject Teacher */}
+          <div className="space-y-4">
+            {/* A. CLASS TEACHER SECTION (Step 5 & 10) */}
+            {classTeacherClasses.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      <GraduationCap size={16} className="text-blue-600" />
+                      Your Classes (Class Teacher)
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Classes where you hold full class leadership, academic monitoring, and score entry authority.
+                    </p>
                   </div>
-                ))}
+                  <button
+                    onClick={() => onNavigate?.('roster')}
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    View Roster
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {classTeacherClasses.map((cls) => (
+                    <div
+                      key={cls.allocationId}
+                      className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/50 via-slate-50 to-white border border-blue-100/80 space-y-3"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-[10px] bg-blue-600 text-white font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Class Teacher
+                          </span>
+                          <h4 className="font-black text-slate-900 text-base mt-1.5">{cls.className}</h4>
+                          <span className="text-xs text-slate-500 font-semibold">Section {cls.sectionName}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-black text-slate-900 block">{cls.studentCount}</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Students</span>
+                        </div>
+                      </div>
+
+                      {/* Subjects Offered summary */}
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-medium">Subjects Offered:</span>
+                        <span className="font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                          {cls.subjectsOffered?.length || 0} Subjects (Auto-Covered)
+                        </span>
+                      </div>
+
+                      {/* Quick Academic Actions (Step 5) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('attendance')}
+                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                        >
+                          Attendance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('subjects')}
+                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                        >
+                          Subjects
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('scores')}
+                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                        >
+                          Score Entry
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate?.('reports')}
+                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                        >
+                          Reports
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="py-6 text-center text-slate-400 text-xs italic">
-                No class allocations found for your account.
+            )}
+
+            {/* B. SUBJECT TEACHER SECTION (Step 8 & 10) */}
+            {subjectTeacherSubjects.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      <BookOpen size={16} className="text-indigo-600" />
+                      My Teaching (Subject Teacher)
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Subjects you teach across classes. Access is strictly scoped to these subjects and students.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onNavigate?.('subjects')}
+                    className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    View All Subjects
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {subjectTeacherSubjects.map((st) => (
+                    <div
+                      key={st.subjectId}
+                      className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-extrabold text-xs flex items-center justify-center">
+                            {st.subjectCode?.substring(0, 3) || 'SUB'}
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-sm">{st.subjectName}</h4>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">{st.subjectCode}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2.5 py-1 rounded-xl">
+                          {st.classes.length} Classes Assigned
+                        </span>
+                      </div>
+
+                      {/* Class Distribution Grid (Step 8) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {st.classes.map((cls) => (
+                          <div
+                            key={cls.assignmentId}
+                            className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-extrabold text-slate-900 text-xs">{cls.className}</div>
+                              <span className="text-[10px] text-slate-400 font-semibold">Sec {cls.sectionName}</span>
+                            </div>
+                            <span className="text-xs font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg">
+                              {cls.studentCount} students
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* C. Fallback: If neither academicRoles array is populated */}
+            {classTeacherClasses.length === 0 && subjectTeacherSubjects.length === 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-slate-900">My Assigned Classes</h3>
+                  <button
+                    onClick={() => onNavigate?.('roster')}
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    View Roster
+                  </button>
+                </div>
+
+                {myClassesList.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    {myClassesList.map((cls, idx) => (
+                      <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{cls.name}</h4>
+                          <span className="text-[10px] font-bold text-blue-600 uppercase block">{cls.role}</span>
+                        </div>
+                        <span className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700">
+                          {cls.studentsCount} Students
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-slate-400 text-xs italic">
+                    No class allocations found for your account.
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -33,6 +33,7 @@ interface LogEntry {
     stack?: string
   }
   stack?: string
+  componentStack?: string
   meta?: any
   user?: {
     id?: string | number

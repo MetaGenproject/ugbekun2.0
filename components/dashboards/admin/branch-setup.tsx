@@ -17,8 +17,10 @@ import {
   Pencil,
   Trash2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  GraduationCap
 } from 'lucide-react'
+import { ClassAcademicManager } from './class-academic-manager'
 
 interface ClassData {
   id: number
@@ -90,6 +92,7 @@ export function BranchSetup() {
   // Modals & Editing states
   const [editingClass, setEditingClass] = useState<ClassData | null>(null)
   const [deletingClassId, setDeletingClassId] = useState<number | null>(null)
+  const [academicManagingClass, setAcademicManagingClass] = useState<ClassData | null>(null)
 
   const [editingSection, setEditingSection] = useState<SectionData | null>(null)
   const [deletingSectionId, setDeletingSectionId] = useState<number | null>(null)
@@ -483,15 +486,10 @@ export function BranchSetup() {
 
     const assignmentsList = []
     for (const subId of selectedSubjectIds) {
-      const teacherId = subjectTeacherOverrides[subId] || defaultTeacherId
-      if (!teacherId) {
-        const sub = subjects.find(s => s.id === subId)
-        showNotification('error', `Please assign a teacher for subject: ${sub?.name || subId}`)
-        return
-      }
+      const teacherId = subjectTeacherOverrides[subId] || defaultTeacherId || null
       assignmentsList.push({
         subjectId: subId,
-        teacherId: Number(teacherId)
+        teacherId: teacherId ? Number(teacherId) : null
       })
     }
 
@@ -942,6 +940,30 @@ export function BranchSetup() {
                                   </span>
                                 ))
                               )}
+                            </div>
+
+                            <div className="pt-3 border-t border-slate-100 flex items-center gap-2 mt-3">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setAcademicManagingClass(cls)
+                                }}
+                                className="flex-1 py-1.5 px-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border border-indigo-200/60"
+                              >
+                                <GraduationCap size={14} /> Academic & Teachers
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleSelectClass(cls)
+                                }}
+                                className="py-1.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Manage Sections"
+                              >
+                                <Layers size={13} /> Sections
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -1789,6 +1811,23 @@ export function BranchSetup() {
                 Confirm Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLASS ACADEMIC & TEACHERS SETUP MODAL */}
+      {academicManagingClass && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-4xl my-auto">
+            <ClassAcademicManager
+              classId={academicManagingClass.id}
+              className={academicManagingClass.name}
+              allClasses={classes.map(c => ({ id: c.id, name: c.name }))}
+              onClose={() => setAcademicManagingClass(null)}
+              onUpdated={async () => {
+                await loadSubjects()
+              }}
+            />
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ import {
   GraduationCap, 
   Download, 
   Loader2, 
+  Globe,
   AlertCircle,
   Plus,
   X,
