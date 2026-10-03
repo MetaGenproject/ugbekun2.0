@@ -61,6 +61,8 @@ const defaultBranding: SchoolBrandingData = {
   currencySymbol: '₦',
 }
 
+const CACHE_KEY = 'ugbekun_school_branding_cache'
+
 const SchoolBrandingContext = createContext<SchoolBrandingContextType>({
   branding: defaultBranding,
   isLoading: false,
@@ -71,7 +73,15 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
   const [branding, setBranding] = useState<SchoolBrandingData>(defaultBranding)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchBranding = async () => {
+  const applyColors = (primary?: string, secondary?: string) => {
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement
+      if (primary) root.style.setProperty('--school-primary', primary)
+      if (secondary) root.style.setProperty('--school-secondary', secondary)
+    }
+  }
+
+  const fetchBranding = async (attempt = 1, maxRetries = 2): Promise<void> => {
     try {
       let branchIdParam = ''
       if (typeof window !== 'undefined') {
@@ -97,20 +107,48 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
       )
       if (res?.data) {
         setBranding(res.data)
-        if (typeof document !== 'undefined') {
-          const root = document.documentElement
-          root.style.setProperty('--school-primary', res.data.primaryColor || '#0f172a')
-          root.style.setProperty('--school-secondary', res.data.secondaryColor || '#0284c7')
+        applyColors(res.data.primaryColor, res.data.secondaryColor)
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(res.data))
+          } catch {
+            // ignore quota errors
+          }
         }
       }
     } catch (err) {
-      console.error('[BRANDING] Failed to load school branding:', err)
+      if (attempt <= maxRetries) {
+        const backoffMs = attempt * 2500
+        console.warn(`[BRANDING] Upstream waking up (attempt ${attempt}/${maxRetries}), retrying in ${backoffMs}ms...`)
+        setTimeout(() => {
+          fetchBranding(attempt + 1, maxRetries)
+        }, backoffMs)
+        return
+      }
+      console.warn('[BRANDING] Failed to load latest school branding, using cached/default:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
+    // 1. Immediately hydrate from localStorage cache if available to prevent layout flash
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed && typeof parsed === 'object' && parsed.schoolName) {
+            setBranding((prev) => ({ ...prev, ...parsed }))
+            applyColors(parsed.primaryColor, parsed.secondaryColor)
+          }
+        }
+      } catch {
+        // ignore cache read error
+      }
+    }
+
+    // 2. Fetch fresh branding from backend
     fetchBranding()
 
     const handleUpdate = () => {
@@ -129,7 +167,7 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
   }, [])
 
   return (
-    <SchoolBrandingContext.Provider value={{ branding, isLoading, refreshBranding: fetchBranding }}>
+    <SchoolBrandingContext.Provider value={{ branding, isLoading, refreshBranding: () => fetchBranding(1, 1) }}>
       {children}
     </SchoolBrandingContext.Provider>
   )

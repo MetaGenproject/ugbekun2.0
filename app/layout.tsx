@@ -28,6 +28,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const isVercel = Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.VERCEL)
+
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning>
       <head />
@@ -36,7 +38,7 @@ export default function RootLayout({
           <GlobalErrorTracker />
           {children}
           <SystemStatusToastContainer />
-          {process.env.NODE_ENV === 'production' && <Analytics />}
+          {isVercel && <Analytics />}
         </SchoolBrandingProvider>
       </body>
     </html>

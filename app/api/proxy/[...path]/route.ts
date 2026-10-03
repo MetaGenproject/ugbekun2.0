@@ -52,11 +52,40 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
       if (body && body.byteLength === 0) body = undefined
     }
 
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers: forwardHeaders,
-      body: body && body.byteLength > 0 ? body : undefined,
-    })
+    const isIdempotent = request.method === 'GET' || request.method === 'HEAD'
+    let response: Response
+
+    const executeFetch = async () => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45000)
+      try {
+        const res = await fetch(targetUrl, {
+          method: request.method,
+          headers: forwardHeaders,
+          body: body && body.byteLength > 0 ? body : undefined,
+          signal: controller.signal,
+        })
+        return res
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+
+    try {
+      response = await executeFetch()
+      // If upstream is cold-starting and returns a 502/503/504 on a GET/HEAD, retry once after a short delay
+      if (isIdempotent && (response.status === 502 || response.status === 503 || response.status === 504)) {
+        await new Promise((r) => setTimeout(r, 2000))
+        response = await executeFetch()
+      }
+    } catch (initialErr) {
+      if (isIdempotent) {
+        await new Promise((r) => setTimeout(r, 2000))
+        response = await executeFetch()
+      } else {
+        throw initialErr
+      }
+    }
 
     const responseContentType = response.headers.get('content-type') || ''
     const issuesSession = /^(auth\/(login|register)|onboarding\/.*register)/i.test(path)
