@@ -110,7 +110,7 @@ interface StudentReportPreview {
   reportCard: SubjectScoreItem[]
 }
 
-export function ReportCardManagement() {
+export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: number[] } = {}) {
   const [activeTab, setActiveTab] = useState<ReportCardTab>('generate')
   
   // Session selection state
@@ -188,10 +188,13 @@ export function ReportCardManagement() {
         if (res.sessionId && (!selectedSessionId || sessionId)) {
           setSelectedSessionId(res.sessionId)
         }
-        setClasses(res.classes)
-        if (res.classes.length > 0) {
-          const foundCls = selectedClassId ? res.classes.find(c => c.id === selectedClassId) : null
-          const activeCls = foundCls || res.classes[0]
+        const availableClasses = allowedClassIds && allowedClassIds.length > 0
+          ? res.classes.filter(c => allowedClassIds.includes(c.id))
+          : res.classes;
+        setClasses(availableClasses)
+        if (availableClasses.length > 0) {
+          const foundCls = selectedClassId ? availableClasses.find(c => c.id === selectedClassId) : null
+          const activeCls = foundCls || availableClasses[0]
           setSelectedClassId(activeCls.id)
           if (activeCls.sections.length > 0) {
             const foundSec = selectedSectionId ? activeCls.sections.find(s => s.id === selectedSectionId) : null

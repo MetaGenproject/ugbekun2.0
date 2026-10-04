@@ -141,16 +141,14 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Teaching' },
         { id: 'my-classes', label: 'My Classes', icon: Users, group: 'Teaching' },
-        { id: 'roster', label: 'Students', icon: UserCheck, group: 'Teaching' },
-        { id: 'gradebook', label: 'Assessments & Scores', icon: TrendingUp, group: 'Teaching' },
-        { id: 'assignments', label: 'Assignments', icon: CheckSquare, group: 'Teaching' },
-        { id: 'cbt-exams', label: 'Exams & Questions', icon: Award, group: 'Teaching' },
-        { id: 'timetable', label: 'Schedule', icon: Calendar, group: 'Teaching' },
         { id: 'attendance', label: 'Attendance', icon: CheckSquare, group: 'Teaching' },
-        { id: 'communication', label: 'Staff Communication', icon: MessageSquare, group: 'Communication' },
-        { id: 'media', label: 'Resource Library', icon: BookOpen, group: 'Resources' },
-        { id: 'class-reports', label: 'Reports', icon: FileText, group: 'Other' },
-        { id: 'ai-planner', label: 'Lesson Plan', icon: FileText, group: 'Other' },
+        { id: 'gradebook', label: 'Assessments', icon: TrendingUp, group: 'Teaching' },
+        { id: 'report-cards', label: 'Report Cards', icon: FileSpreadsheet, group: 'Teaching' },
+        { id: 'assignments', label: 'Assignments', icon: CheckSquare, group: 'Teaching' },
+        { id: 'cbt-exams', label: 'CBT & Tests', icon: Award, group: 'Teaching' },
+        { id: 'class-reports', label: 'Reports', icon: FileText, group: 'Teaching' },
+        { id: 'communication', label: 'Communication', icon: MessageSquare, group: 'Communication' },
+        { id: 'settings', label: 'My Profile', icon: User, group: 'Account' },
       ]
     case 6: // Parent
       return [
