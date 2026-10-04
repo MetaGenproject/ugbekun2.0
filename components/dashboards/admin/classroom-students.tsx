@@ -750,7 +750,7 @@ export function ClassroomStudents() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Form Teacher</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Class Teacher</p>
                     <p className="text-lg font-black text-slate-900 mt-1 truncate max-w-[180px]">{formTeacher}</p>
                   </div>
                   <div className="p-3 rounded-lg border border-blue-100 bg-blue-50 text-blue-600">

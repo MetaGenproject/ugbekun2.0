@@ -1122,7 +1122,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
               </span>
             </div>
 
-            {/* Card 2: Form Teacher */}
+            {/* Card 2: Class Teacher */}
             <div 
               onClick={() => setShowMessageModal(true)}
               className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-purple-200 transition cursor-pointer group"
@@ -1135,7 +1135,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                   <span className="text-sm font-extrabold text-slate-900 block truncate" title={formTeacher?.name || profile?.formTeacher?.name || 'Not Assigned'}>
                     {formTeacher?.name || profile?.formTeacher?.name || 'Not Assigned'}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase">Form Teacher</span>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase">Class Teacher</span>
                 </div>
               </div>
               <span className={`text-[10px] font-bold flex items-center justify-between ${(formTeacher || profile?.formTeacher) ? 'text-purple-600' : 'text-slate-400'}`}>
@@ -1452,7 +1452,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-50 text-purple-600 font-bold text-xs hover:bg-purple-100 transition cursor-pointer"
                   >
                     <Mail size={16} />
-                    <span>Message Form Teacher</span>
+                    <span>Message Class Teacher</span>
                   </button>
 
                   <button
@@ -1548,7 +1548,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
             {/* Right Column (4 cols): Sidebar Widgets */}
             <div className="lg:col-span-4 space-y-6">
               
-              {/* Form Teacher & Subject Teachers Widget */}
+              {/* Class Teacher & Subject Teachers Widget */}
               <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
@@ -1571,7 +1571,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-bold text-slate-900 text-xs truncate">{formTeacher.name}</h4>
-                          <span className="text-[10px] text-purple-700 font-semibold block">Form Teacher</span>
+                          <span className="text-[10px] text-purple-700 font-semibold block">Class Teacher</span>
                           <span className="text-[10px] text-slate-500 truncate block">{formTeacher.email || formTeacher.phone || 'Class Supervisor'}</span>
                         </div>
                       </div>
@@ -2218,7 +2218,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                                 )}
                               </td>
                               <td className="p-4 text-slate-500">
-                                {log.remark || 'Regular roll call entry by form teacher'}
+                                {log.remark || 'Regular roll call entry by class teacher'}
                               </td>
                             </tr>
                           )
@@ -2932,7 +2932,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                   onChange={(e) => setMessageRecipientRole(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
                 >
-                  <option value="TEACHER">Form Teacher / Subject Teachers</option>
+                  <option value="TEACHER">Class Teacher / Subject Teachers</option>
                   <option value="ADMIN">School Administrator / Principal</option>
                 </select>
               </div>

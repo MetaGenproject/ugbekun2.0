@@ -417,7 +417,7 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
               <Users className="text-blue-600" size={24} /> Staff Directory & Communication
             </h1>
             <p className="text-slate-500 text-sm font-medium">
-              Manage teachers, form teachers, subject specialists, non-teaching personnel, and dispatch staff communications via EduChat.
+              Manage teachers, class teachers, subject specialists, non-teaching personnel, and dispatch staff communications via EduChat.
             </p>
           </div>
 
@@ -451,7 +451,7 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <GraduationCap size={15} /> Form Teachers
+          <GraduationCap size={15} /> Class Teachers
         </button>
 
         <button
@@ -674,17 +674,17 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
         </div>
       )}
 
-      {/* TAB 2: FORM TEACHERS */}
+      {/* TAB 2: CLASS TEACHERS */}
       {activeTab === 'form-teachers' && (
         <div className="space-y-6">
           <div className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <GraduationCap className="text-purple-600" size={18} /> Form Teachers ({formTeachers.length})
+                  <GraduationCap className="text-purple-600" size={18} /> Class Teachers ({formTeachers.length})
                 </h3>
                 <p className="text-xs text-slate-400 font-medium">
-                  Class teachers assigned to manage a form class, with the subjects they also teach.
+                  Class teachers assigned to custody of a classroom, with the subjects they also teach.
                 </p>
               </div>
 
@@ -709,14 +709,14 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="animate-spin text-purple-600" size={28} />
-                <p className="text-slate-500 text-xs font-semibold">Loading form teachers...</p>
+                <p className="text-slate-500 text-xs font-semibold">Loading class teachers...</p>
               </div>
             ) : filteredFormTeachers.length === 0 ? (
               <div className="p-12 text-center text-slate-500 text-sm font-semibold bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center gap-2">
                 <GraduationCap size={24} className="text-slate-400" />
                 {formTeachers.length === 0
-                  ? 'No form teachers assigned yet. Mark a teacher as Class Teacher (Form Teacher) when onboarding or editing their record.'
-                  : 'No form teachers match your search filter.'}
+                  ? 'No class teachers assigned yet. Assign a teacher as Class Teacher when onboarding or editing their record.'
+                  : 'No class teachers match your search filter.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -820,7 +820,7 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                     })}
                   </TableBody>
                   <TableCaption>
-                    Showing {filteredFormTeachers.length} form teacher{filteredFormTeachers.length === 1 ? '' : 's'}.
+                    Showing {filteredFormTeachers.length} class teacher{filteredFormTeachers.length === 1 ? '' : 's'}.
                   </TableCaption>
                 </Table>
               </div>

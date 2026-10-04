@@ -101,7 +101,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'overview', label: 'SaaS Overview', icon: Activity, active: true },
         { id: 'manage-branches', label: 'Manage Branches', icon: School },
         { id: 'staff', label: 'Staff Directory', icon: UserCheck },
-        { id: 'form-teachers', label: 'Form Teachers', icon: GraduationCap },
+        { id: 'form-teachers', label: 'Class Teachers', icon: GraduationCap },
         { id: 'tenants', label: 'Tenants Directory', icon: Users },
         { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
         { id: 'revenue-analytics', label: 'Revenue Analytics', icon: TrendingUp },
@@ -386,7 +386,7 @@ export default function DashboardPage() {
         const title = res.isSubjectTeacher
           ? 'Subject Teacher'
           : res.isFormTeacher
-            ? 'Form Teacher'
+            ? 'Class Teacher'
             : 'Teacher'
         setHeaderIdentity({
           name: res.name || user?.username || 'Teacher',

@@ -333,7 +333,7 @@ export function CommentaryReview() {
             </div>
             
             <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-              Explain why this commentary is rejected so the form teacher can revise it:
+              Explain why this commentary is rejected so the class teacher can revise it:
             </p>
 
             <form onSubmit={handleRejectSubmit} className="space-y-4">

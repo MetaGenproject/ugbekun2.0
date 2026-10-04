@@ -1066,7 +1066,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             <div className="space-y-4">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                 <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                  <UserCheck size={14} className="text-rose-600" /> Form Teacher Holistic Remarks
+                  <UserCheck size={14} className="text-rose-600" /> Class Teacher Holistic Remarks
                 </h4>
                 <textarea
                   rows={3}
@@ -1452,7 +1452,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Form Teacher Narrative</label>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase">Class Teacher Narrative</label>
                         <textarea
                           rows={2}
                           value={item.generatedRemark}

@@ -565,9 +565,9 @@ export default function AttendanceRegister({
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm print:hidden">
         <UserCheck size={28} className="mx-auto text-slate-300 mb-3" />
-        <h3 className="text-base font-black text-slate-900">No form class allocated</h3>
+        <h3 className="text-base font-black text-slate-900">No class allocated</h3>
         <p className="text-xs font-semibold text-slate-400 mt-1 max-w-md mx-auto">
-          Only the designated form teacher can take the daily class register. Ask your school admin to assign you as class teacher.
+          Only the designated class teacher can take the daily class register. Ask your school admin to assign you as class teacher.
         </p>
       </div>
     )
@@ -936,7 +936,7 @@ export default function AttendanceRegister({
             {activeForm?.className} ({activeForm?.sectionName}) · {formatLongDate(attendanceDate)}
           </div>
           <div className="text-xs mt-1">
-            Taken by: {registerMeta?.takenByTeacherName || teacherName || 'Form teacher'} · Status: {statusLabel}
+            Taken by: {registerMeta?.takenByTeacherName || teacherName || 'Class teacher'} · Status: {statusLabel}
           </div>
         </div>
         <div className="text-[11px] mb-3 font-semibold">
@@ -974,7 +974,7 @@ export default function AttendanceRegister({
         <div className="mt-10 grid grid-cols-2 gap-16 text-sm">
           <div>
             <div className="border-b border-black h-10" />
-            <div className="mt-1 text-xs">Form teacher signature</div>
+            <div className="mt-1 text-xs">Class teacher signature</div>
           </div>
           <div>
             <div className="border-b border-black h-10" />

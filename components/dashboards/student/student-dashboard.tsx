@@ -1057,7 +1057,7 @@ function normalizeQuestions(raw: any): any[] {
           </div>
         </div>
 
-        {/* Form Teacher Card */}
+        {/* Class Teacher Card */}
         {formTeacher ? (
           <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 text-white shadow-lg border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
@@ -1070,7 +1070,7 @@ function normalizeQuestions(raw: any): any[] {
               </div>
               <div>
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 text-[10px] font-bold uppercase tracking-wider">
-                  Form Class Teacher
+                  Class Teacher
                 </span>
                 <h3 className="text-xl font-extrabold text-white mt-1">{formTeacher.name}</h3>
                 <p className="text-xs text-slate-300">{formTeacher.email || 'No email registered'} &bull; {formTeacher.phone || 'No phone registered'}</p>
@@ -1080,18 +1080,18 @@ function normalizeQuestions(raw: any): any[] {
               onClick={() => {
                 setSelectedRecipientId(formTeacher.id || null)
                 setRecipientRole('TEACHER')
-                setRecipientName(`${formTeacher.name} (Form Teacher)`)
+                setRecipientName(`${formTeacher.name} (Class Teacher)`)
                 setShowMsgModal(true)
               }}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
             >
               <Mail size={14} />
-              <span>Contact Form Teacher</span>
+              <span>Contact Class Teacher</span>
             </button>
           </div>
         ) : (
           <div className="p-6 rounded-2xl bg-slate-100 text-slate-500 text-xs text-center italic">
-            No Form Teacher allocated for {profile.className} {profile.sectionName} yet.
+            No Class Teacher allocated for {profile.className} {profile.sectionName} yet.
           </div>
         )}
 
@@ -1587,7 +1587,7 @@ function normalizeQuestions(raw: any): any[] {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                       <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                          Form Teacher's Commentary
+                          Class Teacher's Commentary
                         </span>
                         <p className="text-xs text-slate-700 italic leading-relaxed">
                           "{grades?.commentary || 'A diligent, polite, and academically steady pupil. Demonstrates high enthusiasm for learning and cooperation.'}"
@@ -3140,14 +3140,14 @@ function normalizeQuestions(raw: any): any[] {
               Messages & Inquiries
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Communicate directly with your Form Teacher, Subject Teachers, and School Administration.
+              Communicate directly with your Class Teacher, Subject Teachers, and School Administration.
             </p>
           </div>
           <button
             onClick={() => {
               setSelectedRecipientId(null)
               setRecipientRole('TEACHER')
-              setRecipientName('Form Teacher / School Admin')
+              setRecipientName('Class Teacher / School Admin')
               setShowMsgModal(true)
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
@@ -3437,7 +3437,7 @@ function normalizeQuestions(raw: any): any[] {
                         <div>
                           <span className="text-[10px] font-mono font-bold text-purple-700 block">{slot.startTime} - {slot.endTime}</span>
                           <span className="font-bold text-slate-900 text-sm mt-0.5 block">{slot.title}</span>
-                          <span className="text-[10px] text-slate-500 block">Teacher: {slot.teacherName || 'Form Teacher'}</span>
+                          <span className="text-[10px] text-slate-500 block">Teacher: {slot.teacherName || 'Class Teacher'}</span>
                         </div>
                         <span className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700">
                           {slot.roomLabel || 'Classroom'}
@@ -3766,7 +3766,7 @@ function normalizeQuestions(raw: any): any[] {
                 <input
                   type="text"
                   readOnly
-                  value={recipientName || 'Form Teacher / Admin'}
+                  value={recipientName || 'Class Teacher / Admin'}
                   className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold"
                 />
               </div>

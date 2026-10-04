@@ -289,7 +289,7 @@ export function AcademicStructure() {
                 <TableRow>
                   <TableHead>Class Name</TableHead>
                   <TableHead>Section</TableHead>
-                  <TableHead>Form Teacher</TableHead>
+                  <TableHead>Class Teacher</TableHead>
                   <TableHead>Arms / Streams</TableHead>
                   <TableHead>Capacity / Enrolled</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -328,9 +328,9 @@ export function AcademicStructure() {
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
-                <UserCheck className="text-purple-600" size={20} /> Primary Form Teachers & Class Masters
+                <UserCheck className="text-purple-600" size={20} /> Primary Class Teachers
               </h3>
-              <p className="text-xs text-slate-500 font-medium">Assigned class masters responsible for daily registration, attendance, and moral supervision.</p>
+              <p className="text-xs text-slate-500 font-medium">Assigned class teachers responsible for daily registration, attendance, and student custody.</p>
             </div>
           </div>
 
@@ -338,7 +338,7 @@ export function AcademicStructure() {
             <TableHeader>
               <TableRow>
                 <TableHead>Class Level</TableHead>
-                <TableHead>Assigned Form Teacher</TableHead>
+                <TableHead>Assigned Class Teacher</TableHead>
                 <TableHead>Contact Phone</TableHead>
                 <TableHead>Total Students Managed</TableHead>
                 <TableHead className="text-right">Reassign</TableHead>

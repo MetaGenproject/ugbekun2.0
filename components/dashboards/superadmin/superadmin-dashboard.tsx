@@ -231,10 +231,10 @@ function SuperadminStaffPortal({ initialTab = 'teachers' }: { initialTab?: 'teac
       <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-900">
-            {initialTab === 'form-teachers' ? 'Form Teachers' : 'Staff Directory'}
+            {initialTab === 'form-teachers' ? 'Class Teachers' : 'Staff Directory'}
           </h2>
           <p className="text-sm text-slate-500">
-            Manage teachers, form teachers, and staff for a selected school branch.
+            Manage teachers, class teachers, and staff for a selected school branch.
           </p>
         </div>
         <div className="min-w-[260px]">

@@ -862,7 +862,7 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                             onChange={(e) => setIsClassTeacher(e.target.checked)}
                             className="rounded border-slate-300 text-[#0063a6] focus:ring-[#0063a6]"
                           />
-                          Class Teacher (Form Teacher)
+                          Class Teacher
                         </label>
 
                         <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
@@ -876,10 +876,10 @@ export function TeacherOnboardingModal({ isOpen, onClose, onSuccess }: TeacherOn
                         </label>
                       </div>
 
-                      {/* Class Teacher (Form Teacher) Allocation Dropdowns */}
+                      {/* Class Teacher Allocation Dropdowns */}
                       {isClassTeacher && (
                         <div className="space-y-3 pt-2 border-t border-slate-200/60">
-                          <p className="text-[11px] font-bold text-[#0063a6] uppercase tracking-wider">Allocate Form/Class Classroom</p>
+                          <p className="text-[11px] font-bold text-[#0063a6] uppercase tracking-wider">Allocate Class</p>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label className="text-[10px] font-bold text-slate-400">Class <span className="text-rose-500">*</span></label>
@@ -1224,7 +1224,7 @@ export function EditTeacherModal({ isOpen, teacher, onClose, onSuccess }: EditTe
 
     try {
       if (isClassTeacher && (!classTeacherClassId || !classTeacherSectionId)) {
-        setErrorMsg('Please select the class and section this form teacher manages.')
+        setErrorMsg('Please select the class and section this class teacher manages.')
         setIsSubmitting(false)
         return
       }

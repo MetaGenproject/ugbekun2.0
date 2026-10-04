@@ -962,7 +962,7 @@ function ClassRegistersPanel() {
           {locked && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
               <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
-                <Lock size={14} /> Submitted registers are locked. Unlock with a reason so the form teacher can correct them. Later edits are audited.
+                <Lock size={14} /> Submitted registers are locked. Unlock with a reason so the class teacher can correct them. Later edits are audited.
               </p>
               {snapshot.register?.unlockedReason && (
                 <p className="text-[11px] text-slate-500">Last unlock: {snapshot.register.unlockedReason}</p>

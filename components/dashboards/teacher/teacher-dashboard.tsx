@@ -424,7 +424,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
             title: profileRes.isSubjectTeacher
               ? 'Subject Teacher'
               : profileRes.isFormTeacher
-                ? 'Form Teacher'
+                ? 'Class Teacher'
                 : 'Teacher',
           })
         } else if (overviewRes?.profile) {
