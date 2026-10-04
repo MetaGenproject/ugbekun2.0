@@ -382,12 +382,15 @@ export default function DashboardPage() {
           isFormTeacher?: boolean
           isSubjectTeacher?: boolean
         }>(endpoints.teacher.profile)
-        if (cancelled || !res.success) return
-        const title = res.isSubjectTeacher
-          ? 'Subject Teacher'
-          : res.isFormTeacher
+        const isClass = Boolean((res as any).isClassTeacher || res.isFormTeacher)
+        const isSubj = Boolean(res.isSubjectTeacher)
+        const title = isClass && isSubj
+          ? 'Class & Subject Teacher'
+          : isClass
             ? 'Class Teacher'
-            : 'Teacher'
+            : isSubj
+              ? 'Subject Teacher'
+              : 'Teacher'
         setHeaderIdentity({
           name: res.name || user?.username || 'Teacher',
           photo: res.photo || null,

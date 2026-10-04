@@ -418,14 +418,18 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
 
         if (profileRes && profileRes.success) {
           setProfile(profileRes)
+          const isClass = Boolean((profileRes as any).isClassTeacher || profileRes.isFormTeacher)
+          const isSubj = Boolean(profileRes.isSubjectTeacher)
           onIdentityChange?.({
             name: profileRes.name || user.username,
             photo: profileRes.photo || null,
-            title: profileRes.isSubjectTeacher
-              ? 'Subject Teacher'
-              : profileRes.isFormTeacher
+            title: isClass && isSubj
+              ? 'Class & Subject Teacher'
+              : isClass
                 ? 'Class Teacher'
-                : 'Teacher',
+                : isSubj
+                  ? 'Subject Teacher'
+                  : 'Teacher',
           })
         } else if (overviewRes?.profile) {
           setProfile({
@@ -782,7 +786,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
     return <TeacherCommunicationInbox />
   }
   if (!activeSection || activeSection === 'overview') {
-    if (profile.isSubjectTeacher) {
+    if (profile.isSubjectTeacher && !profile.isFormTeacher) {
       return <SubjectTeacherDashboard onNavigate={onNavigate} />
     }
   }
