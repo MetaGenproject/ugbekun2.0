@@ -130,11 +130,23 @@ export function TeacherBroadReports() {
 
   const currentSections = classes.find((c) => String(c.id) === String(selectedClassId))?.sections || []
 
+  // Normalized Class Summary
+  const classSummary = reportsData?.classSummary || (reportsData as any)?.classInfo || {
+    classId: 0,
+    className: '',
+    sectionName: 'All Sections',
+    totalStudents: 0,
+    classAverage: 0,
+    highestScore: 0,
+    lowestScore: 0,
+  }
+
   // Filtered rows for tabulation
   const filteredTabulation = (reportsData?.tabulation || []).filter((r) => {
     if (!filterSearch.trim()) return true
     const q = filterSearch.toLowerCase().trim()
-    return r.name.toLowerCase().includes(q) || r.registerNo.toLowerCase().includes(q)
+    const studentName = r.name || `${(r as any).firstName || ''} ${(r as any).lastName || ''}`
+    return studentName.toLowerCase().includes(q) || (r.registerNo || '').toLowerCase().includes(q)
   })
 
   return (
@@ -220,20 +232,20 @@ export function TeacherBroadReports() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100">
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Class Average</span>
-              <span className="text-xl font-black text-blue-600">{reportsData.classSummary.classAverage}%</span>
+              <span className="text-xl font-black text-blue-600">{classSummary.classAverage ?? 0}%</span>
             </div>
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Highest Score</span>
-              <span className="text-xl font-black text-emerald-600">{reportsData.classSummary.highestScore}</span>
+              <span className="text-xl font-black text-emerald-600">{classSummary.highestScore ?? 0}</span>
             </div>
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lowest Score</span>
-              <span className="text-xl font-black text-amber-600">{reportsData.classSummary.lowestScore}</span>
+              <span className="text-xl font-black text-amber-600">{classSummary.lowestScore ?? 0}</span>
             </div>
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 text-center">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
               <span className="text-xl font-black text-indigo-600">
-                {reportsData.attendanceOverview.averageAttendanceRate}%
+                {reportsData.attendanceOverview?.averageAttendanceRate ?? 100}%
               </span>
             </div>
           </div>
@@ -289,10 +301,10 @@ export function TeacherBroadReports() {
           <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-black text-slate-900 uppercase">
-                {reportsData.classSummary.className} ({reportsData.classSummary.sectionName}) — Tabulation Sheet
+                {classSummary.className || 'Class'} ({classSummary.sectionName || 'All Sections'}) — Tabulation Sheet
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Total Enrolled: {reportsData.classSummary.totalStudents} | Subjects Offered: {reportsData.offeredSubjects.length}
+                Total Enrolled: {classSummary.totalStudents || 0} | Subjects Offered: {reportsData.offeredSubjects?.length || 0}
               </p>
             </div>
 
