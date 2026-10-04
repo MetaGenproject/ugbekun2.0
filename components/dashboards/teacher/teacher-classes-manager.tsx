@@ -15,6 +15,8 @@ import {
   GraduationCap,
   Sparkles,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   X,
   Send,
   Building2,
@@ -160,6 +162,22 @@ export function TeacherClassesManager({
       return fullName.includes(q) || regNo.includes(q) || parentName.includes(q) || parentPhone.includes(q)
     })
   }, [students, studentSearchQuery])
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reset to first page when search filter or dataset changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [studentSearchQuery, selectedClassId, selectedSectionId, students.length])
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize))
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, filteredStudents.length)
+  const paginatedStudents = useMemo(() => {
+    return filteredStudents.slice(startIndex, endIndex)
+  }, [filteredStudents, startIndex, endIndex])
 
   // Send Parent Message
   const handleSendParentMessage = async (e: React.FormEvent) => {
@@ -362,7 +380,8 @@ export function TeacherClassesManager({
             <p className="text-xs text-slate-500 font-medium">Loading your students...</p>
           </div>
         ) : filteredStudents.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
                 <tr>
@@ -376,7 +395,7 @@ export function TeacherClassesManager({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStudents.map((st, idx) => (
+                {paginatedStudents.map((st, idx) => (
                   <tr key={`st-${st.id}-${idx}`} className="hover:bg-slate-50/80 transition">
                     <td className="p-4 font-mono text-slate-600 text-[11px] font-semibold">
                       {st.registerNo || `REG-${st.id}`}
@@ -465,6 +484,85 @@ export function TeacherClassesManager({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredStudents.length > 0 && (
+            <div className="p-4 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <span>Showing</span>
+                <span className="font-bold text-slate-900 font-mono">
+                  {filteredStudents.length === 0 ? 0 : startIndex + 1}–{endIndex}
+                </span>
+                <span>of</span>
+                <span className="font-bold text-slate-900 font-mono">{filteredStudents.length}</span>
+                <span>students</span>
+
+                <span className="text-slate-300 mx-2">|</span>
+
+                <label className="text-slate-500 font-medium">Per page:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={14} />
+                  <span>Prev</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .map((p, idx, arr) => {
+                      const prevPage = arr[idx - 1]
+                      return (
+                        <div key={`page-${p}`} className="flex items-center">
+                          {prevPage && p - prevPage > 1 && (
+                            <span className="px-1 text-slate-400 font-bold">...</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(p)}
+                            className={`h-8 min-w-[32px] px-2 rounded-lg font-bold text-xs transition cursor-pointer ${
+                              currentPage === p
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-700 hover:bg-slate-100 border border-slate-200 bg-white'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </div>
+                      )
+                    })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                  title="Next Page"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         ) : (
           <div className="p-16 text-center">
             <Users className="mx-auto text-slate-300 mb-3" size={36} />
