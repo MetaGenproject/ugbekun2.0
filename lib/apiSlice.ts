@@ -174,6 +174,10 @@ export const endpoints = {
     evaluationMatrices: `${BASE_URL}/admin/evaluation-matrices`,
     evaluationMatrixDetail: (id: number | string) => `${BASE_URL}/admin/evaluation-matrices/${id}`,
     setEvaluationMatrixDefault: (id: number | string) => `${BASE_URL}/admin/evaluation-matrices/${id}/set-default`,
+    gradingScales: `${BASE_URL}/admin/grading-scales`,
+    gradingScaleDetail: (id: number | string) => `${BASE_URL}/admin/grading-scales/${id}`,
+    setGradingScaleDefault: (id: number | string) => `${BASE_URL}/admin/grading-scales/${id}/set-default`,
+    assignClassGradingScale: `${BASE_URL}/admin/grading-scales/assign-class`,
     examHalls: `${BASE_URL}/admin/exam-halls`,
     examHallDetail: (id: number | string) => `${BASE_URL}/admin/exam-halls/${id}`,
     examSchedule: (classId?: number, sectionId?: number, hallId?: number) =>
@@ -424,6 +428,7 @@ export const endpoints = {
     gradebookBatchSave: `${BASE_URL}/teacher/gradebook/batch-save`,
     marksEntry: (query: string) => `${BASE_URL}/teacher/marks-entry?${query}`,
     saveMarksEntryBatch: `${BASE_URL}/teacher/marks-entry/batch-save`,
+    gradingSystem: (classId?: number) => `${BASE_URL}/teacher/grading-system${classId ? `?classId=${classId}` : ''}`,
     classReports: (query: string) => `${BASE_URL}/teacher/class-reports?${query}`,
     studentPool: (params: string) => `${BASE_URL}/teacher/students/pool?${params}`,
     autoGenerateStudent: `${BASE_URL}/teacher/students/auto-generate`,

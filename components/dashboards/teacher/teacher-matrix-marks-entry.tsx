@@ -94,8 +94,34 @@ export function TeacherMatrixMarksEntry() {
 
   // Loaded Gradebook Data
   const [matrix, setMatrix] = useState<EvaluationMatrix | null>(null)
+  const [gradingScale, setGradingScale] = useState<any>(null)
   const [studentRows, setStudentRows] = useState<StudentMarksRow[]>([])
   const [initialRowsState, setInitialRowsState] = useState<string>('')
+
+  // Helper to resolve score to grade badge
+  const getGradeForScore = (score: number) => {
+    if (!gradingScale || !Array.isArray(gradingScale.ranges) || gradingScale.ranges.length === 0) {
+      if (score >= 70) return { grade: 'A', remark: 'Excellent', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+      if (score >= 60) return { grade: 'B', remark: 'Very Good', color: 'bg-blue-100 text-blue-800 border-blue-200' }
+      if (score >= 50) return { grade: 'C', remark: 'Credit', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
+      if (score >= 45) return { grade: 'D', remark: 'Pass', color: 'bg-amber-100 text-amber-800 border-amber-200' }
+      if (score >= 40) return { grade: 'E', remark: 'Fair', color: 'bg-orange-100 text-orange-800 border-orange-200' }
+      return { grade: 'F', remark: 'Fail', color: 'bg-rose-100 text-rose-800 border-rose-200' }
+    }
+    for (const r of gradingScale.ranges) {
+      if (score >= r.minScore && score <= r.maxScore) {
+        const isFail = r.grade.toUpperCase() === 'F' || (r.remark && r.remark.toLowerCase().includes('fail'))
+        const isHigh = r.grade.toUpperCase() === 'A' || r.grade.toUpperCase() === 'B' || (r.gpaPoint && r.gpaPoint >= 4)
+        const color = isFail
+          ? 'bg-rose-100 text-rose-800 border-rose-200'
+          : isHigh
+          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+          : 'bg-blue-100 text-blue-800 border-blue-200'
+        return { grade: r.grade, remark: r.remark || '', color }
+      }
+    }
+    return { grade: '-', remark: '', color: 'bg-slate-100 text-slate-700 border-slate-200' }
+  }
 
   // Search & Pagination States
   const [studentSearch, setStudentSearch] = useState('')
@@ -290,6 +316,7 @@ export function TeacherMatrixMarksEntry() {
       const res = await apiSlice.get<{
         success: boolean
         matrix: EvaluationMatrix
+        gradingScale?: any
         students: any[]
         marksMap?: Record<number, any>
         exams: ExamOption[]
@@ -297,6 +324,9 @@ export function TeacherMatrixMarksEntry() {
 
       if (res.success) {
         setMatrix(res.matrix)
+        if (res.gradingScale) {
+          setGradingScale(res.gradingScale)
+        }
         const marksMap = res.marksMap || {}
         const rows: StudentMarksRow[] = (res.students || []).map((s: any) => {
           const sId = Number(s.studentId || s.id)
@@ -580,6 +610,40 @@ export function TeacherMatrixMarksEntry() {
             </span>
           </div>
         )}
+
+        {/* ACTIVE GRADING SCALE BENCHMARK BANNER */}
+        {gradingScale && (
+          <div className="bg-linear-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/60 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+                %
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 flex items-center gap-2">
+                  <span>Grading Scale: {gradingScale.name}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase tracking-wider">
+                    {gradingScale.systemType || 'Standard'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Pass Mark: <strong className="text-slate-800">{gradingScale.passMark}%</strong> • Max GPA: <strong className="text-slate-800">{gradingScale.maxGpa || '5.0'}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(gradingScale.ranges || []).map((r: any, idx: number) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 rounded-xl bg-white border border-blue-200/70 text-[11px] font-bold text-slate-700 shadow-2xs flex items-center gap-1"
+                  title={`${r.minScore}% - ${r.maxScore}%: ${r.remark || ''} (${r.gpaPoint} GPA)`}
+                >
+                  <span className="text-blue-700 font-black">{r.grade}</span>
+                  <span className="text-slate-400 font-normal">({r.minScore}-{r.maxScore}%)</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MARKS ENTRY TABLE */}
@@ -671,8 +735,8 @@ export function TeacherMatrixMarksEntry() {
                         <div className="text-[10px] text-slate-400 font-normal">Max: {comp.maxMarks}</div>
                       </th>
                     ))}
-                    <th className="p-4 text-center font-black text-slate-900 bg-slate-100/60">
-                      <div>Total</div>
+                    <th className="p-4 text-center font-black text-slate-900 bg-slate-100/60 w-32">
+                      <div>Total & Grade</div>
                       <div className="text-[10px] text-slate-400 font-normal">/{matrix.totalMarks}</div>
                     </th>
                     <th className="p-4 text-center">Status</th>
@@ -717,19 +781,29 @@ export function TeacherMatrixMarksEntry() {
                           )
                         })}
 
-                        {/* Auto-Calculated Total */}
+                        {/* Auto-Calculated Total & Dynamic Grade */}
                         <td className="p-3 text-center bg-slate-50/60">
-                          <span
-                            className={`inline-block px-3 py-1.5 rounded-xl font-mono font-black text-xs ${
-                              st.isAbsent
-                                ? 'bg-rose-100 text-rose-700'
-                                : st.totalScore >= (matrix.totalMarks * 0.5)
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {st.isAbsent ? 'ABS' : st.totalScore}
-                          </span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-xl font-mono font-black text-xs ${
+                                st.isAbsent
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : st.totalScore >= (matrix.totalMarks * (gradingScale?.passMark ? gradingScale.passMark / 100 : 0.5))
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {st.isAbsent ? 'ABS' : st.totalScore}
+                            </span>
+                            {!st.isAbsent && (
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black border ${getGradeForScore(st.totalScore).color}`}
+                                title={`${getGradeForScore(st.totalScore).remark}`}
+                              >
+                                {getGradeForScore(st.totalScore).grade}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Absent Toggle Button */}

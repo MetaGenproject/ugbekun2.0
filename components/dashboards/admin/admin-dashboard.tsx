@@ -655,6 +655,10 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <ExamCbtManagement initialTab="evaluation-matrix" />
   }
 
+  if (activeSection === 'grading-scales' || activeSection === 'grading-scale') {
+    return <ExamCbtManagement initialTab="grading-scales" />
+  }
+
   if (
     activeSection === 'marks-entry' ||
     activeSection === 'student-scores' ||

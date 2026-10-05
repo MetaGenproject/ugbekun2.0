@@ -47,6 +47,7 @@ import { MarksEntry } from './marks-entry'
 import { ExamScheduleManager } from './exam-schedule-manager'
 import { ExamHalls } from './exam-halls'
 import { EvaluationMatrices } from './evaluation-matrices'
+import { GradingScales } from './grading-scales'
 
 export type ExamTab = 
   | 'cbt-manager'
@@ -55,6 +56,7 @@ export type ExamTab =
   | 'exam-schedule'
   | 'exam-halls'
   | 'evaluation-matrix'
+  | 'grading-scales'
   | 'cbt-simulator'
   | 'ai-generator'
   | 'result-publishing'
@@ -89,6 +91,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
     if (tab === 'exam-schedule' || tab === 'exam-timetable') return 'exam-schedule'
     if (tab === 'exam-halls' || tab === 'exam-hall') return 'exam-halls'
     if (tab === 'evaluation-matrix' || tab === 'evaluation-matrices') return 'evaluation-matrix'
+    if (tab === 'grading-scales' || tab === 'grading-scale' || tab === 'grading') return 'grading-scales'
     if (tab === 'cbt-exam' || tab === 'cbt-simulator') return 'cbt-simulator'
     if (tab === 'ai-generator') return 'ai-generator'
     if (tab === 'result-publishing' || tab === 'results-processing') return 'result-publishing'
@@ -390,6 +393,15 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
         </button>
 
         <button
+          onClick={() => setActiveTab('grading-scales')}
+          className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'grading-scales' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Award size={14} /> Grading Scales
+        </button>
+
+        <button
           onClick={() => setActiveTab('cbt-simulator')}
           className={`px-3 py-2 rounded-xl font-bold text-xs shrink-0 transition cursor-pointer flex items-center gap-1.5 ${
             activeTab === 'cbt-simulator' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
@@ -645,6 +657,13 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       {activeTab === 'evaluation-matrix' && (
         <div className="space-y-4">
           <EvaluationMatrices />
+        </div>
+      )}
+
+      {/* 6.5. GRADING SCALES & BENCHMARKS */}
+      {activeTab === 'grading-scales' && (
+        <div className="space-y-4">
+          <GradingScales />
         </div>
       )}
 
