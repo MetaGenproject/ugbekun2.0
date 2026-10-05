@@ -97,10 +97,24 @@ export function TeacherClassesManager({
         setStudents(res.students || [])
         if (res.assignedClasses && res.assignedClasses.length > 0) {
           setAssignedClasses(res.assignedClasses)
-          // Default to the first assigned class if none selected yet
-          if (!selectedClassId) {
-            setSelectedClassId(String(res.assignedClasses[0].id))
+
+          let initialClassId = String(res.assignedClasses[0].id)
+          let initialSectionId = ''
+          try {
+            const storedJson = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_teacher_active_context') : null
+            if (storedJson) {
+              const ctx = JSON.parse(storedJson)
+              if (ctx.classId && res.assignedClasses.some((c) => c.id === ctx.classId)) {
+                initialClassId = String(ctx.classId)
+                initialSectionId = ctx.sectionId ? String(ctx.sectionId) : ''
+              }
+            }
+          } catch {
+            // ignore
           }
+
+          setSelectedClassId(initialClassId)
+          setSelectedSectionId(initialSectionId)
         }
       }
     } catch (err: any) {
@@ -112,6 +126,19 @@ export function TeacherClassesManager({
 
   useEffect(() => {
     fetchClassesAndRoster()
+  }, [])
+
+  // Listen to Top Bar Context Switcher
+  useEffect(() => {
+    const handleContextSwitch = (e: any) => {
+      const ctx = e.detail
+      if (!ctx || !ctx.classId) return
+      setSelectedClassId(String(ctx.classId))
+      setSelectedSectionId(ctx.sectionId ? String(ctx.sectionId) : '')
+    }
+
+    window.addEventListener('ugbekun-context-changed', handleContextSwitch)
+    return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
   }, [])
 
   // Available sections for current selected class

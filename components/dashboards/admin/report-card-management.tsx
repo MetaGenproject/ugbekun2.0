@@ -192,12 +192,37 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           ? res.classes.filter(c => allowedClassIds.includes(c.id))
           : res.classes;
         setClasses(availableClasses)
+
+        // Read active context from localStorage if available
+        let targetClassId: number | null = null
+        let targetSectionId: number | null = null
+
+        try {
+          const storedJson = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_teacher_active_context') : null
+          if (storedJson) {
+            const ctx = JSON.parse(storedJson)
+            if (ctx.classId && availableClasses.some((c) => c.id === ctx.classId)) {
+              targetClassId = ctx.classId
+              const matchedCls = availableClasses.find((c) => c.id === ctx.classId)
+              if (matchedCls && ctx.sectionId && matchedCls.sections.some((s) => s.id === ctx.sectionId)) {
+                targetSectionId = ctx.sectionId
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         if (availableClasses.length > 0) {
-          const foundCls = selectedClassId ? availableClasses.find(c => c.id === selectedClassId) : null
+          const foundCls = targetClassId
+            ? availableClasses.find(c => c.id === targetClassId)
+            : (selectedClassId ? availableClasses.find(c => c.id === selectedClassId) : null)
           const activeCls = foundCls || availableClasses[0]
           setSelectedClassId(activeCls.id)
           if (activeCls.sections.length > 0) {
-            const foundSec = selectedSectionId ? activeCls.sections.find(s => s.id === selectedSectionId) : null
+            const foundSec = targetSectionId
+              ? activeCls.sections.find(s => s.id === targetSectionId)
+              : (selectedSectionId ? activeCls.sections.find(s => s.id === selectedSectionId) : null)
             setSelectedSectionId(foundSec ? foundSec.id : activeCls.sections[0].id)
           } else {
             setSelectedSectionId(null)
@@ -213,6 +238,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
       setLoadingClasses(false)
     }
   }
+
+  // Listen to Top Bar Context Switcher
+  useEffect(() => {
+    const handleContextSwitch = (e: any) => {
+      const ctx = e.detail
+      if (!ctx || !ctx.classId) return
+      setSelectedClassId(ctx.classId)
+      if (ctx.sectionId) {
+        setSelectedSectionId(ctx.sectionId)
+      }
+    }
+    window.addEventListener('ugbekun-context-changed', handleContextSwitch)
+    return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
+  }, [])
 
   // Fetch Students when selected class/section/session changes
   useEffect(() => {

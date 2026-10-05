@@ -102,7 +102,7 @@ export function StudentMediaLibrary() {
           <FileText className="mx-auto text-slate-300 mb-3" size={32} />
           <h3 className="font-extrabold text-slate-800 text-base">No Class Resources Available</h3>
           <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto mt-1">
-            Your class teacher has not uploaded resource files for this class tier yet.
+            Your form teacher has not uploaded resource files for this class tier yet.
           </p>
         </div>
       ) : (

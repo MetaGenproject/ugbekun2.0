@@ -101,22 +101,38 @@ export function TeacherAssignmentsManager() {
       try {
         setLoadingList(true)
         const [classesRes, subjectsRes, hwRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; assignedClasses: AssignedClass[] }>(endpoints.teacher.roster),
-          apiSlice.get<{ success: boolean; subjects: AssignedSubject[] }>(endpoints.teacher.subjects),
-          apiSlice.get<{ success: boolean; homeworks: HomeworkItem[] }>(endpoints.teacher.homeworks),
+          apiSlice.get<{ success: boolean; assignedClasses: AssignedClass[] }>(endpoints.teacher.roster).catch(() => ({ success: false, assignedClasses: [] })),
+          apiSlice.get<{ success: boolean; subjects: AssignedSubject[]; assignedSubjects?: any[] }>(endpoints.teacher.subjects).catch(() => ({ success: false, subjects: [], assignedSubjects: [] })),
+          apiSlice.get<{ success: boolean; homeworks: HomeworkItem[] }>(endpoints.teacher.homeworks).catch(() => ({ success: false, homeworks: [] })),
         ])
 
-        if (classesRes.success && classesRes.assignedClasses) {
+        if (classesRes.success && classesRes.assignedClasses && classesRes.assignedClasses.length > 0) {
           setClasses(classesRes.assignedClasses)
-          if (classesRes.assignedClasses.length > 0) {
-            setNewClassId(String(classesRes.assignedClasses[0].id))
+
+          let initialClassId = String(classesRes.assignedClasses[0].id)
+          try {
+            const storedJson = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_teacher_active_context') : null
+            if (storedJson) {
+              const ctx = JSON.parse(storedJson)
+              if (ctx.classId && classesRes.assignedClasses.some((c) => c.id === ctx.classId)) {
+                initialClassId = String(ctx.classId)
+              }
+            }
+          } catch {
+            // ignore
           }
+          setNewClassId(initialClassId)
         }
 
-        if (subjectsRes.success && subjectsRes.subjects) {
-          setSubjects(subjectsRes.subjects)
-          if (subjectsRes.subjects.length > 0) {
-            setNewSubjectId(String(subjectsRes.subjects[0].id))
+        if (subjectsRes.success) {
+          const rawSubjects = (subjectsRes.assignedSubjects && subjectsRes.assignedSubjects.length > 0)
+            ? subjectsRes.assignedSubjects.map((s: any) => ({ id: s.subjectId || s.id, name: s.subjectName || s.name }))
+            : (subjectsRes.subjects || [])
+          
+          const uniqueSubjects = Array.from(new Map(rawSubjects.map((s: any) => [s.id, s])).values())
+          setSubjects(uniqueSubjects as any)
+          if (uniqueSubjects.length > 0) {
+            setNewSubjectId(String(uniqueSubjects[0].id))
           }
         }
 
@@ -131,6 +147,18 @@ export function TeacherAssignmentsManager() {
     }
 
     loadData()
+  }, [])
+
+  // Listen to Top Bar Context Switcher
+  useEffect(() => {
+    const handleContextSwitch = (e: any) => {
+      const ctx = e.detail
+      if (!ctx || !ctx.classId) return
+      setNewClassId(String(ctx.classId))
+    }
+
+    window.addEventListener('ugbekun-context-changed', handleContextSwitch)
+    return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
   }, [])
 
   // Create new assignment

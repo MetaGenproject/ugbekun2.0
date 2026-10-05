@@ -53,6 +53,7 @@ import { OSeAiAssistant } from '@/components/ai/ose-ai-assistant'
 import { SchoolFooter } from '@/components/shared/school-footer'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashboard'
+import { TeacherContextSwitcher } from '@/components/dashboards/teacher/teacher-context-switcher'
 import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
@@ -659,6 +660,13 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Teacher Active Teaching Context Switcher (Top Bar) */}
+          {user.role === 3 && (
+            <div className="mx-2 shrink-0">
+              <TeacherContextSwitcher />
+            </div>
+          )}
 
           {/* Top Right Header Action Badges & User Avatar Profile */}
           <div className="flex items-center gap-3 sm:gap-4">
