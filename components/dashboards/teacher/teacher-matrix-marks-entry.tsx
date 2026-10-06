@@ -20,6 +20,15 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Printer,
+  Wand2,
+  Wifi,
+  WifiOff,
+  Laptop,
+  ArrowRightLeft,
+  School,
+  FileSpreadsheet,
+  Users
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
@@ -36,6 +45,7 @@ interface EvaluationMatrix {
   name: string
   code: string
   totalMarks: number
+  isDefault?: boolean
   components: MatrixComponent[]
 }
 
@@ -45,8 +55,12 @@ interface StudentMarksRow {
   name: string
   registerNo: string
   gender: string
-  componentMarks: Record<string, number>
+  photo?: string | null
+  sectionName?: string
+  componentMarks: Record<string, number | string>
   totalScore: number
+  cbtMark?: string | null
+  cbtExamTitle?: string | null
   isAbsent: boolean
   remarks: string
 }
@@ -54,6 +68,7 @@ interface StudentMarksRow {
 interface ClassOption {
   id: number
   name: string
+  evaluationMatrixId?: number | null
   sections: Array<{ id: number; name: string }>
   subjects?: Array<{ id: number; name: string; subjectCode: string }>
 }
@@ -87,11 +102,13 @@ export function TeacherMatrixMarksEntry() {
   const [subjects, setSubjects] = useState<SubjectOption[]>([])
   const [assignedSubjects, setAssignedSubjects] = useState<AssignedSubjectOption[]>([])
   const [exams, setExams] = useState<ExamOption[]>([])
+  const [matrices, setMatrices] = useState<EvaluationMatrix[]>([])
 
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('')
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('')
   const [selectedExamId, setSelectedExamId] = useState<string>('')
+  const [selectedMatrixId, setSelectedMatrixId] = useState<string>('')
 
   // Loaded Gradebook Data
   const [matrix, setMatrix] = useState<EvaluationMatrix | null>(null)
@@ -99,14 +116,42 @@ export function TeacherMatrixMarksEntry() {
   const [studentRows, setStudentRows] = useState<StudentMarksRow[]>([])
   const [initialRowsState, setInitialRowsState] = useState<string>('')
 
+  // Status States
+  const [loadingConfig, setLoadingConfig] = useState(true)
+  const [loadingSheet, setLoadingSheet] = useState(false)
+  const [savingBatch, setSavingBatch] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // Offline Buffer & Network Detection
+  const [isOnline, setIsOnline] = useState<boolean>(true)
+  const [offlineBufferCount, setOfflineBufferCount] = useState<number>(0)
+
+  // AI Score Assistant States
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const [aiTotalTarget, setAiTotalTarget] = useState<string>('75')
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false)
+
+  // Search & Filter States
+  const [studentSearch, setStudentSearch] = useState('')
+  const [scoreFilterMode, setScoreFilterMode] = useState<'all' | 'scored' | 'cbt'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Buffer storage key
+  const bufferKey = useMemo(() => {
+    return `ugbekun_teacher_offline_marks_${selectedClassId}_${selectedSubjectId}_${selectedMatrixId || 'default'}`
+  }, [selectedClassId, selectedSubjectId, selectedMatrixId])
+
   // Helper to resolve score to grade badge
   const getGradeForScore = (score: number) => {
+    const totalMax = matrix?.totalMarks ? Number(matrix.totalMarks) : 100
     if (!gradingScale || !Array.isArray(gradingScale.ranges) || gradingScale.ranges.length === 0) {
-      if (score >= 70) return { grade: 'A', remark: 'Excellent', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
-      if (score >= 60) return { grade: 'B', remark: 'Very Good', color: 'bg-blue-100 text-blue-800 border-blue-200' }
-      if (score >= 50) return { grade: 'C', remark: 'Credit', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
-      if (score >= 45) return { grade: 'D', remark: 'Pass', color: 'bg-amber-100 text-amber-800 border-amber-200' }
-      if (score >= 40) return { grade: 'E', remark: 'Fair', color: 'bg-orange-100 text-orange-800 border-orange-200' }
+      const pct = totalMax > 0 ? (score / totalMax) * 100 : score
+      if (pct >= 70) return { grade: 'A', remark: 'Excellent', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+      if (pct >= 60) return { grade: 'B', remark: 'Very Good', color: 'bg-blue-100 text-blue-800 border-blue-200' }
+      if (pct >= 50) return { grade: 'C', remark: 'Credit', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' }
+      if (pct >= 45) return { grade: 'D', remark: 'Pass', color: 'bg-amber-100 text-amber-800 border-amber-200' }
+      if (pct >= 40) return { grade: 'E', remark: 'Fair', color: 'bg-orange-100 text-orange-800 border-orange-200' }
       return { grade: 'F', remark: 'Fail', color: 'bg-rose-100 text-rose-800 border-rose-200' }
     }
     for (const r of gradingScale.ranges) {
@@ -124,47 +169,44 @@ export function TeacherMatrixMarksEntry() {
     return { grade: '-', remark: '', color: 'bg-slate-100 text-slate-700 border-slate-200' }
   }
 
-  // Search & Pagination States
-  const [studentSearch, setStudentSearch] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-
-  // Status States
-  const [loadingConfig, setLoadingConfig] = useState(true)
-  const [loadingSheet, setLoadingSheet] = useState(false)
-  const [savingBatch, setSavingBatch] = useState(false)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-
-  // Filter students based on search
-  const filteredRows = useMemo(() => {
-    if (!studentSearch.trim()) return studentRows
-    const q = studentSearch.toLowerCase().trim()
-    return studentRows.filter(
-      (st) =>
-        st.name.toLowerCase().includes(q) ||
-        (st.registerNo && st.registerNo.toLowerCase().includes(q))
-    )
-  }, [studentRows, studentSearch])
-
-  // Reset pagination on filter or dataset change
+  // Network online/offline detection
   useEffect(() => {
-    setCurrentPage(1)
-  }, [selectedClassId, selectedSectionId, selectedSubjectId, selectedExamId, studentSearch])
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true)
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
-  const startIndex = (currentPage - 1) * pageSize
-  const endIndex = Math.min(startIndex + pageSize, filteredRows.length)
+  // Check offline buffer on target selection change
+  useEffect(() => {
+    if (!selectedClassId || !selectedSubjectId) {
+      setOfflineBufferCount(0)
+      return
+    }
+    try {
+      const bufferedDataStr = typeof window !== 'undefined' ? localStorage.getItem(bufferKey) : null
+      if (bufferedDataStr) {
+        const parsed = JSON.parse(bufferedDataStr)
+        setOfflineBufferCount(Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length)
+      } else {
+        setOfflineBufferCount(0)
+      }
+    } catch {
+      setOfflineBufferCount(0)
+    }
+  }, [bufferKey, selectedClassId, selectedSubjectId])
 
-  const paginatedRows = useMemo(() => {
-    return filteredRows.slice(startIndex, endIndex)
-  }, [filteredRows, startIndex, endIndex])
-
-  // 1. Initial Load: Teacher's Classes, Subjects, and Exams
+  // 1. Initial Load: Teacher's Classes, Subjects, Exams, and School Evaluation Matrices
   useEffect(() => {
     async function loadInitialContext() {
       try {
         setLoadingConfig(true)
-        const [classesRes, subjectsRes, examsRes] = await Promise.all([
+        const [classesRes, subjectsRes, examsRes, matricesRes] = await Promise.all([
           apiSlice.get<{ success: boolean; assignedClasses: ClassOption[] }>(endpoints.teacher.roster),
           apiSlice.get<{
             success: boolean
@@ -172,6 +214,7 @@ export function TeacherMatrixMarksEntry() {
             assignedSubjects?: AssignedSubjectOption[]
           }>(endpoints.teacher.subjects),
           apiSlice.get<{ success: boolean; exams: ExamOption[] }>(endpoints.teacher.exams),
+          apiSlice.get<{ success: boolean; matrices: EvaluationMatrix[] }>(endpoints.teacher.evaluationMatrices).catch(() => ({ success: false, matrices: [] })),
         ])
 
         const assignedClasses = classesRes.success ? (classesRes.assignedClasses || []) : []
@@ -182,12 +225,16 @@ export function TeacherMatrixMarksEntry() {
         setSubjects(branchSubjects)
         setAssignedSubjects(teacherAssignedSubjects)
 
+        if (matricesRes.success && Array.isArray(matricesRes.matrices)) {
+          setMatrices(matricesRes.matrices)
+        }
+
         if (examsRes.success && examsRes.exams?.length > 0) {
           setExams(examsRes.exams)
           setSelectedExamId(String(examsRes.exams[0].id))
         }
 
-        // Check if user has an active context saved from Context Switcher
+        // Check active context from Context Switcher
         let initialClassId = ''
         let initialSectionId = ''
         let initialSubjectId = ''
@@ -237,7 +284,7 @@ export function TeacherMatrixMarksEntry() {
     loadInitialContext()
   }, [])
 
-  // Dynamically compute subjects offered by the currently selected class
+  // Dynamically compute subjects offered by the selected class
   const availableSubjects = useMemo(() => {
     if (!selectedClassId) return []
     const cid = Number(selectedClassId)
@@ -266,14 +313,11 @@ export function TeacherMatrixMarksEntry() {
       return Array.from(map.values())
     }
 
-    // 2. If no direct subject teaching assignment for this class (e.g. user is Class Teacher),
-    // use the subjects offered by this class
     const targetClass = classes.find((c) => c.id === cid)
     if (targetClass?.subjects && targetClass.subjects.length > 0) {
       return targetClass.subjects
     }
 
-    // Fallback: If no class-level subjects found, fallback to global branch subjects
     return subjects
   }, [assignedSubjects, classes, selectedClassId, selectedSectionId, subjects])
 
@@ -320,26 +364,43 @@ export function TeacherMatrixMarksEntry() {
       params.append('subjectId', selectedSubjectId)
       if (selectedSectionId) params.append('sectionId', selectedSectionId)
       if (selectedExamId) params.append('examId', selectedExamId)
+      if (selectedMatrixId) params.append('matrixId', selectedMatrixId)
 
       const res = await apiSlice.get<{
         success: boolean
         matrix: EvaluationMatrix
+        matrices?: EvaluationMatrix[]
         gradingScale?: any
         students: any[]
         marksMap?: Record<number, any>
-        exams: ExamOption[]
+        exams?: ExamOption[]
+        classData?: { id: number; name: string; evaluationMatrixId?: number | null }
       }>(endpoints.teacher.marksEntry(params.toString()))
 
       if (res.success) {
         setMatrix(res.matrix)
+        if (res.matrices && Array.isArray(res.matrices) && res.matrices.length > 0) {
+          setMatrices(res.matrices)
+        }
         if (res.gradingScale) {
           setGradingScale(res.gradingScale)
         }
+
+        // Align matrix selector
+        if (!selectedMatrixId) {
+          const defaultMatId = res.classData?.evaluationMatrixId || res.matrix?.id
+          if (defaultMatId) {
+            setSelectedMatrixId(String(defaultMatId))
+          }
+        }
+
         const marksMap = res.marksMap || {}
-        const rows: StudentMarksRow[] = (res.students || []).map((s: any) => {
+        let rows: StudentMarksRow[] = (res.students || []).map((s: any) => {
           const sId = Number(s.studentId || s.id)
           const markData = marksMap[sId] || {}
           const existingComps = markData.components || s.componentMarks || {}
+
+          // Compute total score
           const total = Object.values(existingComps).reduce((a: number, b: any) => a + (Number(b) || 0), 0)
 
           return {
@@ -348,23 +409,53 @@ export function TeacherMatrixMarksEntry() {
             name: s.name || `${s.lastName || ''}, ${s.firstName || ''}`,
             registerNo: s.registerNo || '',
             gender: s.gender || '',
+            photo: s.photo || null,
+            sectionName: s.sectionName || '',
             componentMarks: existingComps,
             totalScore: Number(total) || 0,
+            cbtMark: s.cbtMark ?? markData.cbtMark ?? null,
+            cbtExamTitle: s.cbtExamTitle ?? markData.cbtExamTitle ?? null,
             isAbsent: markData.absent !== undefined ? markData.absent : (s.isAbsent || false),
             remarks: markData.remarks || s.remarks || '',
           }
         })
 
+        // Restore offline buffer if available
+        try {
+          const bufferedStr = typeof window !== 'undefined' ? localStorage.getItem(bufferKey) : null
+          if (bufferedStr) {
+            const bufferedRows: StudentMarksRow[] = JSON.parse(bufferedStr)
+            if (Array.isArray(bufferedRows) && bufferedRows.length > 0) {
+              const bufferMap = new Map(bufferedRows.map((b) => [Number(b.studentId || b.id), b]))
+              rows = rows.map((r) => {
+                const bRow = bufferMap.get(r.studentId)
+                if (bRow) {
+                  return {
+                    ...r,
+                    componentMarks: bRow.componentMarks,
+                    totalScore: bRow.totalScore,
+                    isAbsent: bRow.isAbsent,
+                  }
+                }
+                return r
+              })
+              setOfflineBufferCount(rows.length)
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to parse offline buffer:', e)
+        }
+
         setStudentRows(rows)
         setInitialRowsState(JSON.stringify(rows))
         setHasUnsavedChanges(false)
+
         if (res.exams && res.exams.length > 0 && !selectedExamId) {
           setSelectedExamId(String(res.exams[0].id))
         }
-        toast.success(`Active Assessment Matrix: ${res.matrix.name} loaded.`)
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load marks entry sheet.')
+      toast.error(err.message || 'Failed to load assessment sheet.')
       setStudentRows([])
       setMatrix(null)
     } finally {
@@ -372,45 +463,55 @@ export function TeacherMatrixMarksEntry() {
     }
   }
 
-  // Auto-fetch when Class or Subject changes
+  // Auto-fetch when Class, Subject, Section, Exam, or Matrix changes
   useEffect(() => {
     if (selectedClassId && selectedSubjectId) {
       fetchMarksSheet()
     }
-  }, [selectedClassId, selectedSubjectId, selectedSectionId, selectedExamId])
+  }, [selectedClassId, selectedSubjectId, selectedSectionId, selectedExamId, selectedMatrixId])
 
   // Handle Score Input Change for a student component
-  const handleScoreChange = (targetStudentId: number, compCode: string, value: string) => {
-    const numVal = value === '' ? 0 : Math.max(0, Number(value) || 0)
+  const handleScoreChange = (targetStudentId: number, compKey: string, value: string) => {
+    const numVal = value === '' ? '' : Math.max(0, Number(value) || 0)
 
-    setStudentRows((prev) =>
-      prev.map((row) => {
+    setStudentRows((prev) => {
+      const next = prev.map((row) => {
         const rowStudentId = Number(row.studentId || row.id)
         if (rowStudentId !== targetStudentId) return row
 
         const updatedComp = {
           ...(row.componentMarks || {}),
-          [compCode]: numVal,
+          [compKey]: numVal,
         }
 
-        // Calculate Automatic Total
+        // Live Total Calculation
         const total = Object.values(updatedComp).reduce((a, b) => a + (Number(b) || 0), 0)
 
         return {
           ...row,
           componentMarks: updatedComp,
           totalScore: total,
-          isAbsent: false, // Entering a score automatically marks student as present
+          isAbsent: false,
         }
       })
-    )
+
+      // Auto-save to LocalStorage Offline Sync Buffer
+      try {
+        localStorage.setItem(bufferKey, JSON.stringify(next))
+        setOfflineBufferCount(next.length)
+      } catch (e) {
+        // quota exceeded fallback
+      }
+
+      return next
+    })
     setHasUnsavedChanges(true)
   }
 
   // Handle Absent Toggle
   const handleToggleAbsent = (targetStudentId: number) => {
-    setStudentRows((prev) =>
-      prev.map((row) => {
+    setStudentRows((prev) => {
+      const next = prev.map((row) => {
         const rowStudentId = Number(row.studentId || row.id)
         if (rowStudentId !== targetStudentId) return row
         const newAbsent = !row.isAbsent
@@ -420,14 +521,101 @@ export function TeacherMatrixMarksEntry() {
           totalScore: newAbsent ? 0 : row.totalScore,
         }
       })
-    )
+
+      try {
+        localStorage.setItem(bufferKey, JSON.stringify(next))
+        setOfflineBufferCount(next.length)
+      } catch (e) {}
+
+      return next
+    })
     setHasUnsavedChanges(true)
   }
 
-  // Batch Save Scores
+  // Sync a single student's CBT Score to matrix Exam component
+  const handleSyncSingleCbt = (targetStudentId: number) => {
+    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
+    const targetComp =
+      matrix.components.find((c) => /exam|terminal|cbt|objective|theory/i.test(c.name || c.code)) ||
+      matrix.components[matrix.components.length - 1]
+    const targetKey = targetComp.code || targetComp.name
+
+    setStudentRows((prev) => {
+      const next = prev.map((row) => {
+        const rowId = Number(row.studentId || row.id)
+        if (rowId === targetStudentId && row.cbtMark !== null && row.cbtMark !== undefined && String(row.cbtMark).trim() !== '') {
+          const numCbt = Number(row.cbtMark) || 0
+          const updated = {
+            ...(row.componentMarks || {}),
+            [targetKey]: numCbt,
+          }
+          const total = Object.values(updated).reduce((a, b) => a + (Number(b) || 0), 0)
+          return {
+            ...row,
+            componentMarks: updated,
+            totalScore: total,
+            isAbsent: false,
+          }
+        }
+        return row
+      })
+
+      try {
+        localStorage.setItem(bufferKey, JSON.stringify(next))
+        setOfflineBufferCount(next.length)
+      } catch (e) {}
+
+      return next
+    })
+    setHasUnsavedChanges(true)
+    toast.success(`CBT score synced into "${targetComp.name}".`)
+  }
+
+  // Sync All CBT Scores to the Exam component
+  const handleSyncAllCbtToExam = () => {
+    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
+    const targetComp =
+      matrix.components.find((c) => /exam|terminal|cbt|objective|theory/i.test(c.name || c.code)) ||
+      matrix.components[matrix.components.length - 1]
+    const targetKey = targetComp.code || targetComp.name
+
+    let synced = 0
+    setStudentRows((prev) => {
+      const next = prev.map((row) => {
+        if (row.cbtMark !== null && row.cbtMark !== undefined && String(row.cbtMark).trim() !== '') {
+          const numCbt = Number(row.cbtMark) || 0
+          const updated = {
+            ...(row.componentMarks || {}),
+            [targetKey]: numCbt,
+          }
+          const total = Object.values(updated).reduce((a, b) => a + (Number(b) || 0), 0)
+          synced++
+          return {
+            ...row,
+            componentMarks: updated,
+            totalScore: total,
+            isAbsent: false,
+          }
+        }
+        return row
+      })
+
+      try {
+        localStorage.setItem(bufferKey, JSON.stringify(next))
+        setOfflineBufferCount(next.length)
+      } catch (e) {}
+
+      return next
+    })
+
+    setHasUnsavedChanges(true)
+    toast.success(`Synchronized CBT scores for ${synced} student(s) into matrix component "${targetComp.name}".`)
+  }
+
+  // Batch Save Scores to Server
   const handleBatchSave = async () => {
     if (!selectedClassId || !selectedSubjectId || !selectedExamId) {
-      toast.error('Class, Subject, and Exam are required to commit scores.')
+      toast.error('Class, Subject, and Assessment Term are required to commit scores.')
       return
     }
 
@@ -459,13 +647,100 @@ export function TeacherMatrixMarksEntry() {
         toast.success(res.message || 'All student scores saved successfully.')
         setHasUnsavedChanges(false)
         setInitialRowsState(JSON.stringify(studentRows))
+
+        // Clear offline buffer on successful save
+        try {
+          localStorage.removeItem(bufferKey)
+          setOfflineBufferCount(0)
+        } catch (e) {}
       } else {
         toast.error(res.message || 'Failed to save scores.')
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error while saving marks.')
+      toast.error(err.message || 'Server error while saving marks. Saved to offline buffer instead.')
     } finally {
       setSavingBatch(false)
+    }
+  }
+
+  // Run AI Proportional Score Distribution
+  const handleRunAiScoreDistribution = async () => {
+    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
+    setIsGeneratingAi(true)
+
+    try {
+      const targetScoreNum = Number(aiTotalTarget) || 75
+      const studentTotals = studentRows.map((s) => ({
+        studentId: Number(s.studentId || s.id),
+        totalScore: targetScoreNum,
+      }))
+
+      let distributedMap: Record<number, any> = {}
+
+      try {
+        const res = await apiSlice.post<{
+          success: boolean
+          distributedMarksMap: Record<number, { totalScore: number; components: Record<string, number> }>
+        }>(endpoints.teacher.aiDistributeMarks, {
+          matrixComponents: matrix.components,
+          studentTotals,
+        })
+        if (res.success && res.distributedMarksMap) {
+          distributedMap = res.distributedMarksMap
+        }
+      } catch {
+        // Fallback proportional distribution
+        const maxTotal = matrix.totalMarks || matrix.components.reduce((sum, c) => sum + (Number(c.maxMarks) || 0), 0) || 100
+        studentTotals.forEach((st) => {
+          const score = Math.min(Math.max(st.totalScore, 0), maxTotal)
+          const compScores: Record<string, number> = {}
+          let allocated = 0
+          matrix.components.forEach((c, idx) => {
+            const compMax = Number(c.maxMarks) || 0
+            const compKey = c.code || c.name
+            if (idx === matrix.components.length - 1) {
+              compScores[compKey] = Math.max(0, Math.round(score - allocated))
+            } else {
+              const ratio = compMax / maxTotal
+              const assigned = Math.round(score * ratio)
+              compScores[compKey] = assigned
+              allocated += assigned
+            }
+          })
+          distributedMap[st.studentId] = { totalScore: score, components: compScores }
+        })
+      }
+
+      setStudentRows((prev) => {
+        const next = prev.map((row) => {
+          const rId = Number(row.studentId || row.id)
+          const aiData = distributedMap[rId]
+          if (aiData) {
+            return {
+              ...row,
+              componentMarks: aiData.components,
+              totalScore: aiData.totalScore,
+              isAbsent: false,
+            }
+          }
+          return row
+        })
+
+        try {
+          localStorage.setItem(bufferKey, JSON.stringify(next))
+          setOfflineBufferCount(next.length)
+        } catch (e) {}
+
+        return next
+      })
+
+      setHasUnsavedChanges(true)
+      setIsAiModalOpen(false)
+      toast.success('AI Score Distribution applied across student roster!')
+    } catch (err: any) {
+      toast.error('Failed to run AI distribution.')
+    } finally {
+      setIsGeneratingAi(false)
     }
   }
 
@@ -476,308 +751,472 @@ export function TeacherMatrixMarksEntry() {
     return cls?.sections || []
   }, [classes, selectedClassId])
 
+  // Filter and Search student rows
+  const filteredRows = useMemo(() => {
+    return studentRows.filter((st) => {
+      // Search Query filter
+      if (studentSearch.trim()) {
+        const q = studentSearch.toLowerCase().trim()
+        const matchesName = st.name.toLowerCase().includes(q)
+        const matchesReg = st.registerNo && st.registerNo.toLowerCase().includes(q)
+        if (!matchesName && !matchesReg) return false
+      }
+
+      // Tab filter
+      if (scoreFilterMode === 'scored') {
+        return !st.isAbsent && st.totalScore > 0
+      }
+      if (scoreFilterMode === 'cbt') {
+        return st.cbtMark !== null && st.cbtMark !== undefined && String(st.cbtMark).trim() !== ''
+      }
+
+      return true
+    })
+  }, [studentRows, studentSearch, scoreFilterMode])
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedClassId, selectedSectionId, selectedSubjectId, selectedExamId, selectedMatrixId, studentSearch, scoreFilterMode])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, filteredRows.length)
+
+  const paginatedRows = useMemo(() => {
+    return filteredRows.slice(startIndex, endIndex)
+  }, [filteredRows, startIndex, endIndex])
+
+  // Statistical aggregates
+  const scoredCount = useMemo(() => {
+    return studentRows.filter((s) => !s.isAbsent && s.totalScore > 0).length
+  }, [studentRows])
+
+  const cbtCount = useMemo(() => {
+    return studentRows.filter((s) => s.cbtMark !== null && s.cbtMark !== undefined && String(s.cbtMark).trim() !== '').length
+  }, [studentRows])
+
+  const classAvgScore = useMemo(() => {
+    const present = studentRows.filter((s) => !s.isAbsent)
+    if (present.length === 0) return '0.0'
+    const totalSum = present.reduce((acc, s) => acc + s.totalScore, 0)
+    return (totalSum / present.length).toFixed(1)
+  }, [studentRows])
+
   return (
     <div className="space-y-6 pb-12 font-sans">
-      {/* Header Banner */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-2 border border-emerald-200/60">
-            <Award size={14} />
-            <span>School Evaluation Matrix Inherited</span>
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            Assessments & Examination Gradebook
-          </h1>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Enter marks dynamically mapped to the school&apos;s active Assessment Matrix. Totals are calculated automatically and instantly synced into student academic records.
-          </p>
-        </div>
+      {/* Header Banner matching Admin standard */}
+      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 skew-x-12 pointer-events-none" />
 
-        {matrix && (
-          <div className="flex items-center gap-3">
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 text-right">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Matrix Config</span>
-              <span className="text-xs font-black text-slate-800">{matrix.name}</span>
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-200 border border-white/15">
+              <FileSpreadsheet size={14} className="text-emerald-300" />
+              <span>Classroom Assessments & Marks Gradebook</span>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2 text-center">
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Total Marks</span>
-              <span className="text-lg font-black text-emerald-700">{matrix.totalMarks}</span>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Student Assessment Desk
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-100/80 max-w-2xl">
+              Enter continuous assessment and exam marks strictly for your allocated classrooms. Dynamic evaluation matrix components, AI proportional distribution, and CBT score synchronization.
+            </p>
           </div>
-        )}
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {cbtCount > 0 && (
+              <button
+                type="button"
+                onClick={handleSyncAllCbtToExam}
+                className="px-3.5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                title="Auto-fill CBT marks into Examination column"
+              >
+                <ArrowRightLeft size={14} /> Sync All CBT to Exam
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+              disabled={!matrix}
+              className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+            >
+              <Wand2 size={15} /> AI Score Assistant
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBatchSave}
+              disabled={savingBatch || studentRows.length === 0}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+            >
+              {savingBatch ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              <span>Save Marks to Server</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition border border-white/15 cursor-pointer"
+              title="Print Score Sheet"
+            >
+              <Printer size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* SELECTION BAR */}
+      {/* Analytics Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-400 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Enrolled Students</span>
+            <Users size={16} className="text-slate-500" />
+          </div>
+          <div className="text-xl sm:text-2xl font-black text-slate-900">{studentRows.length}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Active in this classroom</div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center justify-between text-emerald-600 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Scored Students</span>
+            <CheckCircle2 size={16} />
+          </div>
+          <div className="text-xl sm:text-2xl font-black text-emerald-700">{scoredCount}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">
+            {studentRows.length > 0 ? Math.round((scoredCount / studentRows.length) * 100) : 0}% completed
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center justify-between text-blue-600 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Class Average</span>
+            <TrendingUp size={16} />
+          </div>
+          <div className="text-xl sm:text-2xl font-black text-blue-700">
+            {classAvgScore} <span className="text-xs font-normal text-slate-400">/{matrix?.totalMarks || 100}</span>
+          </div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Calculated across active marks</div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="flex items-center justify-between text-purple-600 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">CBT Online Tests</span>
+            <Laptop size={16} />
+          </div>
+          <div className="text-xl sm:text-2xl font-black text-purple-700">{cbtCount}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Submissions detected</div>
+        </div>
+      </div>
+
+      {/* SELECTORS & MATRIX BAR */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-          {/* Class Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          {/* 1. Class Selector (Strictly Teacher's Allocated Classes) */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               Class <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={selectedClassId}
-              onChange={(e) => {
-                setSelectedClassId(e.target.value)
-                setSelectedSectionId('')
-              }}
-              className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-            >
-              {classes.length === 0 ? (
-                <option value="">No Classes Assigned</option>
-              ) : (
-                classes.map((cls) => (
-                  <option key={`c-${cls.id}`} value={cls.id}>
-                    {cls.name}
-                  </option>
-                ))
-              )}
-            </select>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <School size={16} className="text-emerald-600 shrink-0" />
+              <select
+                value={selectedClassId}
+                onChange={(e) => {
+                  setSelectedClassId(e.target.value)
+                  setSelectedSectionId('')
+                }}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                {classes.length === 0 ? (
+                  <option value="">No Classes Allocated</option>
+                ) : (
+                  classes.map((cls) => (
+                    <option key={`c-${cls.id}`} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
 
-          {/* Section Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+          {/* 2. Section Selector */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               Section
             </label>
-            <select
-              value={selectedSectionId}
-              onChange={(e) => setSelectedSectionId(e.target.value)}
-              className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-            >
-              <option value="">All Sections</option>
-              {currentSections.map((sec) => (
-                <option key={`s-${sec.id}`} value={sec.id}>
-                  {sec.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <Layers size={16} className="text-purple-600 shrink-0" />
+              <select
+                value={selectedSectionId}
+                onChange={(e) => setSelectedSectionId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                <option value="">All Sections</option>
+                {currentSections.map((sec) => (
+                  <option key={`s-${sec.id}`} value={sec.id}>
+                    Section {sec.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Subject Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+          {/* 3. Subject Selector */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               Subject <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={selectedSubjectId}
-              onChange={(e) => setSelectedSubjectId(e.target.value)}
-              disabled={availableSubjects.length === 0}
-              className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer disabled:opacity-50"
-            >
-              {availableSubjects.length === 0 ? (
-                <option value="">No Subjects Offered in this Class</option>
-              ) : (
-                availableSubjects.map((sub) => (
-                  <option key={`sub-${sub.id}`} value={sub.id}>
-                    {sub.name} {sub.subjectCode ? `(${sub.subjectCode})` : ''}
-                  </option>
-                ))
-              )}
-            </select>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <BookOpen size={16} className="text-blue-600 shrink-0" />
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                disabled={availableSubjects.length === 0}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer disabled:opacity-50"
+              >
+                {availableSubjects.length === 0 ? (
+                  <option value="">No Subjects Available</option>
+                ) : (
+                  availableSubjects.map((sub) => (
+                    <option key={`sub-${sub.id}`} value={sub.id}>
+                      {sub.name} {sub.subjectCode ? `(${sub.subjectCode})` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
 
-          {/* Exam / Term Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              Assessment / Term <span className="text-rose-500">*</span>
+          {/* 4. Evaluation Matrix Scheme Selector (Created by Admin) */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+              Matrix Scheme <span className="text-amber-500">*</span>
             </label>
-            <select
-              value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
-              className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-            >
-              {exams.map((ex) => (
-                <option key={`ex-${ex.id}`} value={ex.id}>
-                  {ex.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <Award size={16} className="text-amber-500 shrink-0" />
+              <select
+                value={selectedMatrixId}
+                onChange={(e) => setSelectedMatrixId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                {matrices.length === 0 ? (
+                  <option value="">{matrix ? `${matrix.name} (${matrix.code})` : 'Default Assessment Matrix'}</option>
+                ) : (
+                  matrices.map((m) => (
+                    <option key={`mat-${m.id}`} value={m.id}>
+                      {m.name} ({m.code}) — {m.totalMarks} Marks
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* 5. Exam / Term Selector */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+              Assessment Term <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <Calendar size={16} className="text-emerald-600 shrink-0" />
+              <select
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                {exams.map((ex) => (
+                  <option key={`ex-${ex.id}`} value={ex.id}>
+                    {ex.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Matrix Active Component Tags */}
-        {matrix && Array.isArray(matrix.components) && (
-          <div className="pt-2 flex flex-wrap items-center gap-2 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Matrix Components:
+        {/* Status Bar & Active Matrix Breakdown */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs font-semibold text-slate-600">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
+                isOnline
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}
+            >
+              {isOnline ? <Wifi size={13} className="text-emerald-600" /> : <WifiOff size={13} className="text-rose-600" />}
+              {isOnline ? 'Online Sync Active' : 'Offline Mode (Local Buffer Active)'}
             </span>
-            {matrix.components.map((comp) => (
-              <span
-                key={`comp-badge-${comp.code}`}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200/70"
-              >
-                <span>{comp.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-200/80 rounded-sm text-emerald-900 font-mono">
-                  Max: {comp.maxMarks}
-                </span>
-              </span>
-            ))}
-            <span className="text-xs text-slate-400 italic ml-auto">
-              Auto-Total calculates on entry
-            </span>
-          </div>
-        )}
 
-        {/* ACTIVE GRADING SCALE BENCHMARK BANNER */}
-        {gradingScale && (
-          <div className="bg-linear-to-r from-blue-50/70 via-indigo-50/50 to-slate-50 border border-blue-200/60 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0">
-                %
-              </div>
-              <div>
-                <div className="font-bold text-slate-900 flex items-center gap-2">
-                  <span>Grading Scale: {gradingScale.name}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold uppercase tracking-wider">
-                    {gradingScale.systemType || 'Standard'}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  Pass Mark: <strong className="text-slate-800">{gradingScale.passMark}%</strong> • Max GPA: <strong className="text-slate-800">{gradingScale.maxGpa || '5.0'}</strong>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(gradingScale.ranges || []).map((r: any, idx: number) => (
-                <span
-                  key={idx}
-                  className="px-2.5 py-1 rounded-xl bg-white border border-blue-200/70 text-[11px] font-bold text-slate-700 shadow-2xs flex items-center gap-1"
-                  title={`${r.minScore}% - ${r.maxScore}%: ${r.remark || ''} (${r.gpaPoint} GPA)`}
-                >
-                  <span className="text-blue-700 font-black">{r.grade}</span>
-                  <span className="text-slate-400 font-normal">({r.minScore}-{r.maxScore}%)</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* MARKS ENTRY TABLE */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-slate-50/50">
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-              <span>Score Sheet</span>
-              <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black">
-                {filteredRows.length} Students
+            {offlineBufferCount > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 font-mono">
+                <RefreshCw size={12} className="animate-spin text-amber-600" />
+                {offlineBufferCount} local unsaved entries buffered
               </span>
-            </h3>
+            )}
+
             {hasUnsavedChanges && (
-              <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1 mt-0.5">
-                <AlertCircle size={12} />
-                Unsaved score edits detected
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200 animate-pulse">
+                Unsaved Changes
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-            {/* Quick Search */}
-            <div className="relative flex-1 md:w-60">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                placeholder="Search students..."
-                className="w-full h-10 pl-9 pr-8 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-              />
-              {studentSearch && (
-                <button
-                  type="button"
-                  onClick={() => setStudentSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+          {matrix && Array.isArray(matrix.components) && matrix.components.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-700">
+              <span className="text-slate-400 text-[11px]">Matrix Breakdown:</span>
+              {matrix.components.map((c) => (
+                <span
+                  key={`pill-${c.code || c.name}`}
+                  className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200 text-[11px] font-mono"
                 >
-                  <X size={14} />
-                </button>
-              )}
+                  {c.name || c.code}: <strong className="text-slate-900">{c.maxMarks}</strong> Marks
+                </span>
+              ))}
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold">
+                Total: {matrix.totalMarks}
+              </span>
             </div>
+          )}
+        </div>
+      </div>
 
+      {/* SEARCH & SCORE FILTER BAR */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80">
+        <div className="flex items-center gap-2 w-full sm:w-80 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+          <Search size={15} className="text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search student by name or register no..."
+            value={studentSearch}
+            onChange={(e) => setStudentSearch(e.target.value)}
+            className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full"
+          />
+          {studentSearch && (
             <button
-              onClick={fetchMarksSheet}
-              disabled={loadingSheet}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer"
-              title="Refresh Roster"
+              type="button"
+              onClick={() => setStudentSearch('')}
+              className="text-slate-400 hover:text-slate-600"
             >
-              <RefreshCw size={15} className={loadingSheet ? 'animate-spin' : ''} />
+              <X size={14} />
             </button>
-
-            <button
-              onClick={handleBatchSave}
-              disabled={savingBatch || loadingSheet || studentRows.length === 0}
-              className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-xs hover:shadow cursor-pointer disabled:opacity-50"
-            >
-              {savingBatch ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  <span>Saving Marks...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={15} />
-                  <span>Save All Scores</span>
-                </>
-              )}
-            </button>
-          </div>
+          )}
         </div>
 
+        <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+          <button
+            type="button"
+            onClick={() => setScoreFilterMode('all')}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+              scoreFilterMode === 'all'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            All Students ({studentRows.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setScoreFilterMode('scored')}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+              scoreFilterMode === 'scored'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Scored Only ({scoredCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setScoreFilterMode('cbt')}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+              scoreFilterMode === 'cbt'
+                ? 'bg-purple-600 text-white shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            CBT Online ({cbtCount})
+          </button>
+        </div>
+      </div>
+
+      {/* GRADEBOOK SCORE ENTRY SPREADSHEET TABLE */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         {loadingSheet ? (
-          <div className="p-16 text-center">
-            <Loader2 className="animate-spin text-emerald-600 mx-auto mb-3" size={28} />
-            <p className="text-xs text-slate-500 font-medium">Loading matrix evaluation sheet...</p>
+          <div className="p-16 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="animate-spin text-emerald-600" size={32} />
+            <p className="text-xs text-slate-500 font-medium">Loading evaluation matrix score sheet...</p>
           </div>
         ) : studentRows.length > 0 && matrix ? (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                  <tr>
-                    <th className="p-4 w-12 text-center">#</th>
-                    <th className="p-4">Reg No</th>
-                    <th className="p-4">Student Name</th>
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="p-3 text-center w-12">#</th>
+                    <th className="p-3">Reg. No</th>
+                    <th className="p-3">Student Name</th>
+
+                    {/* Matrix Component Headers */}
                     {(Array.isArray(matrix.components) ? matrix.components : []).map((comp) => (
-                      <th key={`th-${comp.code}`} className="p-4 text-center">
-                        <div>{comp.name}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">Max: {comp.maxMarks}</div>
+                      <th key={`hdr-${comp.code || comp.name}`} className="p-3 text-center min-w-[100px]">
+                        <div className="font-extrabold text-slate-900">{comp.name || comp.code}</div>
+                        <div className="text-[10px] text-emerald-700 font-mono">Max: {comp.maxMarks}</div>
                       </th>
                     ))}
-                    <th className="p-4 text-center font-black text-slate-900 bg-slate-100/60 w-32">
-                      <div>Total & Grade</div>
+
+                    <th className="p-3 text-center min-w-[100px] bg-slate-100/70">
+                      <div className="font-extrabold text-slate-900">Total</div>
                       <div className="text-[10px] text-slate-400 font-normal">/{matrix.totalMarks}</div>
                     </th>
-                    <th className="p-4 text-center">Status</th>
+
+                    <th className="p-3 text-center min-w-[90px]">CBT Test</th>
+                    <th className="p-3 text-center min-w-[80px]">Status</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-slate-100">
                   {paginatedRows.map((st, idx) => {
                     const stId = Number(st.studentId || st.id)
+                    const isRowScored = !st.isAbsent && st.totalScore > 0
+
                     return (
                       <tr
                         key={`row-${stId}`}
-                        className={`transition ${st.isAbsent ? 'bg-rose-50/40' : 'hover:bg-slate-50/80'}`}
+                        className={`hover:bg-slate-50/80 transition ${
+                          st.isAbsent ? 'bg-rose-50/20' : ''
+                        }`}
                       >
-                        <td className="p-4 text-center text-slate-400 font-mono text-[11px]">
+                        <td className="p-3 text-center text-slate-400 font-mono text-[11px]">
                           {startIndex + idx + 1}
                         </td>
-                        <td className="p-4 font-mono text-slate-600 font-semibold">{st.registerNo || 'N/A'}</td>
-                        <td className="p-4 font-bold text-slate-900">{st.name}</td>
+                        <td className="p-3 font-mono text-slate-600 font-semibold">{st.registerNo || 'N/A'}</td>
+                        <td className="p-3 font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <span>{st.name}</span>
+                            {st.sectionName && (
+                              <span className="text-[10px] font-normal text-slate-400">({st.sectionName})</span>
+                            )}
+                          </div>
+                        </td>
 
-                        {/* Matrix Dynamic Component Columns */}
+                        {/* Matrix Dynamic Component Inputs */}
                         {(Array.isArray(matrix.components) ? matrix.components : []).map((comp) => {
-                          const currentVal = st.componentMarks?.[comp.code] ?? 0
-                          const isOverMax = currentVal > comp.maxMarks
+                          const compKey = comp.code || comp.name
+                          const currentVal = st.componentMarks?.[compKey] ?? st.componentMarks?.[comp.code] ?? ''
+                          const numVal = Number(currentVal) || 0
+                          const isOverMax = currentVal !== '' && numVal > comp.maxMarks
 
                           return (
-                            <td key={`input-${stId}-${comp.code}`} className="p-3 text-center">
+                            <td key={`input-${stId}-${compKey}`} className="p-2.5 text-center">
                               <input
                                 type="number"
                                 min="0"
                                 max={comp.maxMarks}
                                 disabled={st.isAbsent}
                                 value={st.isAbsent ? '' : currentVal}
-                                onChange={(e) => handleScoreChange(stId, comp.code, e.target.value)}
+                                onChange={(e) => handleScoreChange(stId, compKey, e.target.value)}
                                 placeholder={st.isAbsent ? 'ABS' : '0'}
                                 className={`w-20 h-10 text-center font-bold font-mono text-xs rounded-xl border transition focus:outline-hidden focus:ring-2 ${
                                   isOverMax
@@ -789,24 +1228,26 @@ export function TeacherMatrixMarksEntry() {
                           )
                         })}
 
-                        {/* Auto-Calculated Total & Dynamic Grade */}
-                        <td className="p-3 text-center bg-slate-50/60">
+                        {/* Auto-Calculated Total & Grade Badge */}
+                        <td className="p-2.5 text-center bg-slate-50/70">
                           <div className="flex items-center justify-center gap-1.5">
                             <span
-                              className={`inline-block px-2.5 py-1 rounded-xl font-mono font-black text-xs ${
+                              className={`font-mono font-black text-xs px-2 py-1 rounded-md ${
                                 st.isAbsent
                                   ? 'bg-rose-100 text-rose-700'
-                                  : st.totalScore >= (matrix.totalMarks * (gradingScale?.passMark ? gradingScale.passMark / 100 : 0.5))
+                                  : isRowScored
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-200/80 text-slate-700'
                               }`}
                             >
                               {st.isAbsent ? 'ABS' : st.totalScore}
                             </span>
                             {!st.isAbsent && (
                               <span
-                                className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black border ${getGradeForScore(st.totalScore).color}`}
-                                title={`${getGradeForScore(st.totalScore).remark}`}
+                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-black border ${
+                                  getGradeForScore(st.totalScore).color
+                                }`}
+                                title={getGradeForScore(st.totalScore).remark}
                               >
                                 {getGradeForScore(st.totalScore).grade}
                               </span>
@@ -814,12 +1255,36 @@ export function TeacherMatrixMarksEntry() {
                           </div>
                         </td>
 
-                        {/* Absent Toggle Button */}
-                        <td className="p-3 text-center">
+                        {/* CBT Test Column with Quick 1-Click Sync */}
+                        <td className="p-2.5 text-center">
+                          {st.cbtMark !== null && st.cbtMark !== undefined && String(st.cbtMark).trim() !== '' ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <span
+                                className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-mono font-bold text-xs border border-purple-200"
+                                title={st.cbtExamTitle || 'CBT Online Test'}
+                              >
+                                {st.cbtMark}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleSyncSingleCbt(stId)}
+                                className="p-1 text-slate-400 hover:text-purple-600 transition cursor-pointer"
+                                title="Copy CBT score into Exam component"
+                              >
+                                <ArrowRightLeft size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-mono">-</span>
+                          )}
+                        </td>
+
+                        {/* Attendance Toggle */}
+                        <td className="p-2.5 text-center">
                           <button
                             type="button"
                             onClick={() => handleToggleAbsent(stId)}
-                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
                               st.isAbsent
                                 ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
                                 : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
@@ -856,11 +1321,12 @@ export function TeacherMatrixMarksEntry() {
                       setPageSize(Number(e.target.value))
                       setCurrentPage(1)
                     }}
-                    className="h-8 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                    className="h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
                   >
                     <option value={10}>10</option>
-                    <option value={20}>20</option>
+                    <option value={25}>25</option>
                     <option value={50}>50</option>
+                    <option value={100}>100</option>
                   </select>
                 </div>
 
@@ -870,7 +1336,6 @@ export function TeacherMatrixMarksEntry() {
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage <= 1}
                     className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                    title="Previous Page"
                   >
                     <ChevronLeft size={14} />
                     <span>Prev</span>
@@ -907,7 +1372,6 @@ export function TeacherMatrixMarksEntry() {
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage >= totalPages}
                     className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                    title="Next Page"
                   >
                     <span>Next</span>
                     <ChevronRight size={14} />
@@ -926,6 +1390,87 @@ export function TeacherMatrixMarksEntry() {
           </div>
         )}
       </div>
+
+      {/* AI Score Assistant Modal */}
+      {isAiModalOpen && matrix && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
+                  <Wand2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">AI Score Assistant</h3>
+                  <p className="text-[11px] text-slate-500">Proportional Matrix Score Distribution</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAiModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Enter an overall benchmark score (out of <strong>{matrix.totalMarks}</strong>). The AI assistant will automatically calculate and distribute scores across all categories of <strong>{matrix.name}</strong> according to each component&apos;s weighting.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Target Benchmark Score</label>
+                <input
+                  type="number"
+                  min="0"
+                  max={matrix.totalMarks}
+                  value={aiTotalTarget}
+                  onChange={(e) => setAiTotalTarget(e.target.value)}
+                  className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {Array.isArray(matrix.components) && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Categories to be allocated:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {matrix.components.map((c) => (
+                      <span
+                        key={`ai-comp-${c.code || c.name}`}
+                        className="px-2 py-0.5 rounded bg-white text-slate-700 text-[10px] font-mono border border-slate-200 font-bold"
+                      >
+                        {c.name || c.code} (max: {c.maxMarks})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAiModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRunAiScoreDistribution}
+                disabled={isGeneratingAi}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isGeneratingAi ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                <span>Apply Distribution</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

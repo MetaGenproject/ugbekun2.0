@@ -754,6 +754,9 @@ function normalizeQuestions(raw: any): any[] {
 }
 
   const [hwAnswersMap, setHwAnswersMap] = useState<Record<string, string>>({})
+  const [studentHwFile, setStudentHwFile] = useState<{ fileUrl: string; fileName: string; fileType?: string } | null>(null)
+  const [uploadingStudentFile, setUploadingStudentFile] = useState<boolean>(false)
+  const [studentUploadError, setStudentUploadError] = useState<string | null>(null)
 
   // Homework submission
   const handleOpenHwSubmit = async (hw: any) => {
@@ -767,6 +770,11 @@ function normalizeQuestions(raw: any): any[] {
     setSubmissionContent(hw.submission?.answers?.[0]?.notes || '')
     setHwAnswersMap({})
     setHwSuccessMsg(null)
+    setStudentUploadError(null)
+
+    // Check if previous file was submitted
+    const priorFile = hw.submission?.fileAttachment || hw.fileAttachment || null
+    setStudentHwFile(priorFile)
     setShowSubmitHwModal(true)
 
     try {
@@ -792,6 +800,11 @@ function normalizeQuestions(raw: any): any[] {
           setSubmissionContent(sub.answers[0].notes)
         }
 
+        const resolvedFile = res.homework.fileAttachment || sub?.fileAttachment || null
+        if (resolvedFile) {
+          setStudentHwFile(resolvedFile)
+        }
+
         setSelectedHomework((prev: any) => ({
           ...prev,
           ...res.homework,
@@ -805,6 +818,51 @@ function normalizeQuestions(raw: any): any[] {
     } catch (err) {
       console.error('Failed to load full homework detail:', err)
     }
+  }
+
+  const handleStudentFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 20 * 1024 * 1024) {
+      setStudentUploadError('File exceeds 20MB limit.')
+      return
+    }
+
+    setUploadingStudentFile(true)
+    setStudentUploadError(null)
+
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const base64Data = (reader.result as string).split(',')[1]
+        const res = await apiSlice.post<{ success: boolean; url: string; fileName?: string; fileType?: string }>(
+          endpoints.student.uploadHomework,
+          {
+            base64: base64Data,
+            mime: file.type || 'application/octet-stream',
+            fileName: file.name,
+          }
+        )
+        if (res.success && res.url) {
+          setStudentHwFile({
+            fileUrl: res.url,
+            fileName: res.fileName || file.name,
+            fileType: res.fileType || file.type || 'file',
+          })
+        } else {
+          setStudentUploadError('Failed to upload file.')
+        }
+      } catch (err: any) {
+        setStudentUploadError(err.message || 'Error uploading file.')
+      } finally {
+        setUploadingStudentFile(false)
+      }
+    }
+    reader.onerror = () => {
+      setUploadingStudentFile(false)
+      setStudentUploadError('Could not read file.')
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleSubmitHomework = async (e: React.FormEvent) => {
@@ -828,7 +886,10 @@ function normalizeQuestions(raw: any): any[] {
         endpoints.student.submitHomework(selectedHomework.id),
         {
           answers: payloadAnswers.length > 0 ? payloadAnswers : undefined,
-          notes: submissionContent.trim() || 'Submitted',
+          notes: submissionContent.trim() || (studentHwFile ? `Uploaded ${studentHwFile.fileName}` : 'Submitted'),
+          fileUrl: studentHwFile?.fileUrl,
+          fileName: studentHwFile?.fileName,
+          fileType: studentHwFile?.fileType,
         }
       )
       if (res.success) {
@@ -2282,6 +2343,38 @@ function normalizeQuestions(raw: any): any[] {
             </div>
           )}
 
+          {/* Teacher Material / Worksheet Download Card (if available) */}
+          {selectedHomework.attachmentUrl && (
+            <div className="bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 p-5 rounded-2xl border border-blue-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+                    Teacher Worksheet / Question Material
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-900 mt-1">
+                    {selectedHomework.attachmentName || 'Assignment Questions Document'}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Download and read the assignment prompt provided by your teacher.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={selectedHomework.attachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Download size={15} />
+                <span>Download Question Sheet</span>
+              </a>
+            </div>
+          )}
+
           {/* Description / Instructions */}
           {selectedHomework.description && (
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
@@ -2292,7 +2385,7 @@ function normalizeQuestions(raw: any): any[] {
 
           {/* Questions Sheet / Submission Form */}
           <form onSubmit={handleSubmitHomework} className="space-y-6">
-            {activeQs.length > 0 ? (
+            {activeQs.length > 0 && (
               <div className="space-y-4">
                 {activeQs.map((q: any, idx: number) => {
                   const qType = String(q.type || q.questionType || '').toUpperCase()
@@ -2386,20 +2479,111 @@ function normalizeQuestions(raw: any): any[] {
                   )
                 })}
               </div>
-            ) : (
-              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
-                <label className="block font-bold text-slate-800 text-xs">Your Solution / Answer Notes *</label>
-                <textarea
-                  required
-                  rows={6}
-                  disabled={selectedHomework.submitted}
-                  placeholder="Type your answers, solutions or comments here..."
-                  value={submissionContent}
-                  onChange={(e) => setSubmissionContent(e.target.value)}
-                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition"
-                />
-              </div>
             )}
+
+            {/* Student Write-up Document Upload / Viewer */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                    <Upload size={16} className="text-blue-600" />
+                    Upload Your Write-up / Solution Document
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Upload your completed worksheet, handwritten solution photos, PDF, or Word document.
+                  </p>
+                </div>
+                {studentHwFile && (
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[11px] font-bold flex items-center gap-1">
+                    <CheckCircle2 size={13} />
+                    File Attached
+                  </span>
+                )}
+              </div>
+
+              {studentHwFile ? (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-800 truncate max-w-[280px] sm:max-w-[360px]">
+                        {studentHwFile.fileName}
+                      </p>
+                      <span className="text-[11px] text-slate-400 font-medium">Ready for teacher marking</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <a
+                      href={studentHwFile.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Eye size={13} />
+                      <span>View Document</span>
+                    </a>
+                    {!selectedHomework.submitted && (
+                      <button
+                        type="button"
+                        onClick={() => setStudentHwFile(null)}
+                        className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                        title="Remove attachment"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {!selectedHomework.submitted ? (
+                    <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center group">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+                        disabled={uploadingStudentFile}
+                        onChange={handleStudentFileUpload}
+                      />
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-110 transition">
+                        {uploadingStudentFile ? <Loader2 size={20} className="animate-spin" /> : <Upload size={18} />}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800">
+                        {uploadingStudentFile ? 'Uploading your document...' : 'Click or drop your write-up file here'}
+                      </p>
+                      <span className="text-[11px] text-slate-400">Supports PDF, Word (.docx), Images (.jpg, .png), TXT up to 20MB</span>
+                    </label>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No document file was attached for this assignment.</p>
+                  )}
+                </div>
+              )}
+
+              {studentUploadError && (
+                <p className="text-xs text-rose-600 font-bold flex items-center gap-1.5">
+                  <AlertCircle size={14} />
+                  <span>{studentUploadError}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Answer Notes / Submission Comments */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+              <label className="block font-bold text-slate-800 text-xs">
+                {activeQs.length > 0 ? 'Additional Comments / Notes (Optional)' : 'Your Solution / Answer Notes ' + (studentHwFile ? '(Optional)' : '*')}
+              </label>
+              <textarea
+                required={activeQs.length === 0 && !studentHwFile}
+                rows={activeQs.length > 0 ? 3 : 5}
+                disabled={selectedHomework.submitted}
+                placeholder={studentHwFile ? "Any additional comments or notes for your teacher..." : "Type your answers, solutions or comments here..."}
+                value={submissionContent}
+                onChange={(e) => setSubmissionContent(e.target.value)}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition"
+              />
+            </div>
 
             {/* Bottom Actions Bar */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
