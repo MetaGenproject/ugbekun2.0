@@ -31,8 +31,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { token, ...publicData } = data
-    const res = NextResponse.json(publicData)
-    if (token) applyAuthCookie(res, token)
+    // Return token in payload so Safari / iOS can use Authorization header fallback
+    // while also setting the httpOnly cookie for standard same-origin requests.
+    const res = NextResponse.json({ ...publicData, token: token || null })
+    if (token) applyAuthCookie(res, token, request)
     return res
   } catch (err: any) {
     clearTimeout(timeoutId)

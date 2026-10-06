@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { applyAuthCookie, AUTH_COOKIE_NAME, getBackendUrl } from '@/lib/serverAuth'
 
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value
+  let token = request.cookies.get(AUTH_COOKIE_NAME)?.value
+
+  // Support Authorization header fallback for Safari / iOS when cookies are blocked or delayed
+  if (!token) {
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim()
+    }
+  }
+
   if (!token) {
     return NextResponse.json({ success: false, message: 'No token provided.' }, { status: 401 })
   }
@@ -23,10 +32,15 @@ export async function GET(request: NextRequest) {
         { success: false, message: data?.message || 'Token is invalid or expired.' },
         { status: response.status || 401 }
       )
-      if (response.status === 401) applyAuthCookie(res, null)
+      if (response.status === 401) applyAuthCookie(res, null, request)
       return res
     }
-    return NextResponse.json(data)
+    const res = NextResponse.json(data)
+    // If the token was verified from Authorization header and cookie was missing, re-apply cookie
+    if (token && !request.cookies.get(AUTH_COOKIE_NAME)?.value) {
+      applyAuthCookie(res, token, request)
+    }
+    return res
   } catch {
     return NextResponse.json({ success: false, message: 'Unable to verify session.' }, { status: 503 })
   }

@@ -58,6 +58,7 @@ import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard
 import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
 import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
 import { endAuthSession, getAuthSession, redirectExpiredSession, setAuthSession, type AuthUser } from '@/lib/authSession'
+import { safeStorage } from '@/lib/safeStorage'
 import { getAvatarUrl } from '@/lib/avatar'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
@@ -258,11 +259,21 @@ export default function DashboardPage() {
 
     async function hydrateSession() {
       try {
-        const meRes = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+        const token = safeStorage.getItem('ugbekun_token') || safeStorage.getItem('token')
+        const headers: Record<string, string> = { Accept: 'application/json' }
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+
+        const meRes = await fetch('/api/auth/me', {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        })
         if (cancelled) return
 
         if (meRes.ok) {
-          const res = await meRes.json() as { success?: boolean; user?: AuthUser }
+          const res = (await meRes.json()) as { success?: boolean; user?: AuthUser }
           if (res.success && res.user) {
             const normalizedUser: User = {
               id: res.user.id,
@@ -273,23 +284,30 @@ export default function DashboardPage() {
               lastLogin: res.user.lastLogin ?? undefined,
             }
             if (res.user.branch) (normalizedUser as any).branch = res.user.branch
-            setAuthSession({
-              id: res.user.id,
-              username: res.user.username,
-              role: res.user.role,
-              roleName: res.user.roleName,
-              legacyUserId: res.user.legacyUserId ?? null,
-              lastLogin: res.user.lastLogin ?? null,
-              branch: res.user.branch || null,
-            })
+            setAuthSession(
+              {
+                id: res.user.id,
+                username: res.user.username,
+                role: res.user.role,
+                roleName: res.user.roleName,
+                legacyUserId: res.user.legacyUserId ?? null,
+                lastLogin: res.user.lastLogin ?? null,
+                branch: res.user.branch || null,
+              },
+              token
+            )
             setUser(normalizedUser)
             return
           }
         }
 
+        // Only redirect if 401 AND there is neither cached session nor valid token
         if (meRes.status === 401) {
-          redirectExpiredSession()
-          return
+          const cached = getAuthSession().user
+          if (!cached && !token) {
+            redirectExpiredSession()
+            return
+          }
         }
 
         const cached = getAuthSession().user

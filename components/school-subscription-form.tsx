@@ -180,9 +180,15 @@ export function SchoolSubscriptionForm() {
       })
 
       if (data.user) {
-        setAuthSession(data.user)
+        setAuthSession(data.user, data.token || null)
         setSuccessMsg('🎉 School account provisioned! Entering your dashboard...')
-        setTimeout(() => router.push('/dashboard'), 1200)
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.assign('/dashboard')
+          } else {
+            router.push('/dashboard')
+          }
+        }, 1200)
       } else {
         setSuccessMsg(data.message || 'School account created successfully! Redirecting to login...')
         setTimeout(() => router.push('/login'), 1500)

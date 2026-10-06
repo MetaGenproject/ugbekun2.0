@@ -94,9 +94,11 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
       const jsonOrText = await response.json().catch(() => null)
       if (jsonOrText && typeof jsonOrText === 'object') {
         const { token, publicJson } = stripToken(jsonOrText as Record<string, unknown>)
-        const nextRes = NextResponse.json(publicJson, { status: response.status })
+        // Include token for auth flows so Safari/iOS clients can retain it for Authorization header fallback
+        const payloadToSend = issuesSession && token ? { ...publicJson, token } : publicJson
+        const nextRes = NextResponse.json(payloadToSend, { status: response.status })
         if (issuesSession && token) {
-          applyAuthCookie(nextRes, token)
+          applyAuthCookie(nextRes, token, request)
         }
         return nextRes
       }

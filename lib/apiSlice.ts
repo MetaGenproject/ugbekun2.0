@@ -519,8 +519,12 @@ import { isExpiredAuthMessage, redirectExpiredSession } from './authSession';
 export { getCacheBustingHeaders, appendCacheBuster };
 
 // Helper to get authorization headers
-const getAuthHeaders = (): HeadersInit => {
+const getAuthHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {};
+  const token = safeStorage.getItem('ugbekun_token') || safeStorage.getItem('token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const impersonatedTeacherId = safeStorage.getItem('ugbekun_admin_impersonated_teacher_id');
   if (impersonatedTeacherId) {
     headers['x-admin-teacher-id'] = impersonatedTeacherId;

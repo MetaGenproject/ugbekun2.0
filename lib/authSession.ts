@@ -52,21 +52,12 @@ function parseStoredUser(userDataStr: string | null): AuthUser | null {
 }
 
 function wipeLegacyTokenStorage() {
-  safeStorage.removeItem('ugbekun_token')
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.removeItem('token')
-    window.sessionStorage.removeItem('token')
     window.localStorage.removeItem('ugbekun_superadmin_token')
     window.sessionStorage.removeItem('ugbekun_superadmin_token')
   } catch {
     // ignore
-  }
-  try {
-    document.cookie = 'ugbekun_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
-    document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
-  } catch {
-    // ignore leftover JS cookies; the httpOnly session cookie cannot be read here
   }
 }
 
@@ -80,16 +71,22 @@ export function getAuthSession(): AuthSession {
   return { user }
 }
 
-export function setAuthSession(user: AuthUser, _ignoredToken?: string): void {
+export function setAuthSession(user: AuthUser, token?: string | null): void {
   memorySession = { user }
   wipeLegacyTokenStorage()
+  if (token) {
+    safeStorage.setItem('ugbekun_token', token)
+    safeStorage.setItem('token', token)
+  }
   safeStorage.setItem('ugbekun_user', JSON.stringify(user))
 }
 
 export function clearAuthSession(): void {
   memorySession = { user: null }
-  wipeLegacyTokenStorage()
+  safeStorage.removeItem('ugbekun_token')
+  safeStorage.removeItem('token')
   safeStorage.removeItem('ugbekun_user')
+  wipeLegacyTokenStorage()
 }
 
 let endingExpiredSession = false

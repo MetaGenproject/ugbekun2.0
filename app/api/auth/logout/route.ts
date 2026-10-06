@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { applyAuthCookie, AUTH_COOKIE_NAME, getBackendUrl } from '@/lib/serverAuth'
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value
+  let token = request.cookies.get(AUTH_COOKIE_NAME)?.value
+  if (!token) {
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim()
+    }
+  }
+
   try {
     if (token) {
       await fetch(`${getBackendUrl()}/api/auth/logout`, {
@@ -19,6 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   const res = NextResponse.json({ success: true, message: 'Signed out.' })
-  applyAuthCookie(res, null)
+  applyAuthCookie(res, null, request)
   return res
 }

@@ -14,23 +14,36 @@ export function getBackendUrl(): string {
   return PRODUCTION_BACKEND
 }
 
-export function getAuthCookieOptions() {
+export function getAuthCookieOptions(request?: any) {
+  let isSecure = process.env.NODE_ENV === 'production'
+  if (request) {
+    const proto = request.headers?.get?.('x-forwarded-proto') || request.nextUrl?.protocol
+    if (proto) {
+      isSecure = proto === 'https:' || proto === 'https'
+    }
+  }
+
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax' as const,
     path: '/',
     maxAge: AUTH_COOKIE_MAX_AGE_SEC,
   }
 }
 
-export function applyAuthCookie(response: { cookies: { set: Function; delete: Function } }, token?: string | null) {
+export function applyAuthCookie(
+  response: { cookies: { set: Function; delete: Function } },
+  token?: string | null,
+  request?: any
+) {
+  const cookieOpts = getAuthCookieOptions(request)
   if (token) {
-    response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions())
+    response.cookies.set(AUTH_COOKIE_NAME, token, cookieOpts)
     return
   }
   response.cookies.set(AUTH_COOKIE_NAME, '', {
-    ...getAuthCookieOptions(),
+    ...cookieOpts,
     maxAge: 0,
   })
 }

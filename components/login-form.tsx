@@ -52,24 +52,30 @@ export function LoginForm() {
     fetchBranding()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    
-    // Front-end Username & Password Validation (Strip whitespace)
-    const trimmedUsername = username.trim().replace(/\s+/g, '')
-    const trimmedPassword = password.trim()
 
-    if (!trimmedUsername) {
+    // Support Safari / iOS iCloud Keychain autofill by reading DOM elements if state hasn't fired onChange
+    const form = e.currentTarget
+    const domUsername = (form.elements.namedItem('username') as HTMLInputElement)?.value ||
+                        (form.elements.namedItem('login-username') as HTMLInputElement)?.value || ''
+    const domPassword = (form.elements.namedItem('password') as HTMLInputElement)?.value ||
+                        (form.elements.namedItem('login-password') as HTMLInputElement)?.value || ''
+
+    const effectiveUsername = (domUsername || username).trim().replace(/\s+/g, '')
+    const effectivePassword = (domPassword || password).trim()
+
+    if (!effectiveUsername) {
       setErrorMsg('Username is required.')
       return
     }
 
-    if (trimmedUsername.length < 2) {
+    if (effectiveUsername.length < 2) {
       setErrorMsg('Username must be at least 2 characters long.')
       return
     }
 
-    if (!trimmedPassword) {
+    if (!effectivePassword) {
       setErrorMsg('Password is required.')
       return
     }
@@ -78,11 +84,13 @@ export function LoginForm() {
     setErrorMsg('')
 
     try {
-      const data = await apiSlice.post(endpoints.auth.login, { username: trimmedUsername, password: trimmedPassword })
+      const data = await apiSlice.post(endpoints.auth.login, { username: effectiveUsername, password: effectivePassword })
 
       if (!data || !data.user) {
         throw new Error('Invalid credentials or empty server response.')
       }
+
+      const receivedToken = data.token || null
 
       // Construct user payload for storage
       const userToStore = {
@@ -99,20 +107,25 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist user profile only. The access token lives in an httpOnly cookie.
-      setAuthSession(userToStore)
+      // Persist user profile and token for defense-in-depth on Safari/iOS
+      setAuthSession(userToStore, receivedToken)
 
-      // Client-side navigation preserves memorySession (JS context stays alive — critical for old browsers)
-      router.push(postLoginPath || '/dashboard')
+      // Top-level navigation ensures Safari WebKit commits cookies and flushes storage cleanly
+      const destination = postLoginPath || '/dashboard'
+      if (typeof window !== 'undefined') {
+        window.location.assign(destination)
+      } else {
+        router.push(destination)
+      }
     } catch (err: any) {
       console.error('Login error:', err)
-      
+
       const friendlyMsg = err && typeof err === 'object' && err.message
         ? err.message
         : typeof err === 'string'
           ? err
           : 'Network connection error. Is the backend server running?'
-      
+
       setErrorMsg(friendlyMsg)
     } finally {
       setIsLoading(false)
@@ -181,6 +194,7 @@ export function LoginForm() {
             <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               id="login-username"
+              name="username"
               type="text"
               placeholder="Enter your username"
               value={username}
@@ -190,7 +204,7 @@ export function LoginForm() {
               autoCorrect="off"
               spellCheck={false}
               autoComplete="username"
-              className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[16px] sm:text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
             />
           </div>
         </div>
@@ -204,13 +218,14 @@ export function LoginForm() {
             <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               id="login-password"
+              name="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
+              className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[16px] sm:text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
             />
             <button
               type="button"
@@ -251,6 +266,8 @@ export function LoginForm() {
             gap: '8px',
             opacity: isLoading ? 0.65 : 1,
             boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
+            WebkitAppearance: 'none',
+            WebkitTapHighlightColor: 'transparent',
           }}
         >
           {isLoading ? (
