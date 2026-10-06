@@ -55,6 +55,7 @@ interface ClassOption {
   id: number
   name: string
   sections: Array<{ id: number; name: string }>
+  subjects?: Array<{ id: number; name: string; subjectCode: string }>
 }
 
 interface SubjectOption {
@@ -265,9 +266,16 @@ export function TeacherMatrixMarksEntry() {
       return Array.from(map.values())
     }
 
-    // Fallback: If no assigned subjects mapped to this class, fallback to global branch subjects
+    // 2. If no direct subject teaching assignment for this class (e.g. user is Class Teacher),
+    // use the subjects offered by this class
+    const targetClass = classes.find((c) => c.id === cid)
+    if (targetClass?.subjects && targetClass.subjects.length > 0) {
+      return targetClass.subjects
+    }
+
+    // Fallback: If no class-level subjects found, fallback to global branch subjects
     return subjects
-  }, [assignedSubjects, selectedClassId, selectedSectionId, subjects])
+  }, [assignedSubjects, classes, selectedClassId, selectedSectionId, subjects])
 
   // Keep selectedSubjectId synchronized with availableSubjects
   useEffect(() => {

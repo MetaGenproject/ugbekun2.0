@@ -157,9 +157,9 @@ export function TeacherContextSwitcher({ onContextChange }: { onContextChange?: 
 
   if (loading || !activeContext) {
     return (
-      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/80 border border-slate-200 text-slate-400 text-xs animate-pulse">
-        <GraduationCap size={15} />
-        <span>Loading Class...</span>
+      <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-100/80 border border-slate-200 text-slate-400 text-[11px] sm:text-xs animate-pulse shrink-0">
+        <GraduationCap size={14} />
+        <span className="hidden xs:inline">Loading...</span>
       </div>
     )
   }
@@ -176,32 +176,32 @@ export function TeacherContextSwitcher({ onContextChange }: { onContextChange?: 
         type="button"
         onClick={() => hasMultipleContexts && setIsOpen(!isOpen)}
         disabled={!hasMultipleContexts}
-        className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-2xs ${
+        className={`group flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition shadow-2xs max-w-[200px] xs:max-w-[240px] sm:max-w-none ${
           isClassTeacher
-            ? 'bg-blue-50/70 hover:bg-blue-100/70 border-blue-200/80 text-blue-900'
-            : 'bg-purple-50/70 hover:bg-purple-100/70 border-purple-200/80 text-purple-900'
+            ? 'bg-blue-50/90 hover:bg-blue-100/80 border-blue-200 text-blue-900'
+            : 'bg-purple-50/90 hover:bg-purple-100/80 border-purple-200 text-purple-900'
         } ${hasMultipleContexts ? 'cursor-pointer' : 'cursor-default'}`}
         title={hasMultipleContexts ? 'Click to switch teaching classroom or role context' : 'Assigned Classroom'}
       >
-        <div className={`p-1 rounded-lg ${isClassTeacher ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+        <div className={`p-1 rounded-lg shrink-0 ${isClassTeacher ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
           {isClassTeacher ? <GraduationCap size={13} /> : <BookOpen size={13} />}
         </div>
 
-        <div className="text-left leading-tight">
-          <div className="flex items-center gap-1.5">
-            <span className="font-extrabold text-slate-900 truncate max-w-[130px] sm:max-w-[170px]">
+        <div className="text-left leading-tight min-w-0">
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <span className="font-extrabold text-slate-900 truncate max-w-[85px] xs:max-w-[120px] sm:max-w-[180px]">
               {activeContext.className} {activeContext.sectionName ? `(${activeContext.sectionName})` : ''}
             </span>
             <span
-              className={`text-[9px] uppercase px-1.5 py-0.2 rounded-full font-black tracking-wider ${
+              className={`text-[8.5px] sm:text-[9px] uppercase px-1 sm:px-1.5 py-0.2 rounded-full font-black tracking-wider shrink-0 ${
                 isClassTeacher ? 'bg-blue-200 text-blue-800' : 'bg-purple-200 text-purple-800'
               }`}
             >
-              {isClassTeacher ? 'Class Teacher' : 'Subject'}
+              {isClassTeacher ? 'Class' : 'Subject'}
             </span>
           </div>
           {activeContext.subjectName && (
-            <span className="text-[10px] text-purple-700 font-semibold block truncate max-w-[150px]">
+            <span className="text-[9.5px] sm:text-[10px] text-purple-700 font-semibold block truncate max-w-[100px] sm:max-w-[150px]">
               {activeContext.subjectName}
             </span>
           )}
@@ -209,8 +209,8 @@ export function TeacherContextSwitcher({ onContextChange }: { onContextChange?: 
 
         {hasMultipleContexts && (
           <ChevronDown
-            size={14}
-            className={`text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+            size={13}
+            className={`text-slate-400 group-hover:text-slate-600 transition-transform duration-200 shrink-0 ml-0.5 ${
               isOpen ? 'rotate-180 text-blue-600' : ''
             }`}
           />
@@ -219,8 +219,8 @@ export function TeacherContextSwitcher({ onContextChange }: { onContextChange?: 
 
       {/* Switcher Contexts Dropdown Menu */}
       {isOpen && hasMultipleContexts && (
-        <div className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white border border-slate-200/90 shadow-xl py-2 z-50 animate-in fade-in-50 zoom-in-95">
-          <div className="px-3.5 py-2 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed sm:absolute left-4 right-4 sm:left-0 sm:right-auto mt-2 sm:w-80 rounded-2xl bg-white border border-slate-200/90 shadow-2xl py-2 z-50 animate-in fade-in-50 zoom-in-95 max-h-[80vh] flex flex-col">
+          <div className="px-3.5 py-2 border-b border-slate-100 flex items-center justify-between shrink-0">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
               Switch Teaching Context
             </span>

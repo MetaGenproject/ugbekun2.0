@@ -630,8 +630,8 @@ export default function DashboardPage() {
       {/* Main Panel Content Area */}
       <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-y-auto">
         {/* Top Header Bar matching Reference Image */}
-        <header className="print:hidden h-16 border-b border-slate-200/90 bg-white px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
+        <header className="print:hidden h-16 border-b border-slate-200/90 bg-white px-3 sm:px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs gap-1.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 md:flex-1 md:max-w-xl">
             {/* Hamburger toggle button for mobile */}
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -641,8 +641,18 @@ export default function DashboardPage() {
               <Menu size={20} />
             </button>
 
-            {/* Search Input Bar with ⌘ K */}
-            <div className="relative w-full max-w-md">
+            {/* Mobile Search / Ask AI button */}
+            <button
+              onClick={() => setIsOseModalOpen(true)}
+              className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80 transition md:hidden cursor-pointer shrink-0"
+              aria-label="Search or Ask AI"
+              title="Search or Ask AI (⌘K)"
+            >
+              <Search size={17} />
+            </button>
+
+            {/* Desktop Search Input Bar with ⌘ K */}
+            <div className="relative w-full max-w-md hidden md:block">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 type="text"
@@ -663,45 +673,45 @@ export default function DashboardPage() {
 
           {/* Teacher Active Teaching Context Switcher (Top Bar) */}
           {user.role === 3 && (
-            <div className="mx-2 shrink-0">
+            <div className="mx-1 sm:mx-2 shrink min-w-0">
               <TeacherContextSwitcher />
             </div>
           )}
 
           {/* Top Right Header Action Badges & User Avatar Profile */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Notification Bell Badge */}
-            <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Notifications">
-              <Bell size={19} />
+            <button className="p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer" title="Notifications">
+              <Bell size={18} />
             </button>
 
             {/* Messages Mail Badge */}
             <button
-              className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 text-slate-600 relative transition cursor-pointer hidden md:flex"
               title="Messages"
               onClick={() => {
                 if (user.role === 3) setSelectedSection('communication')
               }}
             >
-              <Mail size={19} />
+              <Mail size={18} />
             </button>
 
             {/* Calendar Icon */}
             <button
-              className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer hidden md:flex"
               title="Calendar"
               onClick={() => {
                 if (user.role === 3) setSelectedSection('timetable')
               }}
             >
-              <Calendar size={19} />
+              <Calendar size={18} />
             </button>
 
-            <div className="w-px h-7 bg-slate-200 mx-0.5 sm:mx-1" />
+            <div className="w-px h-6 bg-slate-200 mx-0.5 hidden xs:block" />
 
             {/* User Profile Container */}
-            <div className="flex items-center gap-3">
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-blue-100 shrink-0 shadow-xs">
+            <div className="flex items-center gap-2">
+              <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-blue-100 shrink-0 shadow-xs">
                 <img 
                   src={getAvatarUrl(headerIdentity?.photo, headerIdentity?.name || user?.username || 'User')}
                   alt={headerIdentity?.name || user?.username || 'User'}
@@ -709,8 +719,8 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="hidden sm:block text-left">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight">{headerIdentity?.name || user?.username || 'User'}</h4>
-                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5">
+                <h4 className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[110px]">{headerIdentity?.name || user?.username || 'User'}</h4>
+                <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5 truncate max-w-[110px]">
                   {headerIdentity?.title || user?.roleName || 'Portal User'}
                 </p>
               </div>
@@ -719,7 +729,7 @@ export default function DashboardPage() {
             {/* Prominent Header Logout Button */}
             <button 
               onClick={handleLogout} 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200/80 transition cursor-pointer shadow-2xs shrink-0" 
+              className="flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200/80 transition cursor-pointer shadow-2xs shrink-0" 
               title="Sign Out"
             >
               <LogOut size={15} />
@@ -729,7 +739,7 @@ export default function DashboardPage() {
         </header>
 
         {/* Main Section Content Area */}
-        <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6 flex-1 print:p-0 print:max-w-none">
+        <div className="p-3 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-6 flex-1 print:p-0 print:max-w-none">
           {renderDashboardContent()}
         </div>
 

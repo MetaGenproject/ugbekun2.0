@@ -855,19 +855,19 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
         <div className="lg:col-span-8 space-y-6">
           
           {/* 1. Top Hero Welcome Banner */}
-          <div className="relative rounded-3xl bg-gradient-to-r from-[#070D22] via-[#0E1A42] to-[#12245A] p-6 sm:p-8 text-white shadow-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="relative rounded-3xl bg-gradient-to-r from-[#070D22] via-[#0E1A42] to-[#12245A] p-4 sm:p-6 md:p-8 text-white shadow-xl border border-white/10 overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6">
             
             {/* Left Hero Content with Avatar */}
-            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-3.5 sm:gap-5 w-full md:w-auto">
               <div className="relative group/avatar shrink-0">
                 {profile.photo ? (
                   <img
                     src={profile.photo}
                     alt={teacherName}
-                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl object-cover border-2 border-white/30 shadow-lg"
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl object-cover border-2 border-white/30 shadow-lg"
                   />
                 ) : (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-linear-to-br from-blue-500 to-indigo-600 border-2 border-white/20 text-white font-black text-xl sm:text-2xl flex items-center justify-center shadow-lg">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-linear-to-br from-blue-500 to-indigo-600 border-2 border-white/20 text-white font-black text-lg sm:text-2xl flex items-center justify-center shadow-lg">
                     {(teacherName[0] || 'T').toUpperCase()}
                   </div>
                 )}
@@ -877,19 +877,19 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
                     setPhotoUploadError(null)
                     setShowPhotoModal(true)
                   }}
-                  className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition cursor-pointer border border-white/40"
+                  className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition cursor-pointer border border-white/40"
                   title="Upload profile photograph"
                 >
-                  <Camera size={13} />
+                  <Camera size={12} />
                 </button>
               </div>
 
-              <div className="space-y-1">
-                <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-xs text-blue-100 inline-flex items-center gap-1.5 mb-1">
-                  <Sparkles size={13} className="text-yellow-300" />
+              <div className="space-y-1 min-w-0">
+                <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/20 text-[11px] sm:text-xs font-semibold backdrop-blur-xs text-blue-100 inline-flex items-center gap-1.5 mb-0.5">
+                  <Sparkles size={12} className="text-yellow-300" />
                   Teacher Workspace
                 </span>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
                   Good Day, {teacherName}! 👋
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-300 font-medium">
@@ -899,9 +899,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
             </div>
 
             {/* Right Date Box */}
-            <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs space-y-1 shrink-0">
+            <div className="relative z-10 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3 sm:p-4 text-xs space-y-1 w-full sm:w-auto shrink-0 flex items-center justify-between sm:block">
               <div className="flex items-center gap-2 text-slate-200 font-bold">
-                <Calendar size={15} className="text-sky-400 shrink-0" />
+                <Calendar size={14} className="text-sky-400 shrink-0" />
                 <span>{currentDateFormatted}</span>
               </div>
             </div>
@@ -909,65 +909,65 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
           </div>
 
           {/* 2. Top 5 Metric Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
             
             {/* Card 1: Students */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <Users size={20} />
+            <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-2.5 sm:gap-3 hover:shadow-md transition">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Users size={18} />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none">{studentsCount}</h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">Students</p>
-                <span className="text-[10px] font-bold text-emerald-600 block mt-0.5">{presentTodayCount} Present today</span>
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-none">{studentsCount}</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">Students</p>
+                <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-600 block mt-0.5 truncate">{presentTodayCount} Present today</span>
               </div>
             </div>
 
             {/* Card 2: Subjects */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <BookOpen size={20} />
+            <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-2.5 sm:gap-3 hover:shadow-md transition">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <BookOpen size={18} />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none">{subjectsCount}</h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">Subjects</p>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">Assigned to teach</span>
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-none">{subjectsCount}</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">Subjects</p>
+                <span className="text-[9.5px] sm:text-[10px] font-medium text-slate-400 block mt-0.5 truncate">Assigned to teach</span>
               </div>
             </div>
 
             {/* Card 3: Assignments */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
-              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <CheckCircle2 size={20} />
+            <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-2.5 sm:gap-3 hover:shadow-md transition">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <CheckCircle2 size={18} />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none">{assignmentsCount}</h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">Assignments</p>
-                <span className="text-[10px] font-bold text-amber-600 block mt-0.5">{pendingReviewCount} Pending review</span>
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-none">{assignmentsCount}</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">Assignments</p>
+                <span className="text-[9.5px] sm:text-[10px] font-bold text-amber-600 block mt-0.5 truncate">{pendingReviewCount} Pending</span>
               </div>
             </div>
 
             {/* Card 4: Tests / CBT */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
-              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <Award size={20} />
+            <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-2.5 sm:gap-3 hover:shadow-md transition">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Award size={18} />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none">{testsCount}</h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">Tests / CBT</p>
-                <span className="text-[10px] font-bold text-blue-600 block mt-0.5">{ongoingTestsCount} Active</span>
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-none">{testsCount}</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">Tests / CBT</p>
+                <span className="text-[9.5px] sm:text-[10px] font-bold text-blue-600 block mt-0.5 truncate">{ongoingTestsCount} Active</span>
               </div>
             </div>
 
             {/* Card 5: Class Average */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3 hover:shadow-md transition">
-              <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <TrendingUp size={20} />
+            <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-2.5 sm:gap-3 hover:shadow-md transition">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <TrendingUp size={18} />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 leading-none">{classAverage}%</h3>
-                <p className="text-[11px] font-bold text-slate-500 mt-0.5">Class Average</p>
-                <span className="text-[10px] font-bold text-emerald-600 block mt-0.5">DB Score Average</span>
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-none">{classAverage}%</h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5 truncate">Class Average</p>
+                <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-600 block mt-0.5 truncate">DB Score Average</span>
               </div>
             </div>
 
@@ -981,9 +981,9 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 mb-4">Attendance Overview</h3>
                 
-                <div className="flex items-center gap-4 py-1">
-                  <SVGDonutChart percentage={attSummary.overallPercentage} centerLabel="Overall" color="#10B981" size={120} />
-                  <div className="space-y-2 text-xs">
+                <div className="flex flex-col sm:flex-row items-center justify-around gap-4 py-1">
+                  <SVGDonutChart percentage={attSummary.overallPercentage} centerLabel="Overall" color="#10B981" size={115} />
+                  <div className="space-y-2 text-xs w-full sm:w-auto">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                       <span className="text-slate-600 font-semibold">Present</span>
@@ -1006,7 +1006,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
               <div className="pt-2 border-t border-slate-100 text-center">
                 <button 
                   onClick={() => onNavigate?.('attendance')}
-                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer py-1.5 min-h-[38px]"
                 >
                   <span>Take Daily Roll Call</span>
                   <ArrowRight size={14} />
@@ -1054,7 +1054,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
               <div className="pt-2 border-t border-slate-100 text-center">
                 <button 
                   onClick={() => onNavigate?.('gradebook')}
-                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer py-1.5 min-h-[38px]"
                 >
                   <span>Open Marks Gradebook</span>
                   <ArrowRight size={14} />
@@ -1112,14 +1112,14 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between px-1">
                 <button 
                   onClick={() => onNavigate?.('timetable')}
-                  className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1 cursor-pointer py-1.5 min-h-[38px]"
                 >
                   <Calendar size={13} />
                   <span>My Timetable</span>
                 </button>
                 <button 
                   onClick={() => onNavigate?.('ai-planner')}
-                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-bold text-blue-600 hover:underline inline-flex items-center gap-1 cursor-pointer py-1.5 min-h-[38px]"
                 >
                   <span>AI Lesson Planner</span>
                   <ArrowRight size={14} />
@@ -1185,28 +1185,28 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
                         <button
                           type="button"
                           onClick={() => onNavigate?.('attendance')}
-                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                          className="py-2 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-[10px] border border-slate-200 transition text-center min-h-[36px]"
                         >
                           Attendance
                         </button>
                         <button
                           type="button"
                           onClick={() => onNavigate?.('subjects')}
-                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                          className="py-2 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-[10px] border border-slate-200 transition text-center min-h-[36px]"
                         >
                           Subjects
                         </button>
                         <button
                           type="button"
                           onClick={() => onNavigate?.('scores')}
-                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                          className="py-2 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-[10px] border border-slate-200 transition text-center min-h-[36px]"
                         >
                           Score Entry
                         </button>
                         <button
                           type="button"
                           onClick={() => onNavigate?.('reports')}
-                          className="py-1.5 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200 transition text-center"
+                          className="py-2 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-[10px] border border-slate-200 transition text-center min-h-[36px]"
                         >
                           Reports
                         </button>
