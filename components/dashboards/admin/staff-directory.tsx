@@ -53,7 +53,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { TeacherOnboardingModal, EditTeacherModal, DeactivateTeacherModal } from './teacher-modals'
+import { TeacherOnboardingModal, EditTeacherModal, DeactivateTeacherModal, DeactivateStaffModal } from './teacher-modals'
 
 interface TeacherRow {
   id: number
@@ -132,6 +132,7 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
   const [isOnboardOpen, setIsOnboardOpen] = useState(false)
   const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null)
   const [deletingTeacher, setDeletingTeacher] = useState<TeacherRow | null>(null)
+  const [deletingStaff, setDeletingStaff] = useState<any | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
@@ -1005,6 +1006,17 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
                           >
                             <Edit3 size={12} /> Edit
                           </button>
+                          <button
+                            onClick={() => setDeletingStaff({
+                              ...s,
+                              name: staffDisplayName,
+                              roleLabel: displayRoleText,
+                            })}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer"
+                            title="Delete Staff Member"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1285,6 +1297,17 @@ export function StaffDirectory({ initialTab = 'teachers' }: { initialTab?: Staff
         onClose={() => setDeletingTeacher(null)}
         onSuccess={() => {
           setDeletingTeacher(null)
+          loadList()
+        }}
+      />
+
+      {/* DEACTIVATE / DELETE NON-TEACHING STAFF MODAL */}
+      <DeactivateStaffModal
+        isOpen={Boolean(deletingStaff)}
+        staff={deletingStaff}
+        onClose={() => setDeletingStaff(null)}
+        onSuccess={() => {
+          setDeletingStaff(null)
           loadList()
         }}
       />

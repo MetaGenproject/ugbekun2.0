@@ -22,6 +22,8 @@ import {
   MessageSquare
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { toast } from 'sonner'
+import { showSystemStatus } from '@/lib/systemStatus'
 import { TeacherOnboardingModal, EditTeacherModal } from './teacher-modals'
 import { UserCredentialModal } from './user-credential-modal'
 import {
@@ -274,6 +276,11 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     setIsDeactivating(true)
     try {
       await apiSlice.delete(endpoints.admin.deleteTeacher(teacherId))
+      toast.success('Staff deleted successfully')
+      showSystemStatus({
+        type: 'SUCCESS',
+        title: 'Staff deleted successfully',
+      })
       setDeactivatingTeacher(null)
       loadList()
       // Reload stats to reflect updated teacher count

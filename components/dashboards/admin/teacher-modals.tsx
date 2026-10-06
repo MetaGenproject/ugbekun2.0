@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
+import { showSystemStatus } from '@/lib/systemStatus'
 import { getValidPhotoUrl } from '@/lib/utils'
 import {
   X,
@@ -62,7 +63,12 @@ export function DeactivateTeacherModal({ isOpen, teacher, onClose, onSuccess }: 
     setError(null)
     try {
       await apiSlice.delete(endpoints.admin.deleteTeacher(teacher.id))
-      toast.success(`Teacher "${teacherName}" record deleted successfully.`)
+      toast.success('Staff deleted successfully')
+      showSystemStatus({
+        type: 'SUCCESS',
+        title: 'Staff deleted successfully',
+        message: `${teacherName} record has been removed.`,
+      })
       onSuccess()
       onClose()
     } catch (err: any) {
@@ -112,6 +118,89 @@ export function DeactivateTeacherModal({ isOpen, teacher, onClose, onSuccess }: 
           >
             {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
             Delete Teacher
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface DeactivateStaffModalProps {
+  isOpen: boolean
+  staff: any
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export function DeactivateStaffModal({ isOpen, staff, onClose, onSuccess }: DeactivateStaffModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!isOpen || !staff) return null
+
+  const staffName = staff.name || staff.username || 'Staff Member'
+  const roleName = staff.roleLabel || 'Staff'
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    setError(null)
+    try {
+      await apiSlice.delete(endpoints.admin.deleteStaff(staff.id))
+      toast.success('Staff deleted successfully')
+      showSystemStatus({
+        type: 'SUCCESS',
+        title: 'Staff deleted successfully',
+        message: `${staffName} record has been removed.`,
+      })
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete staff record.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 text-rose-600">
+            <Trash2 size={20} />
+            <h3 className="font-black text-base text-slate-900">Delete Staff Record</h3>
+          </div>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+          Are you sure you want to delete <strong className="text-slate-900">{staffName}</strong> ({roleName})? This action will permanently remove their profile, delete user login credentials, and unassign any duties.
+        </p>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+          >
+            {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Delete Staff
           </button>
         </div>
       </div>

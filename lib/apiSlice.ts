@@ -157,6 +157,7 @@ export const endpoints = {
     uploadTeacherPhoto: (id: number) => `${BASE_URL}/admin/teachers/${id}/upload-photo`,
     uploadStaffPhoto: (userId: number) => `${BASE_URL}/admin/staff/${userId}/upload-photo`,
     updateStaff: (id: number) => `${BASE_URL}/admin/staff/${id}`,
+    deleteStaff: (id: number) => `${BASE_URL}/admin/staff/${id}`,
     staffMessages: (recipientId?: number) => `${BASE_URL}/admin/staff-messages${recipientId ? `?recipientId=${recipientId}` : ''}`,
     sendStaffMessage: `${BASE_URL}/admin/staff-messages`,
     toggleTeacherStatus: (id: number) => `${BASE_URL}/admin/teachers/${id}/toggle-status`,

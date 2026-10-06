@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SystemStatusToastContainer } from '@/components/ui/status-notifier'
+import { Toaster } from '@/components/ui/sonner'
 import { SchoolBrandingProvider } from '@/lib/schoolBrandingContext'
 import { GlobalErrorTracker } from '@/components/common/global-error-tracker'
 import './globals.css'
@@ -37,6 +38,7 @@ export default function RootLayout({
         <SchoolBrandingProvider>
           <GlobalErrorTracker />
           {children}
+          <Toaster richColors position="top-right" />
           <SystemStatusToastContainer />
           {isVercel && <Analytics />}
         </SchoolBrandingProvider>
