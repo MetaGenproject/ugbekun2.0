@@ -283,6 +283,7 @@ export function LoginForm() {
             boxShadow: '0 4px 14px rgba(99,102,241,0.35)',
             WebkitAppearance: 'none',
             WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
           }}
         >
           {isLoading ? (

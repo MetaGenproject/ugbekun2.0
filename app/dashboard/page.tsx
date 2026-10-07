@@ -465,13 +465,16 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    // No session found — redirect to login
     if (typeof window !== 'undefined') {
-      window.location.replace('/login')
+      setTimeout(() => {
+        window.location.replace('/login')
+      }, 1500)
     }
     return (
-      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8', fontSize: '14px' }}>Redirecting to login…</p>
+      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+        <div style={{ width: '36px', height: '36px', border: '3px solid rgba(244,63,94,0.3)', borderTopColor: '#f43f5e', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 600 }}>Securing session... Redirecting to login if unauthenticated.</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
