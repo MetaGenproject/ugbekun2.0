@@ -434,6 +434,8 @@ export const endpoints = {
     evaluationMatrices: `${BASE_URL}/teacher/evaluation-matrices`,
     gradingSystem: (classId?: number) => `${BASE_URL}/teacher/grading-system${classId ? `?classId=${classId}` : ''}`,
     classReports: (query: string) => `${BASE_URL}/teacher/class-reports?${query}`,
+    classCredentials: (query: string) => `${BASE_URL}/teacher/class-credentials?${query}`,
+    exportClassCredentialsPdf: (query: string) => `${BASE_URL}/teacher/class-credentials/export-pdf?${query}`,
     studentPool: (params: string) => `${BASE_URL}/teacher/students/pool?${params}`,
     autoGenerateStudent: `${BASE_URL}/teacher/students/auto-generate`,
     roster: `${BASE_URL}/teacher/roster`,

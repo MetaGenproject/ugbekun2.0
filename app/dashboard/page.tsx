@@ -189,25 +189,9 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window === 'undefined') return null
-    const cached = getAuthSession().user
-    if (!cached) return null
-    const normalizedUser: User = {
-      id: cached.id,
-      username: cached.username,
-      role: cached.role,
-      roleName: cached.roleName,
-      legacyUserId: cached.legacyUserId ?? null,
-      lastLogin: cached.lastLogin ?? undefined,
-    }
-    if (cached.branch) (normalizedUser as any).branch = cached.branch
-    return normalizedUser
-  })
-  const [isLoading, setIsLoading] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true
-    return !getAuthSession().user
-  })
+  const [mounted, setMounted] = useState<boolean>(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState('overview')
   const [branchStats, setBranchStats] = useState<BranchStats | null>(null)
@@ -272,7 +256,24 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    setMounted(true)
     let cancelled = false
+
+    // Immediately restore cached session on client mount to minimize loading flash
+    const initialCached = getAuthSession().user
+    if (initialCached) {
+      const normalizedUser: User = {
+        id: initialCached.id,
+        username: initialCached.username,
+        role: initialCached.role,
+        roleName: initialCached.roleName,
+        legacyUserId: initialCached.legacyUserId ?? null,
+        lastLogin: initialCached.lastLogin ?? undefined,
+      }
+      if (initialCached.branch) (normalizedUser as any).branch = initialCached.branch
+      setUser(normalizedUser)
+      setIsLoading(false)
+    }
 
     async function hydrateSession() {
       try {
@@ -455,7 +456,7 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center gap-4 font-sans">
         <div className="w-12 h-12 border-4 border-rose-500/30 border-t-rose-600 rounded-full animate-spin" />
