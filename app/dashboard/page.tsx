@@ -189,8 +189,25 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window === 'undefined') return null
+    const cached = getAuthSession().user
+    if (!cached) return null
+    const normalizedUser: User = {
+      id: cached.id,
+      username: cached.username,
+      role: cached.role,
+      roleName: cached.roleName,
+      legacyUserId: cached.legacyUserId ?? null,
+      lastLogin: cached.lastLogin ?? undefined,
+    }
+    if (cached.branch) (normalizedUser as any).branch = cached.branch
+    return normalizedUser
+  })
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    return !getAuthSession().user
+  })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState('overview')
   const [branchStats, setBranchStats] = useState<BranchStats | null>(null)

@@ -49,8 +49,6 @@ const getCookie = (key: string): string | null => {
 
 const setCookie = (key: string, value: string, maxAgeSeconds = 60 * 60 * 8): void => {
   if (typeof document === 'undefined') return;
-  // Never write document.cookie for ugbekun_token because server manages httpOnly ugbekun_token
-  if (key === 'ugbekun_token') return;
 
   try {
     const secureFlag = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';

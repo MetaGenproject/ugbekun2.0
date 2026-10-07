@@ -62,7 +62,7 @@ export function LoginForm() {
     const domPassword = (form.elements.namedItem('password') as HTMLInputElement)?.value ||
                         (form.elements.namedItem('login-password') as HTMLInputElement)?.value || ''
 
-    const effectiveUsername = (domUsername || username).trim().replace(/\s+/g, '')
+    const effectiveUsername = (domUsername || username).trim()
     const effectivePassword = (domPassword || password).trim()
 
     if (!effectiveUsername) {
@@ -107,15 +107,27 @@ export function LoginForm() {
         } : null,
       }
 
-      // Persist user profile and token for defense-in-depth on Safari/iOS
+      // Persist user profile and token across all 5 fallback tiers (memory, localStorage, sessionStorage, cookie, window.name)
       setAuthSession(userToStore, receivedToken)
 
-      // Top-level navigation ensures Safari WebKit commits cookies and flushes storage cleanly
       const destination = postLoginPath || '/dashboard'
+
+      // Client-side router navigation preserves in-memory session heap (no destructive page reload)
+      try {
+        router.replace(destination)
+      } catch {
+        if (typeof window !== 'undefined') {
+          window.location.href = destination
+        }
+      }
+
+      // Safety timeout: if client router does not complete within 1000ms, use top-level navigation
       if (typeof window !== 'undefined') {
-        window.location.assign(destination)
-      } else {
-        router.push(destination)
+        setTimeout(() => {
+          if (window.location.pathname.startsWith('/login')) {
+            window.location.href = destination
+          }
+        }, 1000)
       }
     } catch (err: any) {
       console.error('Login error:', err)
@@ -224,6 +236,9 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               autoComplete="current-password"
               className="w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[16px] sm:text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
             />

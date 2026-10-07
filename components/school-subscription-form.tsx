@@ -183,10 +183,12 @@ export function SchoolSubscriptionForm() {
         setAuthSession(data.user, data.token || null)
         setSuccessMsg('🎉 School account provisioned! Entering your dashboard...')
         setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            window.location.assign('/dashboard')
-          } else {
-            router.push('/dashboard')
+          try {
+            router.replace('/dashboard')
+          } catch {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/dashboard'
+            }
           }
         }, 1200)
       } else {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { applyAuthCookie, getBackendUrl } from '@/lib/serverAuth'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 90000)

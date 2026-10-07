@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { applyAuthCookie, AUTH_COOKIE_NAME, getBackendUrl } from '@/lib/serverAuth'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
   let token = request.cookies.get(AUTH_COOKIE_NAME)?.value
 
@@ -16,6 +19,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'No token provided.' }, { status: 401 })
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 45000)
+
   try {
     const response = await fetch(`${getBackendUrl()}/api/auth/me`, {
       method: 'GET',
@@ -25,7 +31,9 @@ export async function GET(request: NextRequest) {
         Cookie: `${AUTH_COOKIE_NAME}=${token}`,
       },
       cache: 'no-store',
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
     const data = await response.json().catch(() => null)
     if (!response.ok || !data) {
       const res = NextResponse.json(
@@ -42,6 +50,7 @@ export async function GET(request: NextRequest) {
     }
     return res
   } catch {
+    clearTimeout(timeoutId)
     return NextResponse.json({ success: false, message: 'Unable to verify session.' }, { status: 503 })
   }
 }

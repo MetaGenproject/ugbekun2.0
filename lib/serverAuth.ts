@@ -19,7 +19,11 @@ export function getAuthCookieOptions(request?: any) {
   if (request) {
     const proto = request.headers?.get?.('x-forwarded-proto') || request.nextUrl?.protocol
     if (proto) {
-      isSecure = proto === 'https:' || proto === 'https'
+      if (process.env.NODE_ENV === 'production') {
+        isSecure = true
+      } else {
+        isSecure = proto === 'https:' || proto === 'https'
+      }
     }
   }
 
