@@ -538,6 +538,25 @@ const getAuthHeaders = (): Record<string, string> => {
   return headers;
 };
 
+export const normalizeUrl = (url: string): string => {
+  if (typeof window === 'undefined') {
+    return url;
+  }
+  // When running client-side in the browser:
+  // Direct cross-origin calls to remote backend trigger CORS preflights, network drops, or cold-start timeouts resulting in "TypeError: Failed to fetch".
+  // Rewrite any configured backend or onrender API URL to the same-origin Next.js proxy route /api/proxy.
+  const configuredBackend = (process.env.NEXT_PUBLIC_API_URL || 'https://ugbekunsmp-backend.onrender.com/api').replace(/\/$/, '');
+  if (url.startsWith(configuredBackend)) {
+    const subpath = url.slice(configuredBackend.length);
+    return `/api/proxy${subpath.startsWith('/') ? '' : '/'}${subpath}`;
+  }
+  if (/^https?:\/\/[^\/]+\.onrender\.com\/api/i.test(url)) {
+    const subpath = url.replace(/^https?:\/\/[^\/]+\.onrender\.com\/api/, '');
+    return `/api/proxy${subpath.startsWith('/') ? '' : '/'}${subpath}`;
+  }
+  return url;
+};
+
 /**
  * Robust, lightweight API client mimicking the apiSlice pattern.
  * Manages request headers, authentication tokens, and standardized error handling.
@@ -554,7 +573,7 @@ export const apiSlice = {
     }, 90000) : null;
 
     try {
-      const finalUrl = options?.cacheBust ? appendCacheBuster(url) : url;
+      const finalUrl = normalizeUrl(options?.cacheBust ? appendCacheBuster(url) : url);
       const headers = {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
@@ -596,6 +615,7 @@ export const apiSlice = {
     }, 90000) : null;
 
     try {
+      const targetUrl = normalizeUrl(url);
       const headers = {
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
@@ -614,7 +634,7 @@ export const apiSlice = {
         fetchOpts.signal = controller.signal;
       }
 
-      const response = await fetch(url, fetchOpts);
+      const response = await fetch(targetUrl, fetchOpts);
       return handleResponse<T>(response);
     } catch (err: any) {
       if (err && err.name === 'AbortError') {
@@ -630,7 +650,8 @@ export const apiSlice = {
    * PUT Request
    */
   async put<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
+    const targetUrl = normalizeUrl(url);
+    const response = await fetch(targetUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -648,7 +669,8 @@ export const apiSlice = {
    * PATCH Request
    */
   async patch<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
+    const targetUrl = normalizeUrl(url);
+    const response = await fetch(targetUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -666,7 +688,8 @@ export const apiSlice = {
    * DELETE Request
    */
   async delete<T = any>(url: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
+    const targetUrl = normalizeUrl(url);
+    const response = await fetch(targetUrl, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -683,7 +706,7 @@ export const apiSlice = {
    * Download a file (CSV, PDF, etc.) with auth headers.
    */
   async download(url: string, filename: string, options?: { cacheBust?: boolean }): Promise<void> {
-    const finalUrl = options?.cacheBust ? appendCacheBuster(url) : url;
+    const finalUrl = normalizeUrl(options?.cacheBust ? appendCacheBuster(url) : url);
     const response = await fetch(finalUrl, {
       method: 'GET',
       headers: {

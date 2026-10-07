@@ -89,6 +89,158 @@ interface QuestionBankManagerProps {
   onImportToBuilder?: (questions: any[]) => void
 }
 
+function parseAikenClient(text?: string | null) {
+  if (!text || typeof text !== 'string') return []
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const drafts: any[] = []
+  let current: any = null
+
+  const qNumRegex = /^(?:(?:question|q)\s*\d+[\s.:\-)]*|\d+[\s.:\-)])\s*(.*)/i
+  const optRegex = /^(?:(?:\(|\[)?([a-eA-E])(?:\)|\]|\.|\:|\-)\s*)(.*)/
+  const ansRegex = /^(?:ans(?:wer)?|correct(?:\s*option|\s*answer)?|key)\s*[:=\-]?\s*(?:option\s*)?(?:\(|\[)?([a-eA-E0-9]+)(?:\)|\])?/i
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Check Answer: A or ANSWER: A or Key: A
+    const ansMatch = line.match(ansRegex)
+    if (ansMatch) {
+      if (current && current.questionText && current.options.length >= 2) {
+        current.correctOption = ansMatch[1].toUpperCase()
+        drafts.push(current)
+      }
+      current = null
+      continue
+    }
+
+    // Check Option: A. or A) or (A)
+    const optMatch = line.match(optRegex)
+    if (optMatch) {
+      if (current) {
+        current.options.push(optMatch[2].trim())
+      }
+      continue
+    }
+
+    // Question prompt line
+    const qMatch = line.match(qNumRegex)
+    const cleanPrompt = qMatch ? qMatch[1].trim() : line
+
+    if (current) {
+      if (current.options.length === 0) {
+        current.questionText += ' ' + cleanPrompt
+      } else {
+        current = {
+          questionText: cleanPrompt,
+          questionType: 'mcq',
+          options: [],
+          correctOption: 'A',
+          marks: 1.0,
+        }
+      }
+    } else {
+      current = {
+        questionText: cleanPrompt,
+        questionType: 'mcq',
+        options: [],
+        correctOption: 'A',
+        marks: 1.0,
+      }
+    }
+  }
+
+  return drafts
+}
+
+function parseCsvClient(csvText?: string | null) {
+  if (!csvText || typeof csvText !== 'string') return []
+  const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length < 2) return []
+
+  const parseLine = (str: string) => {
+    const result: string[] = []
+    let cur = ''
+    let insideQuote = false
+    for (let i = 0; i < str.length; i++) {
+      const c = str[i]
+      if (c === '"') {
+        if (insideQuote && str[i + 1] === '"') {
+          cur += '"'
+          i++
+        } else {
+          insideQuote = !insideQuote
+        }
+      } else if (c === ',' && !insideQuote) {
+        result.push(cur.trim())
+        cur = ''
+      } else {
+        cur += c
+      }
+    }
+    result.push(cur.trim())
+    return result
+  }
+
+  const headers = parseLine(lines[0]).map((h) => h.toLowerCase().replace(/[\s_-]+/g, ''))
+  const drafts: any[] = []
+
+  const qIdx = headers.findIndex((h) => h.includes('question') || h === 'prompt' || h === 'text')
+  const typeIdx = headers.findIndex((h) => h.includes('type'))
+  const optAIdx = headers.findIndex((h) => h.includes('optiona') || h === 'a')
+  const optBIdx = headers.findIndex((h) => h.includes('optionb') || h === 'b')
+  const optCIdx = headers.findIndex((h) => h.includes('optionc') || h === 'c')
+  const optDIdx = headers.findIndex((h) => h.includes('optiond') || h === 'd')
+  const ansIdx = headers.findIndex((h) => h.includes('correct') || h.includes('answer') || h === 'ans')
+  const marksIdx = headers.findIndex((h) => h.includes('mark') || h.includes('point') || h.includes('score'))
+
+  if (qIdx === -1) return []
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseLine(lines[i])
+    if (!row[qIdx]) continue
+    const options: string[] = []
+    if (optAIdx !== -1 && row[optAIdx]) options.push(row[optAIdx])
+    if (optBIdx !== -1 && row[optBIdx]) options.push(row[optBIdx])
+    if (optCIdx !== -1 && row[optCIdx]) options.push(row[optCIdx])
+    if (optDIdx !== -1 && row[optDIdx]) options.push(row[optDIdx])
+
+    let correct = 'A'
+    if (ansIdx !== -1 && row[ansIdx]) {
+      const a = row[ansIdx].trim().toUpperCase()
+      if (['A', 'B', 'C', 'D'].includes(a)) correct = a
+    }
+
+    drafts.push({
+      questionText: row[qIdx],
+      questionType: typeIdx !== -1 && row[typeIdx] ? row[typeIdx] : 'mcq',
+      options: options.length >= 2 ? options : ['Option A', 'Option B'],
+      correctOption: correct,
+      marks: marksIdx !== -1 && !isNaN(Number(row[marksIdx])) ? Number(row[marksIdx]) : 1.0,
+    })
+  }
+
+  return drafts
+}
+
+function parseJsonClient(raw: any) {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const list = Array.isArray(parsed) ? parsed : parsed?.questions || parsed?.drafts || []
+    if (!Array.isArray(list)) return []
+    return list
+      .map((item: any) => ({
+        questionText: String(item.questionText || item.prompt || item.text || '').trim(),
+        questionType: item.questionType || 'mcq',
+        options: Array.isArray(item.options) ? item.options : ['Option A', 'Option B'],
+        correctOption: String(item.correctOption || item.answer || 'A').toUpperCase(),
+        marks: Number(item.marks) || 1.0,
+      }))
+      .filter((item: any) => item.questionText)
+  } catch {
+    return []
+  }
+}
+
 export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBankManagerProps) {
   const [questions, setQuestions] = useState<QuestionBankItem[]>([])
   const [onlineExams, setOnlineExams] = useState<OnlineExamItem[]>([])
@@ -97,7 +249,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  const isAdminPortal = Number(profile?.role) === 1
+  const isAdminPortal = Number(profile?.role) === 1 || Number(profile?.role) === 2 || Number(profile?.role) === 9 || !profile?.role
   const bankListUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank('?limit=200') : endpoints.teacher.questionBank())
   const bankCreateUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank() : endpoints.teacher.questionBank())
   const bankItemUrl = (id: number) => (isAdminPortal ? endpoints.admin.cbtQuestionBankItem(id) : endpoints.teacher.questionBankItem(id))
@@ -619,12 +771,37 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const handleBulkImport = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!importText.trim() || !importSubjectId || !importClassId) {
-      alert('Import data, class, and subject are required so questions stay classified.')
+      showNotification('Import data, class, and subject are required so questions stay classified.')
       return
     }
 
     setIsImporting(true)
     try {
+      // 1. Instant client-side parsing (0ms latency, zero network dependency, immune to Failed to fetch)
+      let clientDrafts: any[] = []
+      if (importFormat === 'aiken') {
+        clientDrafts = parseAikenClient(importText)
+      } else if (importFormat === 'csv') {
+        clientDrafts = parseCsvClient(importText)
+      } else if (importFormat === 'json') {
+        clientDrafts = parseJsonClient(importText)
+      }
+
+      if (clientDrafts.length > 0) {
+        setReviewMeta({
+          subjectId: importSubjectId,
+          classId: importClassId,
+          termName: importTermName,
+          sourceType: 'UPLOAD',
+        })
+        setReviewDrafts(clientDrafts)
+        setIsImportModalOpen(false)
+        setIsReviewModalOpen(true)
+        showNotification(`Parsed ${clientDrafts.length} question(s) successfully. Review and edit before saving.`)
+        return
+      }
+
+      // 2. Graceful server-side fallback if client-side parse yielded 0 items
       const res = await apiSlice.post<{ success: boolean; drafts?: any[]; count: number; message: string }>(
         bankImportUrl,
         {
@@ -653,9 +830,11 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         setIsImportModalOpen(false)
         setImportText('')
         fetchQuestions()
+      } else {
+        showNotification('No valid questions could be parsed. Check question format (options A, B, C and Answer key).')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to import questions. Please check format syntax.')
+      showNotification(err instanceof Error ? err.message : 'Failed to import questions. Please check format syntax.')
     } finally {
       setIsImporting(false)
     }
@@ -712,7 +891,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const handleSaveReviewedDrafts = async () => {
     const usable = reviewDrafts.filter((q) => String(q.questionText || '').trim())
     if (!usable.length || !reviewMeta.subjectId) {
-      alert('Edit at least one question before saving.')
+      showNotification('Edit at least one question before saving.')
       return
     }
     setIsSavingDrafts(true)
@@ -732,9 +911,11 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         setImportText('')
         setAiTopic('')
         fetchQuestions()
+      } else {
+        showNotification(res.message || 'Failed to save questions to the bank.')
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save reviewed questions.')
+      showNotification(err instanceof Error ? err.message : 'Failed to save reviewed questions.')
     } finally {
       setIsSavingDrafts(false)
     }
