@@ -513,7 +513,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f5f9] flex flex-col md:flex-row font-sans text-slate-900 overflow-x-hidden">
+    <div className="min-h-screen bg-[#f3f5f9] flex flex-col font-sans text-slate-900">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
@@ -525,10 +525,10 @@ export default function DashboardPage() {
       {/* Dynamic Dark Navy Sidebar Shell matching Reference Image */}
       <aside className={`
         print:hidden
-        fixed inset-y-0 left-0 z-50 w-[84vw] max-w-[320px] md:w-72 lg:w-72
+        fixed inset-y-0 left-0 z-50 md:z-30 w-[84vw] max-w-[320px] md:w-72
         bg-gradient-to-b from-[#0b1739] via-[#091436] to-[#040c21]
-        flex flex-col h-full md:h-screen md:sticky md:top-0 md:shrink-0
-        text-white shadow-2xl md:shadow-xl border-r border-white/5
+        flex flex-col h-full
+        text-white shadow-2xl md:shadow-none border-r border-white/5
         transition-transform duration-300 ease-in-out transform select-none
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
@@ -670,9 +670,9 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Panel Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 min-h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen md:ml-72">
         {/* Top Header Bar matching Reference Image */}
-        <header className="print:hidden h-16 border-b border-slate-200/90 bg-white px-3 sm:px-6 flex items-center justify-between sticky top-0 z-40 shadow-xs gap-1.5 sm:gap-3">
+        <header className="print:hidden h-16 border-b border-slate-200/90 bg-white px-3 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-1.5 sm:gap-3">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0 md:flex-1 md:max-w-xl">
             {/* Hamburger toggle button for mobile */}
             <button 
