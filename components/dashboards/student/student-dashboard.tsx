@@ -191,16 +191,19 @@ interface GradeData {
   totalClassStudents: number | null
   isEcd?: boolean
   assessment?: any
+  isPublished?: boolean
+  message?: string
 }
 
 interface DashboardOverviewData {
   profile: StudentProfile
   kpi: {
-    averageScore: number
+    averageScore: number | null
     classRank: number | null
     totalClassStudents: number
     attendancePercentage: number
     behaviourRating: string
+    resultsPublished?: boolean
   }
   attendance: AttendanceData
   todayTimetable: Array<{
@@ -1226,6 +1229,74 @@ function normalizeQuestions(raw: any): any[] {
     const totalClass = dashboardOverview?.kpi?.totalClassStudents || grades?.totalClassStudents || profile.fellowStudentsCount || 0
     const avgScore = dashboardOverview?.kpi?.averageScore ?? grades?.overallAverage ?? 0
     const reportCardList = grades?.reportCard || []
+    const isResultsPublished = Boolean(grades?.isPublished)
+
+    if (!isResultsPublished) {
+      return (
+        <div className="space-y-6 pb-12 font-sans">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <Award className="text-indigo-600" size={24} />
+                Term Academic Results & Official Report Card
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Class: <span className="font-bold text-slate-900">{profile.className} {profile.sectionName}</span> &bull; Student Reg: <span className="font-bold text-slate-900">{profile.registerNo}</span>
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>Compilation & Moderation Phase</span>
+            </div>
+          </div>
+
+          {/* Locked / Under Review State */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6">
+            <div className="w-20 h-20 rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600 shadow-inner">
+              <FileText size={38} className="text-indigo-600" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 inline-block">
+                Awaiting Administrative Release
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Report Cards Are Currently Invisible
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
+                Your subject teachers, form master, and school administrators are currently finalizing marks entry, psychomotor assessments, and pedagogical commentary.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-200/60 text-left">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">1. Continuous Assessment</span>
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-emerald-500" /> CBT & Tests Logged
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">2. Principal Review</span>
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-emerald-500" /> Commentary Moderation
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">3. Official Publication</span>
+                <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
+                  <Clock size={13} className="text-amber-500" /> Pending Admin Release
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 italic">
+              Once the school administrator officially publishes report cards, your full subject breakdown, overall average, class position, and 1-click PDF download will immediately become available here.
+            </p>
+          </div>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-6 pb-12 font-sans">
@@ -3439,11 +3510,19 @@ function normalizeQuestions(raw: any): any[] {
   // Derived values grounded strictly in real DB data
   const studentName = `${profile.firstName} ${profile.lastName}`
   const firstName = profile.firstName
-  const rawRank = dashboardOverview?.kpi?.classRank ?? grades?.rank
-  const userRankText = rawRank ? `${rawRank}${getOrdinal(rawRank)}` : 'N/A'
+  const isOverviewPublished = Boolean(
+    (dashboardOverview?.kpi?.resultsPublished ?? grades?.isPublished) &&
+    (dashboardOverview?.kpi?.averageScore !== null || grades?.overallAverage !== null)
+  )
+  const rawRank = isOverviewPublished ? (dashboardOverview?.kpi?.classRank ?? grades?.rank) : null
+  const userRankText = rawRank ? `${rawRank}${getOrdinal(rawRank)}` : (isOverviewPublished ? 'N/A' : 'Pending')
   
   const totalClass = dashboardOverview?.kpi?.totalClassStudents || grades?.totalClassStudents || profile.fellowStudentsCount || 0
-  const overallAvg = dashboardOverview?.kpi?.averageScore !== undefined ? `${dashboardOverview.kpi.averageScore}%` : (grades?.overallAverage !== undefined ? `${grades.overallAverage}%` : '0%')
+  const overallAvg = isOverviewPublished && dashboardOverview?.kpi?.averageScore !== undefined && dashboardOverview?.kpi?.averageScore !== null
+    ? `${dashboardOverview.kpi.averageScore}%`
+    : (isOverviewPublished && grades?.overallAverage !== undefined && grades?.overallAverage !== null
+      ? `${grades.overallAverage}%`
+      : 'In Review')
   const attendancePct = dashboardOverview?.kpi?.attendancePercentage !== undefined ? `${dashboardOverview.kpi.attendancePercentage}%` : (attendance?.percentage !== undefined ? `${attendance.percentage}%` : '0%')
   const behaviourRating = dashboardOverview?.kpi?.behaviourRating || 'Good'
 

@@ -188,7 +188,7 @@ export function HomeworkManagement() {
     setLoadingBank(true)
     setError(null)
     try {
-      const res = await apiSlice.get<{ success: boolean; items: BankItem[] }>(endpoints.admin.cbtQuestionBank('?limit=300'))
+      const res = await apiSlice.get<{ success: boolean; items: BankItem[] }>(endpoints.admin.cbtQuestionBank('?limit=5000'))
       setBankItems(res.items || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load Question Bank.')

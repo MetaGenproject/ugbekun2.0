@@ -31,6 +31,7 @@ import {
   Calendar,
   Award,
   ChevronRight,
+  ChevronLeft,
   Grid,
   List,
   FolderPlus,
@@ -241,6 +242,73 @@ function parseJsonClient(raw: any) {
   }
 }
 
+
+function PaginationBar({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  noun,
+  pageSizeOptions = [10, 20, 30, 50],
+  onPage,
+  onPageSize,
+}: {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  noun: string
+  pageSizeOptions?: number[]
+  onPage: (page: number) => void
+  onPageSize: (size: number) => void
+}) {
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const end = Math.min(page * pageSize, total)
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+        <span>Per page:</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+        >
+          {pageSizeOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+        <span>
+          Showing <strong className="text-slate-900">{start}</strong>–<strong className="text-slate-900">{end}</strong> of{" "}
+          <strong className="text-slate-900">{total}</strong> {noun}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-end">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer shadow-2xs transition"
+        >
+          <ChevronLeft size={14} /> Previous
+        </button>
+        <div className="px-3 py-1.5 text-xs font-black text-slate-800 bg-slate-100 rounded-xl">
+          Page {page} of {totalPages}
+        </div>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer shadow-2xs transition"
+        >
+          Next <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBankManagerProps) {
   const [questions, setQuestions] = useState<QuestionBankItem[]>([])
   const [onlineExams, setOnlineExams] = useState<OnlineExamItem[]>([])
@@ -250,7 +318,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const isAdminPortal = Number(profile?.role) === 1 || Number(profile?.role) === 2 || Number(profile?.role) === 9 || !profile?.role
-  const bankListUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank('?limit=200') : endpoints.teacher.questionBank())
+  const bankListUrl = (queryString = "") => (isAdminPortal ? endpoints.admin.cbtQuestionBank(queryString || "?limit=5000") : endpoints.teacher.questionBank(queryString))
   const bankCreateUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank() : endpoints.teacher.questionBank())
   const bankItemUrl = (id: number) => (isAdminPortal ? endpoints.admin.cbtQuestionBankItem(id) : endpoints.teacher.questionBankItem(id))
   const bankImportUrl = isAdminPortal ? endpoints.admin.cbtQuestionBankImport : endpoints.teacher.questionBankImport
@@ -319,6 +387,12 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [isSavingDrafts, setIsSavingDrafts] = useState(false)
   const [selectedType, setSelectedType] = useState('All')
 
+  // Pagination states
+  const [folderPage, setFolderPage] = useState(1)
+  const [folderPageSize, setFolderPageSize] = useState(12)
+  const [questionPage, setQuestionPage] = useState(1)
+  const [questionPageSize, setQuestionPageSize] = useState(20)
+
   // Single Question Form state
   const [newQuestionText, setNewQuestionText] = useState('')
   const [newQuestionType, setNewQuestionType] = useState<'mcq' | 'true_false'>('mcq')
@@ -386,12 +460,12 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     loadSubjectsAndClasses()
   }, [isAdminPortal])
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (queryOverrides?: string) => {
     setLoading(true)
     setError(null)
     try {
       const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[] }>(
-        bankListUrl()
+        bankListUrl(queryOverrides)
       )
       if (res.success && res.items) {
         setQuestions(res.items)
@@ -514,9 +588,15 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
         }
         map.set(q.subjectId, folder)
       }
+      if (q.class?.name) folder.classes.add(q.class.name)
+
+      // When class filter is applied on Folders view, filter item counts for that specific class
+      if (selectedClassId !== 'All' && q.classId !== Number(selectedClassId)) {
+        return
+      }
+
       folder.questionsCount += 1
       folder.totalMarks += Number(q.marks || 1)
-      if (q.class?.name) folder.classes.add(q.class.name)
       const qType = String(q.questionType || '').toLowerCase()
       if (qType === 'mcq') folder.mcqCount += 1
       else if (qType === 'true_false' || qType === 'tf') folder.tfCount += 1
@@ -524,7 +604,7 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
     })
 
     return Array.from(map.values())
-  }, [subjects, questions])
+  }, [subjects, questions, selectedClassId])
 
   // Filtered folder list
   const filteredFolders = useMemo(() => {
@@ -534,6 +614,22 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       return matchSearch
     })
   }, [subjectFolders, folderSearchTerm])
+
+  const totalFolderPages = Math.max(1, Math.ceil(filteredFolders.length / folderPageSize))
+  const paginatedFolders = useMemo(() => {
+    const start = (folderPage - 1) * folderPageSize
+    return filteredFolders.slice(start, start + folderPageSize)
+  }, [filteredFolders, folderPage, folderPageSize])
+
+  useEffect(() => {
+    setFolderPage(1)
+  }, [folderSearchTerm, selectedClassId])
+
+  useEffect(() => {
+    if (folderPage > totalFolderPages) {
+      setFolderPage(totalFolderPages)
+    }
+  }, [folderPage, totalFolderPages])
 
   // Selected folder data
   const currentFolder = useMemo(() => {
@@ -553,6 +649,22 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
       return matchesFolder && matchesSearch && matchesSubject && matchesClass && matchesTerm && matchesType
     })
   }, [questions, selectedFolderSubjectId, searchTerm, selectedSubjectId, selectedClassId, selectedTerm, selectedType])
+
+  const totalQuestionPages = Math.max(1, Math.ceil(folderQuestions.length / questionPageSize))
+  const paginatedQuestions = useMemo(() => {
+    const start = (questionPage - 1) * questionPageSize
+    return folderQuestions.slice(start, start + questionPageSize)
+  }, [folderQuestions, questionPage, questionPageSize])
+
+  useEffect(() => {
+    setQuestionPage(1)
+  }, [searchTerm, selectedSubjectId, selectedClassId, selectedTerm, selectedType, selectedFolderSubjectId, activeTab])
+
+  useEffect(() => {
+    if (questionPage > totalQuestionPages) {
+      setQuestionPage(totalQuestionPages)
+    }
+  }, [questionPage, totalQuestionPages])
 
   // Handle Question Selection for Pool
   const toggleSelectQuestion = (id: number) => {
@@ -1158,17 +1270,35 @@ ANSWER: A`)
       {/* TAB 1: SUBJECT FOLDERS CABINET */}
       {activeTab === 'folders' && selectedFolderSubjectId === null && (
         <div className="space-y-6">
-          {/* Search bar inside Folders */}
+          {/* Search and Class Filter bar inside Folders */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search subject folders..."
-                value={folderSearchTerm}
-                onChange={(e) => setFolderSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500 transition"
-              />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search subject folders..."
+                  value={folderSearchTerm}
+                  onChange={(e) => setFolderSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500 transition"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Filter Class:</span>
+                <select
+                  value={selectedClassId}
+                  onChange={(e) => setSelectedClassId(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="All">All Classes (Entire School)</option>
+                  {classesList.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="text-xs font-semibold text-slate-500">
@@ -1178,7 +1308,7 @@ ANSWER: A`)
 
           {/* Subject Folders Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredFolders.map((folder) => {
+            {paginatedFolders.map((folder) => {
               const classesArray = Array.from(folder.classes)
 
               return (
@@ -1259,6 +1389,22 @@ ANSWER: A`)
               )
             })}
           </div>
+
+          {filteredFolders.length > 0 && (
+            <PaginationBar
+              page={folderPage}
+              pageSize={folderPageSize}
+              total={filteredFolders.length}
+              totalPages={totalFolderPages}
+              noun="subject folders"
+              pageSizeOptions={[8, 12, 16, 24, 48]}
+              onPage={setFolderPage}
+              onPageSize={(sz) => {
+                setFolderPageSize(sz)
+                setFolderPage(1)
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -1404,14 +1550,16 @@ ANSWER: A`)
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {folderQuestions.map((q, idx) => {
-                const isSelected = selectedIds.includes(q.id)
-                const optionsList = Array.isArray(q.options) ? q.options : []
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedQuestions.map((q, idx) => {
+                  const isSelected = selectedIds.includes(q.id)
+                  const optionsList = Array.isArray(q.options) ? q.options : []
+                  const globalIdx = (questionPage - 1) * questionPageSize + idx + 1
 
-                return (
-                  <div
-                    key={`folder-q-${q.id || idx}-${idx}`}
+                  return (
+                    <div
+                      key={`folder-q-${q.id || idx}-${idx}`}
                     onClick={() => toggleSelectQuestion(q.id)}
                     className={`relative rounded-3xl border p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between space-y-4 ${
                       isSelected
@@ -1486,7 +1634,7 @@ ANSWER: A`)
                       </div>
 
                       <p className="text-xs font-bold text-slate-900 leading-relaxed">
-                        <span className="text-slate-400 mr-1.5">#{idx + 1}</span>
+                        <span className="text-slate-400 mr-1.5">#{globalIdx}</span>
                         {q.questionText}
                       </p>
 
@@ -1525,6 +1673,23 @@ ANSWER: A`)
                   </div>
                 )
               })}
+              </div>
+
+              {folderQuestions.length > 0 && (
+                <PaginationBar
+                  page={questionPage}
+                  pageSize={questionPageSize}
+                  total={folderQuestions.length}
+                  totalPages={totalQuestionPages}
+                  noun="questions"
+                  pageSizeOptions={[10, 20, 30, 50]}
+                  onPage={setQuestionPage}
+                  onPageSize={(sz) => {
+                    setQuestionPageSize(sz)
+                    setQuestionPage(1)
+                  }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1618,13 +1783,15 @@ ANSWER: A`)
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {folderQuestions.map((q, idx) => {
-                const isSelected = selectedIds.includes(q.id)
-                const optionsList = Array.isArray(q.options) ? q.options : []
-                return (
-                  <div
-                    key={`pool-q-${q.id || idx}-${idx}`}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedQuestions.map((q, idx) => {
+                  const isSelected = selectedIds.includes(q.id)
+                  const optionsList = Array.isArray(q.options) ? q.options : []
+                  const globalIdx = (questionPage - 1) * questionPageSize + idx + 1
+                  return (
+                    <div
+                      key={`pool-q-${q.id || idx}-${idx}`}
                     onClick={() => toggleSelectQuestion(q.id)}
                     className={`rounded-3xl border p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between space-y-4 ${
                       isSelected
@@ -1702,7 +1869,7 @@ ANSWER: A`)
                       </div>
 
                       <p className="text-xs font-bold text-slate-900 leading-relaxed">
-                        <span className="text-slate-400 mr-1.5">#{idx + 1}</span> {q.questionText}
+                        <span className="text-slate-400 mr-1.5">#{globalIdx}</span> {q.questionText}
                       </p>
 
                       {optionsList.length > 0 && (
@@ -1738,6 +1905,23 @@ ANSWER: A`)
                   </div>
                 )
               })}
+              </div>
+
+              {folderQuestions.length > 0 && (
+                <PaginationBar
+                  page={questionPage}
+                  pageSize={questionPageSize}
+                  total={folderQuestions.length}
+                  totalPages={totalQuestionPages}
+                  noun="questions"
+                  pageSizeOptions={[10, 20, 30, 50]}
+                  onPage={setQuestionPage}
+                  onPageSize={(sz) => {
+                    setQuestionPageSize(sz)
+                    setQuestionPage(1)
+                  }}
+                />
+              )}
             </div>
           )}
         </div>

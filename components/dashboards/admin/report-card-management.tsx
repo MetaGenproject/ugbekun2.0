@@ -25,7 +25,9 @@ import {
   Eye,
   GraduationCap,
   Users,
-  Calendar
+  Calendar,
+  EyeOff,
+  Globe
 } from 'lucide-react'
 import {
   Table,
@@ -55,6 +57,7 @@ interface ClassItem {
   id: number
   name: string
   isEcd: boolean
+  isPublished?: boolean
   totalEnrolled: number
   sections: ClassSectionItem[]
 }
@@ -134,6 +137,12 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [isBatchGeneratingPdf, setIsBatchGeneratingPdf] = useState(false)
   const [downloadingStudentId, setDownloadingStudentId] = useState<number | null>(null)
 
+  // Report Card Publication State
+  const [isPublished, setIsPublished] = useState<boolean>(false)
+  const [isTogglingPublish, setIsTogglingPublish] = useState<boolean>(false)
+  const [showPublishConfirmModal, setShowPublishConfirmModal] = useState<boolean>(false)
+  const [publishScope, setPublishScope] = useState<'class' | 'all'>('class')
+
   // AI Comment Generator State
   const [selectedAiStudentId, setSelectedAiStudentId] = useState<number | null>(null)
   const [aiStudentName, setAiStudentName] = useState('')
@@ -192,6 +201,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           ? res.classes.filter(c => allowedClassIds.includes(c.id))
           : res.classes;
         setClasses(availableClasses)
+        fetchPublishStatus(sessionId || res.sessionId)
 
         // Read active context from localStorage if available
         let targetClassId: number | null = null
@@ -262,6 +272,50 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     }
   }, [selectedClassId, selectedSectionId, selectedSessionId])
 
+  const fetchPublishStatus = async (sessionId?: number) => {
+    try {
+      const res = await apiSlice.get<{ success: boolean; isPublished: boolean }>(
+        endpoints.admin.reportCards.publishStatus(sessionId)
+      )
+      if (res.success && res.isPublished !== undefined) {
+        setIsPublished(res.isPublished)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleTogglePublish = async (nextState: boolean, scopeOverride?: 'class' | 'all') => {
+    const activeScope = scopeOverride || publishScope
+    setIsTogglingPublish(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; isPublished: boolean; message: string }>(
+        endpoints.admin.reportCards.togglePublish,
+        {
+          classId: activeScope === 'class' ? selectedClassId || undefined : undefined,
+          sectionId: activeScope === 'class' ? selectedSectionId || undefined : undefined,
+          sessionId: selectedSessionId || undefined,
+          publish: nextState,
+          publishAllClasses: activeScope === 'all',
+        }
+      )
+      if (res.success) {
+        setIsPublished(res.isPublished)
+        if (selectedSessionId) {
+          fetchClasses(selectedSessionId)
+        } else {
+          fetchClasses()
+        }
+        toast.success(res.message || (nextState ? 'Report cards published to students & parents!' : 'Report cards reverted to draft mode.'))
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update publication status.')
+    } finally {
+      setIsTogglingPublish(false)
+      setShowPublishConfirmModal(false)
+    }
+  }
+
   const fetchStudents = async (classId: number, sectionId: number, sessionId?: number) => {
     setLoadingStudents(true)
     try {
@@ -270,6 +324,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         sessionId?: number
         className: string
         isEcd: boolean
+        isPublished?: boolean
         totalStudents: number
         students: StudentReportPreview[]
       }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId))
@@ -279,6 +334,9 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           setSelectedSessionId(res.sessionId)
         }
         setStudents(res.students)
+        if (res.isPublished !== undefined) {
+          setIsPublished(res.isPublished)
+        }
         
         // Populate initial AI selection
         if (res.students.length > 0) {
@@ -660,7 +718,51 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Live Publish Status Badge */}
+            <div className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
+              isPublished
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-amber-50 border-amber-200 text-amber-800'
+            }`}>
+              {isPublished ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <Globe size={14} className="text-emerald-600" />
+                  <span>{currentClass?.name || 'Class'}: Live to Students</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <EyeOff size={14} className="text-amber-600" />
+                  <span>{currentClass?.name || 'Class'}: Hidden (Draft)</span>
+                </>
+              )}
+            </div>
+
+            {/* Toggle Publish Button */}
+            <button
+              onClick={() => {
+                setPublishScope('class')
+                setShowPublishConfirmModal(true)
+              }}
+              disabled={isTogglingPublish || !selectedClassId}
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer disabled:opacity-50 ${
+                isPublished
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+              }`}
+            >
+              {isTogglingPublish ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : isPublished ? (
+                <EyeOff size={14} className="text-slate-600" />
+              ) : (
+                <Send size={14} />
+              )}
+              <span>{isPublished ? `Unpublish ${currentClass?.name || 'Class'}` : `Publish ${currentClass?.name || 'Class'} Results`}</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('ai-comments')}
               className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer"
@@ -776,7 +878,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             >
               {classes.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.isEcd ? '(Early Years / Montessori)' : ''} ({c.totalEnrolled} Students)
+                  {c.isPublished ? '🟢 [Published]' : '⚪ [Draft]'} {c.name} {c.isEcd ? '(Early Years)' : ''} ({c.totalEnrolled} Students)
                 </option>
               ))}
             </select>
@@ -1381,6 +1483,139 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
               })}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* Report Card Publish Confirmation Modal */}
+      {showPublishConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 space-y-5 font-sans">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                isPublished ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                {isPublished ? <EyeOff size={24} /> : <Globe size={24} />}
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  {isPublished ? `Unpublish ${currentClass?.name || 'Class'}?` : `Publish Official Report Cards`}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  {isPublished
+                    ? 'Hide results from student and parent portals'
+                    : 'Targeted class release or school-wide publication'}
+                </p>
+              </div>
+            </div>
+
+            {/* Scope Selection: Targeted Class vs All Classes */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                Choose Publication Scope:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPublishScope('class')}
+                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                    publishScope === 'class'
+                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900">
+                      {currentClass?.name || 'Selected Class'} Only
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      Recommended
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 leading-tight">
+                    Releases solely this class without disrupting other classes still being graded.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPublishScope('all')}
+                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                    publishScope === 'all'
+                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900">
+                      All Classes ({classes.length})
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                      Batch
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 leading-tight">
+                    Publish results for all classes across the school session in one click.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs text-slate-600 space-y-2 leading-relaxed">
+              {isPublished ? (
+                <>
+                  <p className="font-semibold text-slate-800">
+                    {publishScope === 'class'
+                      ? `Reverting report cards for ${currentClass?.name || 'this class'} to unpublished draft mode.`
+                      : 'Reverting report cards for ALL classes to unpublished draft mode.'}
+                  </p>
+                  <p>
+                    Students and parents in {publishScope === 'class' ? currentClass?.name || 'this class' : 'all classes'} will immediately be unable to view subject scores, rankings, or download report card PDFs until republished.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-slate-800">
+                    {publishScope === 'class'
+                      ? `Releasing report cards for ${currentClass?.name || 'this class'} to student and parent portals.`
+                      : 'Releasing official report cards for ALL classrooms in this session.'}
+                  </p>
+                  <p>
+                    {publishScope === 'class'
+                      ? `Students in ${currentClass?.name || 'this class'} will instantly see their final grades and download PDFs. Other classes will remain shielded and unaffected.`
+                      : 'All students across the entire institution will gain immediate access to view and download their results.'}
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPublishConfirmModal(false)}
+                disabled={isTogglingPublish}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTogglePublish(!isPublished)}
+                disabled={isTogglingPublish}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-2 transition cursor-pointer ${
+                  isPublished
+                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                }`}
+              >
+                {isTogglingPublish && <Loader2 size={14} className="animate-spin" />}
+                <span>
+                  {isPublished
+                    ? `Confirm Unpublish (${publishScope === 'class' ? currentClass?.name || 'Class' : 'All Classes'})`
+                    : `Confirm & Publish (${publishScope === 'class' ? currentClass?.name || 'Class' : 'All Classes'})`}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

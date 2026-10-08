@@ -525,142 +525,145 @@ export default function DashboardPage() {
       {/* Dynamic Dark Navy Sidebar Shell matching Reference Image */}
       <aside className={`
         print:hidden
-        fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#0b1739] via-[#091436] to-[#040c21] flex flex-col justify-between p-4 text-white shadow-2xl
+        fixed inset-y-0 left-0 z-50 w-[84vw] max-w-[320px] md:w-72 lg:w-72
+        bg-gradient-to-b from-[#0b1739] via-[#091436] to-[#040c21]
+        flex flex-col h-full md:h-screen md:sticky md:top-0 md:shrink-0
+        text-white shadow-2xl md:shadow-xl border-r border-white/5
         transition-transform duration-300 ease-in-out transform select-none
-        md:translate-x-0 md:static md:shadow-none md:flex md:shrink-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="space-y-6">
-          {/* Logo & School Motto Header */}
-          <div className="flex items-center justify-between pt-1 px-2">
-            <div className="flex items-center gap-3 min-w-0">
-              {displayLogo ? (
-                <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center border border-white/20 shrink-0 overflow-hidden shadow-sm">
-                  <img
-                    src={displayLogo}
-                    alt={displaySchoolName}
-                    className="w-full h-full object-contain rounded-lg"
-                  />
+        {/* Logo & School Motto Header */}
+        <div className="shrink-0 p-4 pb-3.5 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {displayLogo ? (
+              <div className="w-11 h-11 rounded-xl bg-white/10 p-1 flex items-center justify-center border border-white/20 shrink-0 overflow-hidden shadow-sm">
+                <img
+                  src={displayLogo}
+                  alt={displaySchoolName}
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              </div>
+            ) : (
+              /* Emblem Shield Logo matching Image */
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-700 via-rose-600 to-red-800 p-0.5 shadow-md shrink-0 flex items-center justify-center border border-rose-400/30">
+                <div className="w-full h-full rounded-[10px] bg-gradient-to-b from-rose-900 to-[#0b1739] flex items-center justify-center relative overflow-hidden">
+                  <span className="text-rose-400 font-extrabold text-sm tracking-tighter">🛡️</span>
                 </div>
-              ) : (
-                /* Emblem Shield Logo matching Image */
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-700 via-rose-600 to-red-800 p-0.5 shadow-md shrink-0 flex items-center justify-center border border-rose-400/30">
-                  <div className="w-full h-full rounded-[10px] bg-gradient-to-b from-rose-900 to-[#0b1739] flex items-center justify-center relative overflow-hidden">
-                    <span className="text-rose-400 font-extrabold text-xs tracking-tighter">🛡️</span>
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="font-bold text-white text-xs sm:text-[13px] tracking-wide uppercase leading-tight line-clamp-2" title={displaySchoolName}>
+                {displaySchoolName}
+              </h2>
+              <p className="text-[10px] sm:text-[11px] text-slate-300/80 font-normal tracking-tight line-clamp-1 mt-0.5" title={displayTagline}>
+                {displayTagline}
+              </p>
+            </div>
+          </div>
+          {/* Close Button for Mobile Drawer */}
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2 -mr-1 rounded-xl hover:bg-white/10 active:bg-white/20 text-slate-300 hover:text-white md:hidden transition cursor-pointer shrink-0"
+            aria-label="Close Sidebar"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Navigation Links - Senior flex-1 layout with custom sleek scrollbar */}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5 custom-sidebar-scroll">
+          {navLinks.map((link, idx) => {
+            const IconComponent = link.icon
+            const isActive = link.id === activeSection
+            const showGroup = Boolean(link.group && link.group !== navLinks[idx - 1]?.group)
+            return (
+              <div key={link.id}>
+                {showGroup && (
+                  <p className="px-3.5 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400/90">
+                    {link.group}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSection(link.id)
+                    setIsSidebarOpen(false)
+                  }}
+                  className={`w-full text-left flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-[13px] transition-all relative group cursor-pointer ${
+                    isActive
+                      ? 'bg-gradient-to-r from-red-600 via-rose-600 to-rose-700 text-white font-semibold shadow-lg shadow-rose-950/50 ring-1 ring-white/15'
+                      : 'text-slate-300/90 hover:bg-white/10 hover:text-white active:bg-white/15'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <IconComponent size={18} className={`shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
+                    <span className="truncate">{link.label}</span>
                   </div>
+                  {link.badge ? (
+                    <span className="min-w-4 h-4 px-1.5 rounded-full bg-rose-500 text-[9px] font-extrabold flex items-center justify-center text-white shadow-xs">
+                      {link.badge}
+                    </span>
+                  ) : (
+                    link.hasSub !== false && (
+                      <ChevronRight size={14} className={`shrink-0 transition-transform ${isActive ? 'text-white/80' : 'text-slate-400/70 group-hover:text-white group-hover:translate-x-0.5'}`} />
+                    )
+                  )}
+                </button>
+              </div>
+            )
+          })}
+        </nav>
+
+        {/* Bottom Section: Streamlined OSe AI Assistant & Actions */}
+        <div className="shrink-0 p-3 pt-2.5 border-t border-white/10 space-y-2.5 bg-[#060f26]/80 backdrop-blur-xs">
+          {/* Streamlined OSe AI Assistant Glass Card */}
+          <div 
+            onClick={() => {
+              setIsOseModalOpen(true)
+              setIsSidebarOpen(false)
+            }}
+            className="relative rounded-xl bg-gradient-to-r from-[#132857]/90 via-[#0e1f46]/95 to-[#091533] border border-blue-400/20 hover:border-blue-400/40 p-2.5 shadow-md flex items-center justify-between gap-2.5 group cursor-pointer transition transform hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-400 via-blue-600 to-indigo-600 p-0.5 shadow-xs shrink-0 flex items-center justify-center">
+                <div className="w-full h-full rounded-[6px] bg-slate-900/90 flex items-center justify-center">
+                  <Bot size={16} className="text-cyan-300" />
                 </div>
-              )}
+              </div>
               <div className="min-w-0">
-                <h2 className="font-extrabold text-white text-xs tracking-wider uppercase leading-tight truncate" title={displaySchoolName}>
-                  {displaySchoolName}
-                </h2>
-                <p className="text-[10px] text-slate-300/80 font-medium tracking-tight truncate mt-0.5" title={displayTagline}>
-                  {displayTagline}
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-bold text-xs text-white tracking-tight truncate">OSe AI</h4>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                </div>
+                <p className="text-[10px] text-slate-300/80 truncate">
+                  Ask AI anything (⌘K)
                 </p>
               </div>
             </div>
-            {/* Close Button for Mobile Drawer */}
             <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white md:hidden transition cursor-pointer"
-              aria-label="Close Sidebar"
+              type="button"
+              className="px-2.5 py-1 rounded-lg bg-blue-600 group-hover:bg-blue-500 text-white text-[10px] font-semibold flex items-center gap-1 shrink-0 shadow-xs transition"
             >
-              <X size={18} />
+              <span>Chat</span>
+              <ArrowRight size={10} />
             </button>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="space-y-1 px-1 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
-            {navLinks.map((link, idx) => {
-              const IconComponent = link.icon
-              const isActive = link.id === activeSection
-              const showGroup = Boolean(link.group && link.group !== navLinks[idx - 1]?.group)
-              return (
-                <div key={link.id}>
-                  {showGroup && (
-                    <p className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                      {link.group}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSection(link.id)
-                      setIsSidebarOpen(false)
-                    }}
-                    className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative group cursor-pointer ${
-                      isActive
-                        ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white font-semibold shadow-md shadow-red-950/50'
-                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <IconComponent size={17} className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}`} />
-                      <span className="truncate">{link.label}</span>
-                    </div>
-                    {link.badge ? (
-                      <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-extrabold flex items-center justify-center">
-                        {link.badge}
-                      </span>
-                    ) : (
-                      link.hasSub !== false && (
-                        <ChevronRight size={14} className={`shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400 opacity-60 group-hover:opacity-100'}`} />
-                      )
-                    )}
-                  </button>
-                </div>
-              )
-            })}
-          </nav>
-        </div>
-
-        {/* Bottom Section: OSe AI Assistant Glass Card & Powered By Footer */}
-        <div className="space-y-3 pt-3 px-1 border-t border-white/10">
-          {/* OSe AI Assistant Widget matching Image */}
-          <div className="relative rounded-2xl bg-gradient-to-b from-[#132857]/90 via-[#0e1f46]/95 to-[#091533] border border-blue-400/20 p-3.5 shadow-xl text-center space-y-2 overflow-hidden group">
-            <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col items-center">
-              {/* Cute 3D Robot Graphic */}
-              <div className="w-12 h-12 mb-1 relative flex items-center justify-center">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 via-blue-600 to-indigo-600 p-0.5 shadow-md shadow-blue-500/30 flex items-center justify-center animate-bounce-subtle">
-                  <div className="w-full h-full rounded-[14px] bg-slate-900/90 backdrop-blur-xs flex items-center justify-center border border-white/20">
-                    <Bot size={22} className="text-cyan-300" />
-                  </div>
-                </div>
-              </div>
-              <h4 className="font-bold text-xs text-white tracking-tight flex items-center gap-1">
-                Hi, I'm OSe 👋
-              </h4>
-              <span className="text-[10px] font-semibold text-blue-300/90 block mb-1">
-                Your AI Assistant
-              </span>
-              <p className="text-[10px] text-slate-300/80 leading-relaxed font-normal mb-2 max-w-[180px]">
-                I can help you get insights, answer questions and manage your school efficiently.
-              </p>
-              <button 
-                onClick={() => setIsOseModalOpen(true)}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[11px] font-semibold py-1.5 px-3 rounded-full flex items-center justify-center gap-1.5 shadow-sm transition transform hover:scale-[1.02] cursor-pointer"
-              >
-                <span>Chat with OSe</span>
-                <ArrowRight size={12} />
-              </button>
-            </div>
-          </div>
-
-          {/* Footer Powered By Metagen Project & Sidebar Logout */}
-          <div className="space-y-2 px-2 pt-1">
+          {/* Footer Powered By & Sidebar Logout */}
+          <div className="space-y-2">
             <button 
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 font-bold text-xs transition border border-rose-900/40 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 active:bg-rose-900/70 text-rose-300 hover:text-rose-200 font-bold text-xs transition border border-rose-900/30 cursor-pointer"
             >
               <LogOut size={14} />
               <span>Sign Out</span>
             </button>
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
               <div className="flex items-center gap-1.5">
                 <span className="w-3.5 h-3.5 rounded bg-cyan-600 text-white flex items-center justify-center text-[9px] font-extrabold">U</span>
-                <span className="text-[10px] text-slate-300 font-medium">Powered by Ugbekun 2.0</span>
+                <span>Powered by Ugbekun 2.0</span>
               </div>
+              <span className="font-mono text-[9px] text-slate-500">v2.0</span>
             </div>
           </div>
         </div>

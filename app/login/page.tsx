@@ -6,8 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ShieldCheck, Cloud, Headphones, Landmark } from 'lucide-react'
 import { UgbekunLogo } from '@/components/logo'
-import { SchoolSelector } from '@/components/school-selector'
-import { LoginForm } from '@/components/login-form'
+import { LoginContainer } from '@/components/login-container'
 
 export const metadata: Metadata = {
   title: 'Login - Ugbekun School Management System',
@@ -29,10 +28,10 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-[#081026]/35 via-[#0B1536]/25 to-[#081026]/45" />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full flex-1 flex flex-col justify-between">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 w-full flex-1 flex flex-col justify-between">
         
         {/* Top Centered Brand Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="flex justify-center mb-3">
             <UgbekunLogo size="lg" />
           </div>
@@ -41,21 +40,11 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Center Dual Cards Container */}
-        <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-10">
-          {/* Left: School Selector Card */}
-          <div className="lg:col-span-6">
-            <SchoolSelector />
-          </div>
-
-          {/* Right: Sign In Form Card */}
-          <div className="lg:col-span-6">
-            <LoginForm />
-          </div>
-        </div>
+        {/* Center Dual Cards Container (Responsive: Sign In first on Mobile, Side-by-Side on Desktop) */}
+        <LoginContainer />
 
         {/* Bottom CTA: Sign Up Your School */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8 sm:mb-10">
           <p className="text-xs text-gray-300 font-medium mb-3">
             Don&apos;t have a school account?
           </p>

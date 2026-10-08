@@ -354,6 +354,9 @@ export const endpoints = {
       commentary: `${BASE_URL}/admin/report-cards/commentary`,
       behavioral: `${BASE_URL}/admin/report-cards/behavioral`,
       aiComments: `${BASE_URL}/admin/report-cards/ai-comments`,
+      togglePublish: `${BASE_URL}/admin/report-cards/toggle-publish`,
+      publishStatus: (sessionId?: number) =>
+        `${BASE_URL}/admin/report-cards/publish-status${sessionId ? `?sessionId=${sessionId}` : ''}`,
     },
     myeduride: {
       config: `${BASE_URL}/admin/myeduride/config`,
