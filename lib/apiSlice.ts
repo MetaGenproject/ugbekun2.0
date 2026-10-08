@@ -461,6 +461,7 @@ export const endpoints = {
     attritionAction: (alertId: number) => `${BASE_URL}/teacher/attrition/action/${alertId}`,
     uploadPhoto: `${BASE_URL}/teacher/profile/upload-photo`,
     events: `${BASE_URL}/teacher/events`,
+    extendCbtDistribution: (id: number) => `${BASE_URL}/teacher/cbt/distributions/${id}/extend-date`,
   },
   student: {
     dashboardOverview: `${BASE_URL}/student/dashboard-overview`,
@@ -472,7 +473,7 @@ export const endpoints = {
     submitHomework: (homeworkId: number) => `${BASE_URL}/student/homeworks/${homeworkId}/submit`,
     submitOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/submit`,
     startOnlineExam: (examId: number) => `${BASE_URL}/student/online-exams/${examId}/start`,
-    cbtActiveExams: `${BASE_URL}/student/cbt/active-exams`,
+    cbtActiveExams: (params?: string) => `${BASE_URL}/student/cbt/active-exams${params ? `?${params}` : ''}`,
     cbtTakeExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/take`,
     cbtSubmitExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/submit`,
     grades: `${BASE_URL}/student/grades`,

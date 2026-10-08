@@ -71,6 +71,7 @@ import {
   Sun,
   LayoutGrid,
   List,
+  Search,
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { useSchoolBranding } from '@/lib/schoolBrandingContext'
@@ -434,9 +435,16 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
   const [updatingPassword, setUpdatingPassword] = useState<boolean>(false)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
 
-  // CBT Examination Runner State
+  // CBT Examination Runner & Session Filtering State
   const [cbtExamsList, setCbtExamsList] = useState<any[]>([])
   const [loadingCbtList, setLoadingCbtList] = useState<boolean>(false)
+  const [cbtCurrentSession, setCbtCurrentSession] = useState<string>('2026-2027')
+  const [cbtSelectedSession, setCbtSelectedSession] = useState<string>('2026-2027')
+  const [cbtSelectedExamType, setCbtSelectedExamType] = useState<string>('ALL')
+  const [cbtSearchQuery, setCbtSearchQuery] = useState<string>('')
+  const [cbtStatusFilter, setCbtStatusFilter] = useState<'all' | 'available' | 'completed' | 'expired'>('all')
+  const [cbtAvailableSessions, setCbtAvailableSessions] = useState<string[]>(['2026-2027'])
+  const [cbtAvailableExamTypes, setCbtAvailableExamTypes] = useState<string[]>([])
   const [activeCbtExam, setActiveCbtExam] = useState<{
     id: number
     onlineExamId?: number
@@ -498,12 +506,39 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     return () => clearInterval(interval)
   }, [activeCbtExam, timeRemaining])
 
-  const fetchCbtExams = async () => {
+  const fetchCbtExams = async (targetSession?: string, targetExamType?: string) => {
     setLoadingCbtList(true)
     try {
-      const res = await apiSlice.get<{ success: boolean; exams: any[] }>(endpoints.student.cbtActiveExams)
+      const sess = targetSession !== undefined ? targetSession : cbtSelectedSession
+      const type = targetExamType !== undefined ? targetExamType : cbtSelectedExamType
+
+      const params = new URLSearchParams()
+      if (sess && sess !== 'ALL') {
+        params.set('session', sess)
+      }
+      if (type && type !== 'ALL') {
+        params.set('examType', type)
+      }
+      const qs = params.toString()
+      const res = await apiSlice.get<{
+        success: boolean
+        currentSession?: string
+        availableSessions?: string[]
+        availableExamTypes?: string[]
+        exams: any[]
+      }>(endpoints.student.cbtActiveExams(qs))
+
       if (res.success && res.exams) {
         setCbtExamsList(res.exams)
+        if (res.currentSession) {
+          setCbtCurrentSession(res.currentSession)
+        }
+        if (Array.isArray(res.availableSessions) && res.availableSessions.length > 0) {
+          setCbtAvailableSessions(res.availableSessions)
+        }
+        if (Array.isArray(res.availableExamTypes) && res.availableExamTypes.length > 0) {
+          setCbtAvailableExamTypes(res.availableExamTypes)
+        }
       }
     } catch (e) {
       console.error('Failed to load CBT exams', e)
@@ -599,9 +634,27 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
         const remindersRes = await apiSlice.get<{ success: boolean; reminders: any[] }>(endpoints.student.reminders).catch(() => null)
         if (remindersRes?.success) setRemindersList(remindersRes.reminders || [])
 
-        // 7. Fetch CBT Exams
-        const cbtRes = await apiSlice.get<{ success: boolean; exams: any[] }>(endpoints.student.cbtActiveExams).catch(() => null)
-        if (cbtRes?.success && cbtRes.exams) setCbtExamsList(cbtRes.exams)
+        // 7. Fetch CBT Exams (filtered to current session 2026-2027 by default)
+        const cbtRes = await apiSlice.get<{
+          success: boolean
+          currentSession?: string
+          availableSessions?: string[]
+          availableExamTypes?: string[]
+          exams: any[]
+        }>(endpoints.student.cbtActiveExams('session=2026-2027')).catch(() => null)
+        if (cbtRes?.success && cbtRes.exams) {
+          setCbtExamsList(cbtRes.exams)
+          if (cbtRes.currentSession) {
+            setCbtCurrentSession(cbtRes.currentSession)
+            setCbtSelectedSession(cbtRes.currentSession)
+          }
+          if (Array.isArray(cbtRes.availableSessions) && cbtRes.availableSessions.length > 0) {
+            setCbtAvailableSessions(cbtRes.availableSessions)
+          }
+          if (Array.isArray(cbtRes.availableExamTypes) && cbtRes.availableExamTypes.length > 0) {
+            setCbtAvailableExamTypes(cbtRes.availableExamTypes)
+          }
+        }
 
       } catch (err: any) {
         if (active) {
@@ -3098,63 +3151,299 @@ function normalizeQuestions(raw: any): any[] {
       )
     }
 
-    // DEFAULT: LIST OF ACTIVE CBT EXAMS
+    // Client-side filtering across assigned assessments
+    const filteredExams = examsList.filter((exam: any) => {
+      // 1. Session filter (defaults to current session e.g. 2026-2027)
+      if (cbtSelectedSession && cbtSelectedSession !== 'ALL') {
+        const examSession = exam.session || (exam.isCurrentSession ? cbtCurrentSession : null)
+        if (cbtSelectedSession === cbtCurrentSession) {
+          if (exam.isCurrentSession === false && examSession && examSession !== cbtCurrentSession) {
+            return false
+          }
+        } else {
+          if (examSession && examSession !== cbtSelectedSession) {
+            return false
+          }
+        }
+      }
+
+      // 2. Exam Type filter
+      if (cbtSelectedExamType && cbtSelectedExamType !== 'ALL') {
+        const typeStr = `${exam.examType || ''} ${exam.title || ''}`.toLowerCase()
+        const targetType = cbtSelectedExamType.toLowerCase()
+        if (!typeStr.includes(targetType)) {
+          return false
+        }
+      }
+
+      // 3. Search query filter
+      if (cbtSearchQuery.trim()) {
+        const q = cbtSearchQuery.trim().toLowerCase()
+        const titleMatch = (exam.title || '').toLowerCase().includes(q)
+        const subjMatch = (exam.subjectName || exam.subject?.name || '').toLowerCase().includes(q)
+        const typeMatch = (exam.examType || '').toLowerCase().includes(q)
+        if (!titleMatch && !subjMatch && !typeMatch) {
+          return false
+        }
+      }
+
+      // 4. Status filter
+      const isCompleted = exam.isSubmitted || exam.submitted
+      const windowStatus = exam.windowStatus || 'open'
+      const isExpired = exam.isExpired || windowStatus === 'ended'
+
+      if (cbtStatusFilter === 'available') {
+        return !isCompleted && windowStatus === 'open'
+      }
+      if (cbtStatusFilter === 'completed') {
+        return isCompleted
+      }
+      if (cbtStatusFilter === 'expired') {
+        return !isCompleted && isExpired
+      }
+
+      return true
+    })
+
+    const isViewingCurrentSessionOnly = cbtSelectedSession === cbtCurrentSession
+
+    // DEFAULT: LIST OF ACTIVE CBT EXAMS WITH FILTER DASHBOARD BOARD
     return (
       <div className="space-y-6 pb-12 font-sans">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <Award className="text-amber-500" size={24} />
-              CBT Tests & Online Examinations
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Take scheduled online CBT assessments and view real-time scores.
-            </p>
+        {/* CBT ASSESSMENT FILTER & SESSION DASHBOARD BOARD */}
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-indigo-900/40 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
+                  CBT Assessment Portal
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Active Academic Session: {cbtCurrentSession}
+                </span>
+              </div>
+              <h2 className="text-xl font-black text-white mt-2 flex items-center gap-2">
+                <Award className="text-amber-400" size={24} />
+                CBT Tests & Online Examinations
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                By default, you only see new questions and tests assigned for the current session (<strong className="text-white">{cbtCurrentSession}</strong>). Old questions from previous sessions are archived so they do not clutter your view.
+              </p>
+            </div>
+
+            <button
+              onClick={() => fetchCbtExams(cbtSelectedSession, cbtSelectedExamType)}
+              disabled={loadingCbtList}
+              className="self-start md:self-auto px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-xs rounded-2xl border border-white/10 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loadingCbtList ? 'animate-spin' : ''} />
+              <span>Refresh Portal</span>
+            </button>
           </div>
 
-          <button
-            onClick={fetchCbtExams}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <RefreshCw size={14} /> Refresh Exams
-          </button>
+          {/* Interactive Filter Board Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+            {/* 1. Academic Session Selector */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Calendar size={13} className="text-amber-400" /> Academic Session
+                </span>
+                {isViewingCurrentSessionOnly ? (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 bg-emerald-400/20 text-emerald-300 rounded border border-emerald-400/30">
+                    CURRENT
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded border border-amber-400/30">
+                    ARCHIVE
+                  </span>
+                )}
+              </label>
+              <select
+                value={cbtSelectedSession}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setCbtSelectedSession(val)
+                  fetchCbtExams(val, cbtSelectedExamType)
+                }}
+                className="w-full bg-slate-950/80 border border-white/20 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-hidden focus:border-amber-400 transition"
+              >
+                <option value={cbtCurrentSession} className="bg-slate-900 text-white">
+                  {cbtCurrentSession} (Current Session Only)
+                </option>
+                {cbtAvailableSessions
+                  .filter((s) => s !== cbtCurrentSession)
+                  .map((s) => (
+                    <option key={s} value={s} className="bg-slate-900 text-white">
+                      {s} (Archived Session)
+                    </option>
+                  ))}
+                <option value="ALL" className="bg-slate-900 text-white">
+                  All Sessions (Include All Archives)
+                </option>
+              </select>
+            </div>
+
+            {/* 2. Exam Type Selector */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                <Layers size={13} className="text-sky-400" /> Exam / Assessment Type
+              </label>
+              <select
+                value={cbtSelectedExamType}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setCbtSelectedExamType(val)
+                  fetchCbtExams(cbtSelectedSession, val)
+                }}
+                className="w-full bg-slate-950/80 border border-white/20 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-hidden focus:border-amber-400 transition"
+              >
+                <option value="ALL" className="bg-slate-900 text-white">
+                  All Exam Types
+                </option>
+                <option value="CA 1" className="bg-slate-900 text-white">Continuous Assessment 1 (CA 1)</option>
+                <option value="CA 2" className="bg-slate-900 text-white">Continuous Assessment 2 (CA 2)</option>
+                <option value="Mid-Term" className="bg-slate-900 text-white">Mid-Term Examination</option>
+                <option value="Terminal" className="bg-slate-900 text-white">Terminal Examination</option>
+                <option value="Mock" className="bg-slate-900 text-white">Mock / Practice Test</option>
+                {cbtAvailableExamTypes
+                  .filter((t) => !['CA 1', 'CA 2', 'Mid-Term', 'Terminal', 'Mock'].some(k => t.toLowerCase().includes(k.toLowerCase())))
+                  .map((t) => (
+                    <option key={t} value={t} className="bg-slate-900 text-white">
+                      {t}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* 3. Search Questions / Subject */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                <Search size={13} className="text-amber-400" /> Search Subject or Title
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="e.g. Mathematics, Science, CA..."
+                  value={cbtSearchQuery}
+                  onChange={(e) => setCbtSearchQuery(e.target.value)}
+                  className="w-full bg-slate-950/80 border border-white/20 text-white rounded-xl pl-3 pr-8 py-2 text-xs font-semibold focus:outline-hidden focus:border-amber-400 transition"
+                />
+                {cbtSearchQuery && (
+                  <button
+                    onClick={() => setCbtSearchQuery('')}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Status Filter Bar & Archive Indicator */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/10 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-bold mr-1">Status:</span>
+              {(['all', 'available', 'completed', 'expired'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setCbtStatusFilter(st)}
+                  className={`px-3 py-1 rounded-xl text-[11px] font-extrabold transition cursor-pointer ${
+                    cbtStatusFilter === st
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  }`}
+                >
+                  {st === 'all'
+                    ? `All Assigned (${filteredExams.length})`
+                    : st === 'available'
+                      ? 'Available to Take'
+                      : st === 'completed'
+                        ? 'Completed'
+                        : 'Closed / Expired'}
+                </button>
+              ))}
+            </div>
+
+            {!isViewingCurrentSessionOnly && (
+              <div className="text-[11px] font-bold text-amber-300 bg-amber-400/10 border border-amber-400/20 px-3 py-1 rounded-xl flex items-center gap-1.5">
+                <AlertTriangle size={13} />
+                <span>Browsing Archives: Session {cbtSelectedSession === 'ALL' ? 'All Sessions' : cbtSelectedSession}</span>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* EXAMS LIST SECTION */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-            Available Online CBT Exams ({examsList.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              {isViewingCurrentSessionOnly ? `Current Session Questions & Tests (${filteredExams.length})` : `Filtered Questions (${filteredExams.length})`}
+            </h3>
+            <span className="text-xs text-slate-500 font-semibold">
+              Session: <strong className="text-slate-800">{cbtSelectedSession}</strong>
+            </span>
+          </div>
 
           {loadingCbtList ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
               <Loader2 className="animate-spin text-amber-500" size={28} />
-              <p className="text-xs font-semibold">Loading active examinations...</p>
+              <p className="text-xs font-semibold">Loading assigned CBT examinations...</p>
             </div>
-          ) : examsList.length > 0 ? (
+          ) : filteredExams.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {examsList.map((exam) => {
+              {filteredExams.map((exam: any) => {
                 const isCompleted = exam.isSubmitted || exam.submitted
                 const examScore = exam.totalMark !== null && exam.totalMark !== undefined ? exam.totalMark : exam.score
                 const windowStatus = exam.windowStatus || 'open'
+                const isExpired = exam.isExpired || windowStatus === 'ended'
                 const canStart = !isCompleted && windowStatus === 'open'
+                const examSession = exam.session || (exam.isCurrentSession ? cbtCurrentSession : '2026-2027')
 
                 return (
-                  <div key={`${exam.sourceType || 'exam'}-${exam.id}`} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between hover:border-amber-400/60 transition">
+                  <div
+                    key={`${exam.sourceType || 'exam'}-${exam.id}`}
+                    className={`p-5 rounded-2xl bg-slate-50 border space-y-3 flex flex-col justify-between transition ${
+                      isExpired && !isCompleted
+                        ? 'border-rose-200 bg-rose-50/20'
+                        : 'border-slate-200 hover:border-amber-400/60'
+                    }`}
+                  >
                     <div>
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md">
-                          {exam.subjectName}
-                        </span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-md">
+                            {exam.subjectName || exam.subject?.name || 'General'}
+                          </span>
+                          {exam.examType && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-extrabold rounded-md">
+                              {exam.examType}
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-[9px] font-bold rounded-md">
+                            {examSession}
+                          </span>
+                        </div>
+
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
                           isCompleted
                             ? 'bg-emerald-100 text-emerald-800'
                             : windowStatus === 'upcoming'
                               ? 'bg-slate-100 text-slate-700'
-                              : windowStatus === 'ended'
-                                ? 'bg-rose-50 text-rose-700'
+                              : isExpired
+                                ? 'bg-rose-100 text-rose-800'
                                 : 'bg-blue-100 text-blue-800'
                         }`}>
-                          {isCompleted ? 'Completed' : windowStatus === 'upcoming' ? 'Opens later' : windowStatus === 'ended' ? 'Sitting closed' : 'Available to take'}
+                          {isCompleted
+                            ? 'Completed'
+                            : windowStatus === 'upcoming'
+                              ? 'Opens later'
+                              : isExpired
+                                ? 'Window closed'
+                                : 'Available to take'}
                         </span>
                       </div>
 
@@ -3163,6 +3452,12 @@ function normalizeQuestions(raw: any): any[] {
                         <span>Duration: <strong className="text-slate-700">{exam.duration || 30} Mins</strong></span>
                         <span>&bull;</span>
                         <span>Pass Mark: <strong className="text-slate-700">{exam.passingMark || 50}%</strong></span>
+                        {exam.questionCount ? (
+                          <>
+                            <span>&bull;</span>
+                            <span>Questions: <strong className="text-slate-700">{exam.questionCount}</strong></span>
+                          </>
+                        ) : null}
                       </p>
                       {(exam.startDate || exam.endDate) && (
                         <p className="text-xs text-slate-500 mt-1">
@@ -3185,11 +3480,19 @@ function normalizeQuestions(raw: any): any[] {
                       >
                         <Zap size={14} /> Start CBT Assessment
                       </button>
+                    ) : isExpired ? (
+                      <div className="p-3.5 rounded-2xl border border-rose-200 bg-rose-50/80 text-xs text-rose-950 space-y-2">
+                        <div className="flex items-center gap-1.5 font-black text-rose-800">
+                          <AlertTriangle size={14} className="text-rose-600 shrink-0" />
+                          <span>Sitting Window Expired</span>
+                        </div>
+                        <p className="text-[11px] text-rose-700 leading-relaxed font-medium">
+                          The assessment deadline has passed. If you missed this test, contact your <strong>subject teacher</strong> or <strong>school admin</strong> to extend your sitting date.
+                        </p>
+                      </div>
                     ) : (
                       <div className="p-3 rounded-2xl border border-slate-200 bg-white text-xs text-slate-600">
-                        {exam.windowMessage || (windowStatus === 'ended'
-                          ? 'This sitting has closed. Your school admin can change the date and time on the same exam.'
-                          : 'This examination is not open yet.')}
+                        {exam.windowMessage || 'This examination is not open yet.'}
                       </div>
                     )}
                   </div>
@@ -3197,8 +3500,31 @@ function normalizeQuestions(raw: any): any[] {
               })}
             </div>
           ) : (
-            <div className="py-12 text-center text-slate-400 text-xs italic">
-              No online CBT tests currently active for your class.
+            <div className="py-14 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                <Award size={24} />
+              </div>
+              <p className="text-sm font-bold text-slate-700">No CBT questions or exams found.</p>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                {isViewingCurrentSessionOnly
+                  ? `There are no new tests assigned to your class for the current session (${cbtCurrentSession}) matching your filter.`
+                  : `No archived tests found for Session ${cbtSelectedSession}.`}
+              </p>
+              {!isViewingCurrentSessionOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCbtSelectedSession(cbtCurrentSession)
+                    setCbtSelectedExamType('ALL')
+                    setCbtSearchQuery('')
+                    setCbtStatusFilter('all')
+                    fetchCbtExams(cbtCurrentSession, 'ALL')
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl transition cursor-pointer"
+                >
+                  Return to Current Session ({cbtCurrentSession})
+                </button>
+              )}
             </div>
           )}
         </div>
