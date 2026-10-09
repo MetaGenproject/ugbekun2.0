@@ -417,6 +417,8 @@ export const endpoints = {
     questionBankBulk: `${BASE_URL}/teacher/question-bank/bulk`,
     questionBankAiGenerate: `${BASE_URL}/teacher/question-bank/ai-generate`,
     schoolInfo: `${BASE_URL}/public/tenant/school-info`,
+    cbtDistributionAnalytics: (id: number) => `${BASE_URL}/teacher/cbt/distributions/${id}/analytics`,
+    cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/teacher/cbt/distributions/${id}/sync-marks`,
     distributeExam: `${BASE_URL}/teacher/online-exams/distribute`,
     homeworkSubmissions: (homeworkId: number) => `${BASE_URL}/teacher/homeworks/${homeworkId}/submissions`,
     uploadHomework: `${BASE_URL}/teacher/homeworks/upload`,

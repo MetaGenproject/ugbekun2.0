@@ -759,7 +759,7 @@ export function AdminCbtManager() {
       )}
 
       {/* TAB 2: QUESTION BANK & IMPORTERS */}
-      {activeTab === 'bank' && <QuestionBankManager profile={{ role: 1 }} />}
+      {activeTab === 'bank' && <QuestionBankManager profile={{ role: 1 }} isAdmin={true} />}
 
       {/* TAB 3: QUESTION BUNDLES */}
       {activeTab === 'groups' && (

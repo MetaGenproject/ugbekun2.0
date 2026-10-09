@@ -485,7 +485,7 @@ export function TeacherMatrixMarksEntry() {
         }
 
         // Live Total Calculation
-        const total = Object.values(updatedComp).reduce((a, b) => a + (Number(b) || 0), 0)
+        const total = Object.values(updatedComp).reduce<number>((a, b) => a + (Number(b) || 0), 0)
 
         return {
           ...row,
@@ -549,7 +549,7 @@ export function TeacherMatrixMarksEntry() {
             ...(row.componentMarks || {}),
             [targetKey]: numCbt,
           }
-          const total = Object.values(updated).reduce((a, b) => a + (Number(b) || 0), 0)
+          const total = Object.values(updated).reduce<number>((a, b) => a + (Number(b) || 0), 0)
           return {
             ...row,
             componentMarks: updated,
@@ -588,7 +588,7 @@ export function TeacherMatrixMarksEntry() {
             ...(row.componentMarks || {}),
             [targetKey]: numCbt,
           }
-          const total = Object.values(updated).reduce((a, b) => a + (Number(b) || 0), 0)
+          const total = Object.values(updated).reduce<number>((a, b) => a + (Number(b) || 0), 0)
           synced++
           return {
             ...row,

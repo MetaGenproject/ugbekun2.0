@@ -141,6 +141,9 @@ export function TeacherAssignmentsManager() {
   const [submissionSearch, setSubmissionSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'MARKED' | 'AWAITING_MARKING' | 'NOT_SUBMITTED'>('ALL')
 
+  // Access / Privilege Notice State
+  const [accessNotice, setAccessNotice] = useState<string | null>(null)
+
   // Load classes, subjects, and assignments on mount
   useEffect(() => {
     async function loadData() {
@@ -173,20 +176,30 @@ export function TeacherAssignmentsManager() {
         if (subjectsRes.success) {
           const rawSubjects = (subjectsRes.assignedSubjects && subjectsRes.assignedSubjects.length > 0)
             ? subjectsRes.assignedSubjects.map((s: any) => ({ id: s.subjectId || s.id, name: s.subjectName || s.name }))
-            : (subjectsRes.subjects || [])
+            : []
           
           const uniqueSubjects = Array.from(new Map(rawSubjects.map((s: any) => [s.id, s])).values())
           setSubjects(uniqueSubjects as any)
           if (uniqueSubjects.length > 0) {
             setNewSubjectId(String(uniqueSubjects[0].id))
+            setAccessNotice(null)
+          } else {
+            setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
           }
+        } else {
+          setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
         }
 
         if (hwRes.success && hwRes.homeworks) {
           setHomeworks(hwRes.homeworks)
         }
       } catch (err: any) {
-        toast.error(err.message || 'Failed to load assignments.')
+        const msg = err instanceof Error ? err.message : String(err || '')
+        if (msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('privilege') || (err as any)?.status === 403) {
+          setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
+        } else {
+          toast.error(msg || 'Failed to load assignments.')
+        }
       } finally {
         setLoadingList(false)
       }
@@ -591,6 +604,21 @@ export function TeacherAssignmentsManager() {
 
   return (
     <div className="space-y-6 pb-12 font-sans">
+      {/* Access / Privileges Notice Banner */}
+      {accessNotice && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50/95 p-4 sm:p-5 shadow-xs flex items-start gap-3.5 animate-in fade-in">
+          <div className="p-2 bg-amber-100 rounded-xl text-amber-700 shrink-0 mt-0.5">
+            <AlertCircle size={22} className="text-amber-700" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-amber-950">Subject Assignment Privileges Notice</h4>
+            <p className="text-xs sm:text-sm text-amber-800 font-medium mt-0.5">
+              {accessNotice}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
         <div>
@@ -606,10 +634,16 @@ export function TeacherAssignmentsManager() {
 
         <button
           onClick={() => {
+            if (subjects.length === 0) {
+              setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
+              return
+            }
             setShowCreateModal(true)
             setAssignmentMode('ONLINE_QUESTIONS')
           }}
-          className="h-11 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-xs hover:shadow cursor-pointer shrink-0"
+          disabled={subjects.length === 0}
+          className="h-11 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-xs hover:shadow cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          title={subjects.length === 0 ? "Accessed can not be granted meet Admin for the priveleges.." : "New Assignment"}
         >
           <Plus size={16} />
           <span>New Assignment</span>

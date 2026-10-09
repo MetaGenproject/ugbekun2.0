@@ -37,8 +37,12 @@ import {
   FolderPlus,
   Users,
   Eye,
-  Download
+  Download,
+  BarChart3,
+  TrendingUp,
+  RefreshCw
 } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface QuestionBankItem {
   id: number
@@ -88,6 +92,7 @@ interface OnlineExamItem {
 interface QuestionBankManagerProps {
   profile?: any
   onImportToBuilder?: (questions: any[]) => void
+  isAdmin?: boolean
 }
 
 function parseAikenClient(text?: string | null) {
@@ -309,7 +314,7 @@ function PaginationBar({
   )
 }
 
-export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBankManagerProps) {
+export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: QuestionBankManagerProps) {
   const [questions, setQuestions] = useState<QuestionBankItem[]>([])
   const [onlineExams, setOnlineExams] = useState<OnlineExamItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,7 +322,28 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  const isAdminPortal = Number(profile?.role) === 1 || Number(profile?.role) === 2 || Number(profile?.role) === 9 || !profile?.role
+  // Subject Assignment Privileges Banner
+  const [accessDeniedNotice, setAccessDeniedNotice] = useState<string | null>(null)
+
+  // Performance Analytics & Marksheet Sync Modal State
+  const [analyticsDistId, setAnalyticsDistId] = useState<number | null>(null)
+  const [analyticsData, setAnalyticsData] = useState<any | null>(null)
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false)
+  const [isSyncingMarks, setIsSyncingMarks] = useState(false)
+  const [maxScoreBase, setMaxScoreBase] = useState<number>(40)
+  const [correctingStudentId, setCorrectingStudentId] = useState<number | null>(null)
+  const [correctionScore, setCorrectionScore] = useState('')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false)
+
+  const isAdminPortal = isAdmin === true || (
+    isAdmin === undefined &&
+    (Number(profile?.role) === 1 || Number(profile?.role) === 2 || Number(profile?.role) === 9) &&
+    !profile?.teacherId &&
+    !profile?.subjectAssignments &&
+    !profile?.isSubjectTeacher &&
+    !profile?.isFormTeacher
+  )
   const bankListUrl = (queryString = "") => (isAdminPortal ? endpoints.admin.cbtQuestionBank(queryString || "?limit=5000") : endpoints.teacher.questionBank(queryString))
   const bankCreateUrl = () => (isAdminPortal ? endpoints.admin.cbtQuestionBank() : endpoints.teacher.questionBank())
   const bankItemUrl = (id: number) => (isAdminPortal ? endpoints.admin.cbtQuestionBankItem(id) : endpoints.teacher.questionBankItem(id))
@@ -440,46 +466,121 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
   useEffect(() => {
     const loadSubjectsAndClasses = async () => {
       try {
-        const [subRes, clsRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; subjects: any[] }>(isAdminPortal ? endpoints.admin.subjects : endpoints.teacher.subjects),
-          apiSlice.get<{ success: boolean; classes: any[] }>(isAdminPortal ? endpoints.admin.classesSections : endpoints.teacher.classesSections),
-        ])
-        if (subRes.success && subRes.subjects) {
-          setSubjects(subRes.subjects)
-          if (subRes.subjects.length > 0) {
-            setFormSubjectId(subRes.subjects[0].id)
-            setImportSubjectId(subRes.subjects[0].id)
-            setAiSubjectId(subRes.subjects[0].id)
-            setAssignSubjectId(subRes.subjects[0].id)
+        if (isAdminPortal) {
+          const [subRes, clsRes] = await Promise.all([
+            apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
+            apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections),
+          ])
+          if (subRes.success && subRes.subjects) {
+            setSubjects(subRes.subjects)
+            if (subRes.subjects.length > 0) {
+              setFormSubjectId(subRes.subjects[0].id)
+              setImportSubjectId(subRes.subjects[0].id)
+              setAiSubjectId(subRes.subjects[0].id)
+              setAssignSubjectId(subRes.subjects[0].id)
+            }
+          }
+          if (clsRes.success && clsRes.classes) {
+            setClassesList(clsRes.classes)
+            if (clsRes.classes.length > 0) {
+              setAssignClassId(String(clsRes.classes[0].id))
+              setFormClassId(String(clsRes.classes[0].id))
+              setImportClassId(String(clsRes.classes[0].id))
+            }
+          }
+        } else {
+          // Strictly fetch teacher's assigned subjects and classes
+          const [subRes, clsRes] = await Promise.all([
+            apiSlice.get<{ success: boolean; subjects?: any[]; assignedSubjects?: any[] }>(endpoints.teacher.subjects).catch((err: any) => {
+              if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+                setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+              }
+              return { success: false, subjects: [], assignedSubjects: [] }
+            }),
+            apiSlice.get<{ success: boolean; classes?: any[]; assignedClasses?: any[] }>(endpoints.teacher.roster).catch((err: any) => {
+              if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+                setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+              }
+              return { success: false, classes: [], assignedClasses: [] }
+            }),
+          ])
+
+          const rawTeacherSubjects = (subRes.assignedSubjects && subRes.assignedSubjects.length > 0)
+            ? subRes.assignedSubjects.map((s: any) => ({
+                id: s.subjectId || s.id,
+                name: s.subjectName || s.name,
+                subjectCode: s.subjectCode || s.code || ''
+              }))
+            : (Array.isArray(profile?.subjectAssignments) && profile.subjectAssignments.length > 0)
+            ? profile.subjectAssignments.map((s: any) => ({
+                id: s.subjectId,
+                name: s.subjectName,
+                subjectCode: s.subjectCode || ''
+              }))
+            : []
+
+          const uniqueTeacherSubjects: Array<{ id: number; name: string; subjectCode?: string }> = Array.from(new Map(rawTeacherSubjects.map((s: any) => [s.id, s])).values()) as any
+          setSubjects(uniqueTeacherSubjects)
+
+          const rawTeacherClasses = (clsRes.assignedClasses && clsRes.assignedClasses.length > 0)
+            ? clsRes.assignedClasses
+            : (clsRes.classes && clsRes.classes.length > 0)
+            ? clsRes.classes
+            : (Array.isArray(profile?.subjectAssignments) && profile.subjectAssignments.length > 0)
+            ? profile.subjectAssignments.map((s: any) => ({ id: s.classId, name: s.className }))
+            : []
+
+          const uniqueTeacherClasses: Array<{ id: number; name: string }> = Array.from(new Map(rawTeacherClasses.map((c: any) => [c.id, c])).values()) as any
+          setClassesList(uniqueTeacherClasses)
+
+          if (uniqueTeacherSubjects.length === 0) {
+            setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+          } else {
+            setAccessDeniedNotice(null)
+            setFormSubjectId(uniqueTeacherSubjects[0].id)
+            setImportSubjectId(uniqueTeacherSubjects[0].id)
+            setAiSubjectId(uniqueTeacherSubjects[0].id)
+            setAssignSubjectId(uniqueTeacherSubjects[0].id)
+          }
+
+          if (uniqueTeacherClasses.length > 0) {
+            setAssignClassId(String(uniqueTeacherClasses[0].id))
+            setFormClassId(String(uniqueTeacherClasses[0].id))
+            setImportClassId(String(uniqueTeacherClasses[0].id))
           }
         }
-        if (clsRes.success && clsRes.classes) {
-          setClassesList(clsRes.classes)
-          if (clsRes.classes.length > 0) {
-            setAssignClassId(String(clsRes.classes[0].id))
-          }
+      } catch (e: any) {
+        if (e?.status === 403 || String(e?.message || '').toLowerCase().includes('forbidden') || String(e?.message || '').toLowerCase().includes('privilege')) {
+          setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
         }
-      } catch (e) {
         console.error('Failed to load subjects or classes', e)
       }
     }
     loadSubjectsAndClasses()
-  }, [isAdminPortal])
+  }, [isAdminPortal, profile])
 
   const fetchQuestions = async (queryOverrides?: string) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[] }>(
+      const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[]; message?: string }>(
         bankListUrl(queryOverrides)
       )
       if (res.success && res.items) {
         setQuestions(res.items)
       } else {
-        setError('Failed to load Question Bank items.')
+        if (String(res.message || '').toLowerCase().includes('forbidden') || String(res.message || '').toLowerCase().includes('privilege')) {
+          setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+        } else {
+          setError('Failed to load Question Bank items.')
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error fetching Question Bank.')
+    } catch (err: any) {
+      if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+        setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+      } else {
+        setError(err instanceof Error ? err.message : 'Error fetching Question Bank.')
+      }
     } finally {
       setLoading(false)
     }
@@ -522,10 +623,97 @@ export function QuestionBankManager({ profile, onImportToBuilder }: QuestionBank
           setOnlineExams(res.exams)
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+        setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+      }
       console.error('Error fetching online exams:', err)
     } finally {
       setLoadingExams(false)
+    }
+  }
+
+  // Open Performance Analytics Modal
+  const openAnalyticsModal = async (distId: number) => {
+    setAnalyticsDistId(distId)
+    setLoadingAnalytics(true)
+    try {
+      const url = isAdminPortal
+        ? endpoints.admin.cbtDistributionAnalytics(distId)
+        : endpoints.teacher.cbtDistributionAnalytics(distId)
+      const res = await apiSlice.get<{ success: boolean; message?: string } & any>(url)
+      if (res.success) {
+        setAnalyticsData(res)
+      } else {
+        alert(res.message || 'Failed to load CBT analytics.')
+      }
+    } catch (err: any) {
+      if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+        setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+      }
+      console.error('Error fetching analytics:', err)
+    } finally {
+      setLoadingAnalytics(false)
+    }
+  }
+
+  // Handle Marksheet Sync
+  const handleSyncMarks = async () => {
+    if (!analyticsDistId) return
+    setIsSyncingMarks(true)
+    try {
+      const url = isAdminPortal
+        ? endpoints.admin.cbtDistributionSyncMarks(analyticsDistId)
+        : endpoints.teacher.cbtDistributionSyncMarks(analyticsDistId)
+      const res = await apiSlice.post<{ success: boolean; message: string; syncCount: number }>(
+        url,
+        { maxScoreBase }
+      )
+      if (res.success) {
+        showNotification(res.message || 'CBT scores recorded on report cards.')
+        await openAnalyticsModal(analyticsDistId)
+      } else {
+        alert(res.message || 'Failed to sync marks.')
+      }
+    } catch (err: any) {
+      if (err?.status === 403 || String(err?.message || '').toLowerCase().includes('forbidden') || String(err?.message || '').toLowerCase().includes('privilege')) {
+        setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+      } else {
+        alert(err instanceof Error ? err.message : 'Failed to sync marks to report cards.')
+      }
+    } finally {
+      setIsSyncingMarks(false)
+    }
+  }
+
+  const handleOverrideCbtMark = async (studentId: number) => {
+    if (!analyticsDistId || !isAdminPortal) return
+    if (!correctionScore.trim() || !correctionReason.trim()) {
+      alert('Enter the corrected report-card CBT score and a reason.')
+      return
+    }
+    setIsSavingCorrection(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string }>(
+        endpoints.admin.cbtDistributionOverrideMark(analyticsDistId),
+        {
+          studentId,
+          cbtMark: Number(correctionScore),
+          reason: correctionReason.trim(),
+          maxScoreBase,
+        }
+      )
+      if (res.success) {
+        showNotification(res.message || 'CBT score corrected on the report card.')
+        setCorrectingStudentId(null)
+        setCorrectionScore('')
+        setCorrectionReason('')
+        await openAnalyticsModal(analyticsDistId)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to correct CBT score.')
+    } finally {
+      setIsSavingCorrection(false)
     }
   }
 
@@ -1194,6 +1382,26 @@ ANSWER: A`)
         </div>
       )}
 
+      {/* Subject Assignment Privilege Notice Banner */}
+      {accessDeniedNotice && (
+        <div className="rounded-3xl border-2 border-amber-300 bg-amber-50/95 p-5 sm:p-6 shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="p-2.5 bg-amber-100 rounded-2xl text-amber-800 shrink-0 mt-0.5">
+            <AlertCircle size={24} className="text-amber-800" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <h4 className="text-sm font-black text-amber-950 uppercase tracking-wide">
+              Subject Assignment Privileges Notice
+            </h4>
+            <p className="text-xs sm:text-sm text-amber-900 font-bold leading-relaxed">
+              {accessDeniedNotice}
+            </p>
+            <p className="text-[11px] text-amber-700 font-medium">
+              Only teachers actively assigned to subjects can create or upload CBT questions and assignments for their assigned subjects. Please contact your school administrator to configure your subject allocations.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
         <div>
@@ -1225,28 +1433,45 @@ ANSWER: A`)
 
           <button
             onClick={() => {
+              if (!isAdminPortal && subjects.length === 0) {
+                setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+                return
+              }
               if (selectedFolderSubjectId) setImportSubjectId(selectedFolderSubjectId)
               setImportFormat('csv')
               setIsImportModalOpen(true)
             }}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            disabled={!isAdminPortal && subjects.length === 0}
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UploadCloud size={15} /> Bulk Import (Aiken/CSV)
           </button>
 
           <button
-            onClick={() => setActiveTab('studio')}
-            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            onClick={() => {
+              if (!isAdminPortal && subjects.length === 0) {
+                setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+                return
+              }
+              setActiveTab('studio')
+            }}
+            disabled={!isAdminPortal && subjects.length === 0}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Sparkles size={15} /> AI / Scan / Upload
           </button>
 
           <button
             onClick={() => {
+              if (!isAdminPortal && subjects.length === 0) {
+                setAccessDeniedNotice("Accessed can not be granted meet Admin for the priveleges..")
+                return
+              }
               if (selectedFolderSubjectId) setFormSubjectId(selectedFolderSubjectId)
               setIsAddModalOpen(true)
             }}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            disabled={!isAdminPortal && subjects.length === 0}
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={16} /> New Question
           </button>
@@ -2102,6 +2327,14 @@ ANSWER: A`)
                           {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : 'Active'}
                         </span>
                         <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openAnalyticsModal(exam.id)}
+                            className="px-2.5 py-1 text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                            title="View CBT Performance Analytics & Sync Marks"
+                          >
+                            <BarChart3 size={13} /> Analytics
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleOpenExtendModal(exam)}
@@ -3176,6 +3409,239 @@ ANSWER: A`)
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CBT TEST PERFORMANCE ANALYTICS & MARKSHEET SCORE SYNC */}
+      {analyticsDistId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
+              <div className="flex items-center gap-2 font-black text-sm">
+                <BarChart3 size={18} className="text-amber-400" /> CBT Test Performance Analytics & Marksheet Sync
+              </div>
+              <button
+                onClick={() => { setAnalyticsDistId(null); setAnalyticsData(null) }}
+                className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {loadingAnalytics ? (
+                <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-3">
+                  <Loader2 className="animate-spin text-amber-500" size={32} />
+                  <p className="text-xs font-semibold">Loading test analytics...</p>
+                </div>
+              ) : analyticsData ? (
+                <>
+                  {/* Top Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500">Total Enrolled</span>
+                      <p className="text-xl font-black text-slate-900">{analyticsData.totalEnrolled}</p>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500">Completed</span>
+                      <p className="text-xl font-black text-emerald-600">{analyticsData.submittedCount}</p>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500">Average Score</span>
+                      <p className="text-xl font-black text-indigo-600">{analyticsData.averageScore}%</p>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
+                      <span className="text-[11px] font-bold text-slate-500">Pass Rate</span>
+                      <p className="text-xl font-black text-amber-600">{analyticsData.passRate}%</p>
+                    </div>
+                  </div>
+
+                  {analyticsData.pendingCount > 0 && (
+                    <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{analyticsData.pendingCount} student{analyticsData.pendingCount === 1 ? '' : 's'} have not submitted</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">Extend deadline or sitting date for students who missed their sitting.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const examToExtend = onlineExams.find((e) => e.id === analyticsDistId)
+                          setAnalyticsDistId(null)
+                          setAnalyticsData(null)
+                          if (examToExtend) handleOpenExtendModal(examToExtend)
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Calendar size={14} /> Extend deadline
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Marksheet Sync Action Card */}
+                  <div className="p-5 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent rounded-2xl border border-amber-200/80 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                          <TrendingUp size={16} className="text-amber-600" />
+                          Report Card & Marksheet Sync
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Submitted CBT scores sync automatically to the subject marksheet. Use this manual sync button to record any missing student attempts or re-calculate scaled continuous assessment scores.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 text-xs">
+                          <span className="text-slate-500 font-bold text-[10px]">Max Scale:</span>
+                          <select
+                            value={maxScoreBase}
+                            onChange={(e) => setMaxScoreBase(Number(e.target.value))}
+                            className="font-bold text-slate-800 focus:outline-hidden"
+                          >
+                            <option value={40}>40 Marks (Standard CBT/CA)</option>
+                            <option value={30}>30 Marks</option>
+                            <option value={20}>20 Marks</option>
+                            <option value={100}>100 Marks (Direct %)</option>
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={handleSyncMarks}
+                          disabled={isSyncingMarks || analyticsData.submittedCount === 0}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSyncingMarks ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                          Record missing scores
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Student Submissions Matrix */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                      Pupil Submissions Matrix ({analyticsData.students?.length || 0})
+                    </h4>
+
+                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200/80">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="text-xs font-bold">Student Name</TableHead>
+                            <TableHead className="text-xs font-bold">Reg No</TableHead>
+                            <TableHead className="text-xs font-bold">Status</TableHead>
+                            <TableHead className="text-xs font-bold">CBT Score (%)</TableHead>
+                            <TableHead className="text-xs font-bold">Report Card (/ {maxScoreBase})</TableHead>
+                            <TableHead className="text-xs font-bold">Submitted At</TableHead>
+                            {isAdminPortal && <TableHead className="text-xs font-bold">Action</TableHead>}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Array.isArray(analyticsData.students) && analyticsData.students.map((st: any) => (
+                            <TableRow key={st.studentId}>
+                              <TableCell className="font-bold text-slate-900 text-xs">
+                                {st.studentName}
+                              </TableCell>
+                              <TableCell className="text-slate-500 text-xs font-mono">
+                                {st.registerNo}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                    st.isSubmitted
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {st.isSubmitted ? 'Submitted' : 'Pending'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-mono font-black text-xs text-slate-800">
+                                {st.totalMark !== null ? `${st.totalMark}%` : '-'}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                <div className="font-mono font-black text-slate-800">
+                                  {st.reportCbtMark != null && st.reportCbtMark !== '' ? st.reportCbtMark : '-'}
+                                </div>
+                                {st.cbtSource === 'ADMIN_OVERRIDE' ? (
+                                  <span className="text-[10px] font-bold text-amber-700">Admin corrected</span>
+                                ) : st.onReportCard ? (
+                                  <span className="text-[10px] font-bold text-emerald-700">On report card</span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400">Not recorded yet</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-slate-500 text-[11px]">
+                                {st.submittedAt ? new Date(st.submittedAt).toLocaleDateString() : '-'}
+                              </TableCell>
+                              {isAdminPortal && (
+                                <TableCell>
+                                  {correctingStudentId === st.studentId ? (
+                                    <div className="space-y-1.5 min-w-[180px]">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={maxScoreBase}
+                                        step="0.1"
+                                        value={correctionScore}
+                                        onChange={(e) => setCorrectionScore(e.target.value)}
+                                        placeholder={`Score / ${maxScoreBase}`}
+                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={correctionReason}
+                                        onChange={(e) => setCorrectionReason(e.target.value)}
+                                        placeholder="Reason for correction"
+                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs"
+                                      />
+                                      <div className="flex gap-1">
+                                        <button
+                                          type="button"
+                                          disabled={isSavingCorrection}
+                                          onClick={() => handleOverrideCbtMark(st.studentId)}
+                                          className="px-2 py-1 bg-slate-900 text-white text-[10px] font-bold rounded-lg disabled:opacity-50"
+                                        >
+                                          {isSavingCorrection ? 'Saving' : 'Save'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setCorrectingStudentId(null)
+                                            setCorrectionScore('')
+                                            setCorrectionReason('')
+                                          }}
+                                          className="px-2 py-1 text-[10px] font-bold text-slate-500"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCorrectingStudentId(st.studentId)
+                                        setCorrectionScore(st.reportCbtMark || '')
+                                        setCorrectionReason('')
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Edit3 size={12} /> Edit
+                                    </button>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       )}

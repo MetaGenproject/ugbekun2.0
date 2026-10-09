@@ -771,7 +771,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
     return <TeacherBroadReports />
   }
   if (activeSection === 'cbt-exams' || activeSection === 'question-bank') {
-    return <QuestionBankManager profile={profile} />
+    return <QuestionBankManager profile={{ ...profile, role: user?.role || 3 }} isAdmin={false} />
   }
   if (activeSection === 'subjects' || activeSection === 'my-subjects' || activeSection === 'subject-session') {
     return <TeacherSubjectsHub profile={profile} onNavigate={onNavigate} />
