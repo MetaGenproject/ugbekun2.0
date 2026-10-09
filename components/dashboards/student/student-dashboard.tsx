@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { 
   BookOpen, 
@@ -72,6 +72,11 @@ import {
   LayoutGrid,
   List,
   Search,
+  Camera,
+  History,
+  AtSign,
+  Key,
+  Users,
 } from 'lucide-react'
 import { SchoolHeader } from '../school-header'
 import { useSchoolBranding } from '@/lib/schoolBrandingContext'
@@ -95,17 +100,32 @@ interface DashboardProps {
 
 interface StudentProfile {
   studentId: number
+  userId?: number | null
+  username?: string | null
   firstName: string
   lastName: string
   registerNo: string
   gender: string
   photo: string | null
+  admissionDate?: string | null
+  birthday?: string | null
+  religion?: string | null
+  caste?: string | null
+  bloodGroup?: string | null
+  motherTongue?: string | null
+  currentAddress?: string | null
+  permanentAddress?: string | null
+  city?: string | null
+  state?: string | null
+  mobileno?: string | null
+  email?: string | null
   branchName: string | null
   classId: number | null
   className: string | null
   sectionId: number | null
   sectionName: string | null
   sessionId: number
+  sessionName?: string | null
   fellowStudentsCount: number
   formTeacher: {
     id?: number
@@ -119,6 +139,42 @@ interface StudentProfile {
     name: string
     code: string
     type: string
+    author?: string | null
+    teacher?: {
+      id: number
+      name: string
+      email: string | null
+      phone: string | null
+      photo?: string | null
+      department?: string | null
+    } | null
+  }>
+  parent?: {
+    id?: number
+    name?: string | null
+    relation?: string | null
+    fatherName?: string | null
+    motherName?: string | null
+    occupation?: string | null
+    income?: string | null
+    education?: string | null
+    email?: string | null
+    mobileno?: string | null
+    address?: string | null
+    city?: string | null
+    state?: string | null
+  } | null
+  classHistory?: Array<{
+    id: number
+    sessionId: number
+    sessionName?: string | null
+    classId: number
+    className: string
+    sectionId: number
+    sectionName: string
+    roll: number
+    isAlumni: boolean
+    enrolledAt: string
   }>
 }
 
@@ -435,6 +491,19 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
   const [updatingPassword, setUpdatingPassword] = useState<boolean>(false)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
 
+  // Student Profile, Username & Photo states
+  const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'history' | 'security'>('bio')
+  const [newUsername, setNewUsername] = useState<string>('')
+  const [updatingUsername, setUpdatingUsername] = useState<boolean>(false)
+  const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false)
+  const [photoSuccess, setPhotoSuccess] = useState<string | null>(null)
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null)
+
+  // Academic subjects search & filter state
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('')
+  const [subjectTypeFilter, setSubjectTypeFilter] = useState<'ALL' | 'CORE' | 'ELECTIVE' | 'OPTIONAL'>('ALL')
+
   // CBT Examination Runner & Session Filtering State
   const [cbtExamsList, setCbtExamsList] = useState<any[]>([])
   const [loadingCbtList, setLoadingCbtList] = useState<boolean>(false)
@@ -612,8 +681,10 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
 
         if (profileRes?.success) {
           setProfile(profileRes)
+          if (profileRes.username) setNewUsername(profileRes.username)
         } else if (overviewRes?.profile) {
           setProfile(overviewRes.profile)
+          if (overviewRes.profile.username) setNewUsername(overviewRes.profile.username)
         } else {
           throw new Error('Failed to load student profile.')
         }
@@ -1048,6 +1119,123 @@ function normalizeQuestions(raw: any): any[] {
     }
   }
 
+  // Sync activeProfileTab when activeSection changes
+  useEffect(() => {
+    if (activeSection === 'settings') {
+      setActiveProfileTab('security')
+    } else if (activeSection === 'profile') {
+      setActiveProfileTab('bio')
+    }
+  }, [activeSection])
+
+  // Sync initial username when profile loads
+  useEffect(() => {
+    if (profile?.username && !newUsername) {
+      setNewUsername(profile.username)
+    }
+  }, [profile?.username])
+
+  // Change username action
+  const handleUpdateUsername = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const clean = newUsername.trim()
+    if (!clean || clean.length < 3) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Invalid Username',
+        message: 'Username must be at least 3 characters long.'
+      })
+      return
+    }
+    try {
+      setUpdatingUsername(true)
+      setUsernameSuccess(null)
+      const res = await apiSlice.put<{ success: boolean; message: string; username: string }>(
+        endpoints.student.changeUsername,
+        { newUsername: clean }
+      )
+      if (res.success) {
+        setUsernameSuccess(res.message || 'Username updated successfully!')
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Username Updated',
+          message: 'Your portal login username has been successfully updated.'
+        })
+        if (profile) {
+          setProfile({ ...profile, username: res.username })
+        }
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to update username.'))
+    } finally {
+      setUpdatingUsername(false)
+    }
+  }
+
+  // Upload student photo action
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Invalid File',
+        message: 'Please choose a valid image file (PNG, JPG, JPEG, WEBP).'
+      })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'File Too Large',
+        message: 'Image size should not exceed 5MB.'
+      })
+      return
+    }
+
+    try {
+      setUploadingPhoto(true)
+      setPhotoSuccess(null)
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result as string
+          const res = await apiSlice.post<{ success: boolean; message: string; photo: string }>(
+            endpoints.student.uploadPhoto,
+            { photoBase64: base64 }
+          )
+          if (res.success && res.photo) {
+            setPhotoSuccess('Profile picture updated successfully!')
+            showSystemStatus({
+              type: 'ACTION_SUCCESS',
+              title: 'Photo Uploaded',
+              message: 'Your profile picture has been updated.'
+            })
+            if (profile) {
+              setProfile({ ...profile, photo: res.photo })
+            }
+          }
+        } catch (err: any) {
+          showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to upload photo.'))
+        } finally {
+          setUploadingPhoto(false)
+        }
+      }
+      reader.onerror = () => {
+        setUploadingPhoto(false)
+        showSystemStatus({
+          type: 'SERVER_ERROR',
+          title: 'File Read Error',
+          message: 'Failed to read the selected file.'
+        })
+      }
+      reader.readAsDataURL(file)
+    } catch (err: any) {
+      setUploadingPhoto(false)
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to upload photo.'))
+    }
+  }
+
   // PDF Export
   const handleExportReportCard = async () => {
     try {
@@ -1160,17 +1348,50 @@ function normalizeQuestions(raw: any): any[] {
 
   // 5. ACADEMICS & TEACHER DIRECTORY SUB-VIEW
   if (activeSection === 'academics' || activeSection === 'teachers') {
+    const filteredSubjects = (profile.subjects || []).filter((sub) => {
+      const q = subjectSearchQuery.trim().toLowerCase()
+      const matchesSearch =
+        !q ||
+        sub.name.toLowerCase().includes(q) ||
+        (sub.code && sub.code.toLowerCase().includes(q))
+      const typeStr = (sub.type || '').toUpperCase()
+      const matchesType =
+        subjectTypeFilter === 'ALL' ||
+        (subjectTypeFilter === 'CORE' && (typeStr.includes('CORE') || typeStr.includes('COMPULSORY'))) ||
+        (subjectTypeFilter === 'ELECTIVE' && typeStr.includes('ELECTIVE')) ||
+        (subjectTypeFilter === 'OPTIONAL' && (typeStr.includes('OPTION') || typeStr.includes('VOCATIONAL')))
+      return matchesSearch && matchesType
+    })
+
     return (
       <div className="space-y-6 pb-12 font-sans">
+        {/* Top Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
           <div>
             <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <GraduationCap className="text-blue-600" size={24} />
-              My Class & Teacher Directory
+              My Academics & Course Curriculum
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               Class: <span className="font-bold text-slate-900">{profile.className} {profile.sectionName}</span> &bull; Enrolled Subjects: <span className="font-bold text-slate-900">{profile.subjects.length}</span>
+              {profile.sessionName && <span> &bull; Session: <span className="font-bold text-blue-700">{profile.sessionName}</span></span>}
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onNavigate?.('tasks')}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckSquare size={14} className="text-blue-600" />
+              <span>Homework & Tasks</span>
+            </button>
+            <button
+              onClick={() => onNavigate?.('cbt')}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Zap size={14} className="text-amber-300" />
+              <span>CBT Exams</span>
+            </button>
           </div>
         </div>
 
@@ -1212,11 +1433,172 @@ function normalizeQuestions(raw: any): any[] {
           </div>
         )}
 
+        {/* ENROLLED SUBJECTS SECTION */}
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <BookOpen className="text-blue-600" size={20} />
+                Enrolled Class Subjects ({profile.subjects.length})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                All approved curriculum subjects assigned to your class section for this academic session.
+              </p>
+            </div>
+
+            {/* Filter buttons */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl text-[11px] font-bold text-slate-600">
+              {(['ALL', 'CORE', 'ELECTIVE', 'OPTIONAL'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setSubjectTypeFilter(tab)}
+                  className={`px-3 py-1 rounded-xl transition cursor-pointer ${
+                    subjectTypeFilter === tab
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'hover:text-slate-900'
+                  }`}
+                >
+                  {tab === 'ALL' ? 'All Subjects' : tab.charAt(0) + tab.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search enrolled subjects by title or subject code (e.g. Mathematics, ENG, SCI)..."
+              value={subjectSearchQuery}
+              onChange={(e) => setSubjectSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Subjects Grid */}
+          {filteredSubjects.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSubjects.map((sub, idx) => {
+                const colors = [
+                  'from-blue-500 to-indigo-600',
+                  'from-emerald-500 to-teal-600',
+                  'from-purple-500 to-indigo-600',
+                  'from-amber-500 to-orange-600',
+                  'from-rose-500 to-pink-600',
+                  'from-cyan-500 to-blue-600',
+                ]
+                const colorGradient = colors[idx % colors.length]
+
+                return (
+                  <div
+                    key={`subj-card-${sub.id}-${idx}`}
+                    className="group bg-white hover:bg-slate-50/50 rounded-2xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${colorGradient} text-white flex items-center justify-center font-extrabold text-xs shadow-xs tracking-wider shrink-0`}>
+                          {sub.code || sub.name.substring(0, 3).toUpperCase()}
+                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          (sub.type || '').toUpperCase().includes('CORE')
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                            : (sub.type || '').toUpperCase().includes('ELECTIVE')
+                            ? 'bg-purple-50 text-purple-700 border border-purple-200/60'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                        }`}>
+                          {sub.type || 'Core'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
+                          {sub.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Code: <span className="font-semibold text-slate-600">{sub.code || 'N/A'}</span>
+                          {sub.author && <span> &bull; Syllabus: {sub.author}</span>}
+                        </p>
+                      </div>
+
+                      {/* Subject Teacher Info */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        {sub.teacher ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
+                              <img
+                                src={getAvatarUrl(sub.teacher.photo, sub.teacher.name)}
+                                alt={sub.teacher.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="truncate">
+                              <span className="text-[11px] font-bold text-slate-800 truncate block">
+                                {sub.teacher.name}
+                              </span>
+                              <span className="text-[9px] text-slate-400 block -mt-0.5">Subject Tutor</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span className="text-[11px] font-medium text-slate-600">
+                              {formTeacher ? `${formTeacher.name} (Coord.)` : 'Class Teacher Oversight'}
+                            </span>
+                          </div>
+                        )}
+
+                        {sub.teacher && (
+                          <button
+                            onClick={() => {
+                              setSelectedRecipientId(sub.teacher!.id)
+                              setRecipientRole('TEACHER')
+                              setRecipientName(`${sub.teacher!.name} (${sub.name} Teacher)`)
+                              setMsgSubject(`Inquiry regarding ${sub.name}`)
+                              setShowMsgModal(true)
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition cursor-pointer"
+                            title="Message subject teacher"
+                          >
+                            <Mail size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Subject Actions */}
+                    <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
+                      <button
+                        onClick={() => onNavigate?.('tasks')}
+                        className="py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold transition flex items-center justify-center gap-1 cursor-pointer border border-slate-200/60"
+                      >
+                        <CheckSquare size={12} className="text-blue-600" />
+                        <span>Homework</span>
+                      </button>
+                      <button
+                        onClick={() => onNavigate?.('cbt')}
+                        className="py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition flex items-center justify-center gap-1 cursor-pointer border border-blue-200/60"
+                      >
+                        <Zap size={12} className="text-amber-500" />
+                        <span>CBT Tests</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-slate-400 text-xs italic bg-slate-50 rounded-2xl border border-slate-200/60">
+              {subjectSearchQuery ? 'No subjects matched your search criteria.' : 'No subjects enrolled for this class section yet.'}
+            </div>
+          )}
+        </div>
+
         {/* Subject Teachers Directory */}
         <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide">
-              Subject Teachers ({subjectTeachers.length})
+              Subject Teachers Directory ({subjectTeachers.length})
             </h3>
             {loadingTeachers && <Loader2 size={16} className="animate-spin text-blue-600" />}
           </div>
@@ -1266,8 +1648,9 @@ function normalizeQuestions(raw: any): any[] {
               ))}
             </div>
           ) : (
-            <div className="py-8 text-center text-slate-400 text-xs italic">
-              No subject teachers assigned to your class section yet.
+            <div className="p-6 rounded-2xl bg-slate-50/60 border border-slate-200/60 text-slate-500 text-xs text-center flex flex-col items-center justify-center gap-1">
+              <span className="font-semibold text-slate-700">All {profile.subjects.length} class subjects are actively coordinated under Class Teacher supervision.</span>
+              <span className="text-slate-400">Subject-specific teacher allocations will automatically show here once individual department assignments are finalized.</span>
             </div>
           )}
         </div>
@@ -3770,65 +4153,523 @@ function normalizeQuestions(raw: any): any[] {
   // 13. SETTINGS & PROFILE SUB-VIEW
   if (activeSection === 'settings' || activeSection === 'profile') {
     return (
-      <div className="space-y-6 pb-12 font-sans max-w-2xl mx-auto">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-          <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-            <Lock className="text-slate-700" size={22} />
-            Security & Account Password
-          </h2>
-          <p className="text-xs text-slate-500">Update your student portal login password securely.</p>
+      <div className="space-y-6 pb-12 font-sans max-w-5xl mx-auto">
+        {/* Profile Hero Header */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
+            {/* Avatar with Camera Upload Overlay */}
+            <div className="relative group shrink-0">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-4 border-white/20 bg-white/10 shadow-xl">
+                <img
+                  src={getAvatarUrl(profile.photo, `${profile.firstName} ${profile.lastName}`)}
+                  alt={`${profile.firstName} ${profile.lastName}`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
 
-          {passwordSuccess && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
-              {passwordSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Current Password *</label>
+              {/* Hidden file input */}
               <input
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
+                ref={profilePhotoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
               />
+
+              {/* Camera Trigger */}
+              <button
+                type="button"
+                onClick={() => profilePhotoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="absolute bottom-1 right-1 p-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition cursor-pointer border-2 border-slate-900 flex items-center justify-center disabled:opacity-50"
+                title="Upload Profile Picture"
+              >
+                {uploadingPhoto ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+              </button>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">New Password *</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
-              />
-            </div>
+            {/* Profile Meta */}
+            <div className="text-center sm:text-left space-y-2 flex-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
+                  Student Portal
+                </span>
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-xs font-bold">
+                  {profile.className} {profile.sectionName}
+                </span>
+                {profile.username && (
+                  <span className="px-3 py-1 rounded-full bg-white/10 text-slate-200 border border-white/15 text-xs font-mono">
+                    @{profile.username}
+                  </span>
+                )}
+              </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Confirm New Password *</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"
-              />
-            </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                {profile.firstName} {profile.lastName}
+              </h2>
 
-            <button
-              type="submit"
-              disabled={updatingPassword}
-              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition"
-            >
-              {updatingPassword ? 'Updating Password...' : 'Save New Password'}
-            </button>
-          </form>
+              <p className="text-xs text-slate-300 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1">
+                <span>Reg No: <strong className="text-white">{profile.registerNo || 'N/A'}</strong></span>
+                <span>Branch: <strong className="text-white">{profile.branchName || 'Main Campus'}</strong></span>
+                {profile.sessionName && (
+                  <span>Session: <strong className="text-blue-300">{profile.sessionName}</strong></span>
+                )}
+              </p>
+
+              {/* Upload trigger button & feedback */}
+              <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                <button
+                  type="button"
+                  onClick={() => profilePhotoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-white/15"
+                >
+                  <Upload size={13} />
+                  <span>{uploadingPhoto ? 'Uploading...' : 'Change Profile Picture'}</span>
+                </button>
+                {photoSuccess && (
+                  <span className="text-xs text-emerald-300 font-semibold flex items-center gap-1">
+                    <CheckCircle2 size={14} />
+                    {photoSuccess}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs">
+          <button
+            onClick={() => setActiveProfileTab('bio')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'bio'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <User size={15} />
+            <span>Child Profile & Family Info</span>
+          </button>
+          <button
+            onClick={() => setActiveProfileTab('history')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'history'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <History size={15} />
+            <span>Academic & Class History</span>
+          </button>
+          <button
+            onClick={() => setActiveProfileTab('security')}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'security'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Lock size={15} />
+            <span>Security & Login Credentials</span>
+          </button>
+        </div>
+
+        {/* TAB 1: CHILD PROFILE & FAMILY INFO */}
+        {activeProfileTab === 'bio' && (
+          <div className="space-y-6">
+            {/* Student Personal Bio Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <User className="text-blue-600" size={18} />
+                    Personal & Student Information
+                  </h3>
+                  <p className="text-xs text-slate-500">Official student biometric and admission registration records.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Name</span>
+                  <p className="font-extrabold text-slate-900">{profile.firstName} {profile.lastName}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Registration / Admission No</span>
+                  <p className="font-extrabold text-blue-700 font-mono">{profile.registerNo || 'Not specified'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Class & Section</span>
+                  <p className="font-extrabold text-slate-900">{profile.className} {profile.sectionName}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Admission Date</span>
+                  <p className="font-extrabold text-slate-900">
+                    {profile.admissionDate ? new Date(profile.admissionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'On Record'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Date of Birth</span>
+                  <p className="font-extrabold text-slate-900">
+                    {profile.birthday ? new Date(profile.birthday).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'On Record'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gender</span>
+                  <p className="font-extrabold text-slate-900">{profile.gender || 'Not specified'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Blood Group</span>
+                  <p className="font-extrabold text-slate-900">{profile.bloodGroup || 'Not specified'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mother Tongue</span>
+                  <p className="font-extrabold text-slate-900">{profile.motherTongue || 'English'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Religion / Caste</span>
+                  <p className="font-extrabold text-slate-900">{profile.religion || 'Christianity'}{profile.caste ? ` &bull; ${profile.caste}` : ''}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Student Email</span>
+                  <p className="font-semibold text-slate-800 truncate">{profile.email || 'N/A'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Student Mobile</span>
+                  <p className="font-semibold text-slate-800">{profile.mobileno || 'N/A'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Campus Branch</span>
+                  <p className="font-extrabold text-slate-900">{profile.branchName || 'Main Campus'}</p>
+                </div>
+              </div>
+
+              {/* Residential Addresses */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                    <MapPin size={13} className="text-blue-600" />
+                    <span>Current Residential Address</span>
+                  </div>
+                  <p className="text-slate-800 font-semibold">{profile.currentAddress || 'No current residential address entered.'}</p>
+                  <p className="text-[11px] text-slate-500">{[profile.city, profile.state].filter(Boolean).join(', ') || ''}</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                    <MapPin size={13} className="text-indigo-600" />
+                    <span>Permanent Address</span>
+                  </div>
+                  <p className="text-slate-800 font-semibold">{profile.permanentAddress || profile.currentAddress || 'Same as residential address'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Parent & Guardian Info Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Users className="text-blue-600" size={18} />
+                  Parent & Guardian Information
+                </h3>
+                <p className="text-xs text-slate-500">Official emergency contacts and parent portal links.</p>
+              </div>
+
+              {profile.parent ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Primary Guardian</span>
+                    <p className="font-extrabold text-slate-900">{profile.parent.name || 'Parent / Guardian'}</p>
+                    <span className="text-[10px] text-blue-600 font-semibold">{profile.parent.relation || 'Parent'}</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Father's Name</span>
+                    <p className="font-extrabold text-slate-900">{profile.parent.fatherName || 'On file'}</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mother's Name</span>
+                    <p className="font-extrabold text-slate-900">{profile.parent.motherName || 'On file'}</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Occupation</span>
+                    <p className="font-semibold text-slate-800">{profile.parent.occupation || 'Not specified'}</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Parent Phone Number</span>
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Phone size={12} className="text-emerald-600" />
+                      <span>{profile.parent.mobileno || 'Not specified'}</span>
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Parent Email</span>
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5 truncate">
+                      <Mail size={12} className="text-blue-600" />
+                      <span className="truncate">{profile.parent.email || 'Not specified'}</span>
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-2 lg:col-span-3 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Residential Address</span>
+                    <p className="font-semibold text-slate-800">{profile.parent.address || 'Address registered with school registry'}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-slate-50 text-slate-500 text-xs text-center italic">
+                  Parent or guardian record is linked through school administration.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: ACADEMIC & CLASS HISTORY */}
+        {activeProfileTab === 'history' && (
+          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+            <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <History className="text-blue-600" size={18} />
+                  Student Academic Journey & Class History
+                </h3>
+                <p className="text-xs text-slate-500">Record of academic class enrollments across school years.</p>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/60">
+                Total Enrollments: {profile.classHistory?.length || 1}
+              </span>
+            </div>
+
+            {profile.classHistory && profile.classHistory.length > 0 ? (
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200/80 bg-slate-50/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="py-3 px-4 rounded-l-xl">Academic Session</th>
+                        <th className="py-3 px-4">Class</th>
+                        <th className="py-3 px-4">Section</th>
+                        <th className="py-3 px-4">Roll No</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 rounded-r-xl">Enrollment Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {profile.classHistory.map((item, idx) => {
+                        const isCurrent = idx === 0
+                        return (
+                          <tr key={`enroll-hist-${item.id}-${idx}`} className={isCurrent ? 'bg-blue-50/30' : ''}>
+                            <td className="py-3.5 px-4 font-extrabold text-slate-900 flex items-center gap-2">
+                              <Calendar size={14} className={isCurrent ? 'text-blue-600' : 'text-slate-400'} />
+                              <span>{item.sessionName || `Session #${item.sessionId}`}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-slate-800">{item.className}</td>
+                            <td className="py-3.5 px-4 text-slate-600">{item.sectionName}</td>
+                            <td className="py-3.5 px-4 font-mono font-semibold text-slate-700">{item.roll || 'N/A'}</td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isCurrent
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : item.isAlumni
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {isCurrent ? 'Active Class' : item.isAlumni ? 'Alumni' : 'Promoted'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-500">
+                              {item.enrolledAt ? new Date(item.enrolledAt).toLocaleDateString() : 'N/A'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Timeline visual cards */}
+                <div className="pt-4 border-t border-slate-100 space-y-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Progression Timeline</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {profile.classHistory.map((item, idx) => (
+                      <div
+                        key={`timeline-card-${item.id}`}
+                        className={`p-4 rounded-2xl border transition ${
+                          idx === 0
+                            ? 'bg-gradient-to-br from-blue-50 to-indigo-50/50 border-blue-200 shadow-xs'
+                            : 'bg-slate-50/60 border-slate-200/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-extrabold text-blue-700">{item.sessionName}</span>
+                          {idx === 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-extrabold text-slate-900 text-sm mt-1">
+                          {item.className} &bull; {item.sectionName}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Roll: {item.roll || 'N/A'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-slate-500 text-xs bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                <p className="font-bold text-slate-800">Current Session: {profile.className} {profile.sectionName}</p>
+                <p className="text-slate-400">Previous promotional history will accumulate here across academic sessions.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: SECURITY & LOGIN CREDENTIALS */}
+        {activeProfileTab === 'security' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Change Username Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                    <AtSign size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">Change Portal Username</h3>
+                    <p className="text-xs text-slate-500">Update your student username used for logging into the portal.</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-1 mt-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Username</span>
+                  <p className="font-mono font-extrabold text-slate-900 text-sm">@{profile.username || user.username}</p>
+                </div>
+
+                {usernameSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 size={16} />
+                    <span>{usernameSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateUsername} className="space-y-4 pt-2 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">New Username *</label>
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="e.g. winner_student"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Letters, numbers, underscores, and dots only. Min 3 characters.</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={updatingUsername}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {updatingUsername ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>{updatingUsername ? 'Saving Username...' : 'Save New Username'}</span>
+                  </button>
+                </form>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-800">
+                <strong>Note:</strong> Once changed, you will need to use your new username next time you log into Ugbekun.
+              </div>
+            </div>
+
+            {/* Change Password Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-slate-100 text-slate-700">
+                  <Lock size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Security & Account Password</h3>
+                  <p className="text-xs text-slate-500">Update your student portal login password securely.</p>
+                </div>
+              </div>
+
+              {passwordSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 size={16} />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Current Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">New Password *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Confirm New Password *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updatingPassword}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {updatingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                  <span>{updatingPassword ? 'Updating Password...' : 'Save New Password'}</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

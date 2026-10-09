@@ -492,6 +492,8 @@ export const endpoints = {
     messages: `${BASE_URL}/student/messages`,
     sendMessage: `${BASE_URL}/student/messages`,
     changePassword: `${BASE_URL}/student/change-password`,
+    changeUsername: `${BASE_URL}/student/change-username`,
+    uploadPhoto: `${BASE_URL}/student/upload-photo`,
   },
   common: {
     upload: `${BASE_URL}/upload`,
