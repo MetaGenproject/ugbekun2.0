@@ -78,11 +78,13 @@ interface OnlineExamItem {
   passingMark: number
   duration: number
   questions: any
+  questionCount?: number
   examDate: string | null
   createdAt: string
   class?: { id: number; name: string }
   subject?: { id: number; name: string }
   submissions?: Array<{ id: number; totalMark: number; createdAt: string }>
+  submissionCount?: number
   startDate?: string | null
   endDate?: string | null
   shuffleQuestions?: boolean
@@ -621,24 +623,61 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
         )
         if (res.success && Array.isArray(res.distributions)) {
           setOnlineExams(
-            res.distributions.map((d) => ({
-              id: d.id,
-              title: d.title,
-              classId: d.classId,
-              subjectId: d.subjectId,
-              passingMark: d.passingMark,
-              duration: d.duration,
-              questions: Array.isArray(d.group?.questionIds) ? d.group.questionIds : [],
-              examDate: d.startDate || null,
-              createdAt: d.createdAt,
-              class: d.class,
-              subject: d.subject,
-              submissions: [],
-              startDate: d.startDate,
-              endDate: d.endDate,
-              shuffleQuestions: d.shuffleQuestions,
-              showResults: d.showResults,
-            }))
+            res.distributions.map((d) => {
+              let qList: any[] = []
+              if (Array.isArray(d.questions) && d.questions.length > 0) {
+                qList = d.questions
+              } else if (Array.isArray(d.onlineExam?.questions) && d.onlineExam.questions.length > 0) {
+                qList = d.onlineExam.questions
+              } else if (Array.isArray(d.group?.questionIds) && d.group.questionIds.length > 0) {
+                qList = d.group.questionIds
+              } else if (typeof d.onlineExam?.questions === 'string') {
+                try {
+                  const parsed = JSON.parse(d.onlineExam.questions)
+                  if (Array.isArray(parsed)) qList = parsed
+                } catch (_) {}
+              } else if (typeof d.group?.questionIds === 'string') {
+                try {
+                  const parsed = JSON.parse(d.group.questionIds)
+                  if (Array.isArray(parsed)) qList = parsed
+                } catch (_) {}
+              }
+
+              const qCount =
+                typeof d.questionCount === 'number' && d.questionCount > 0
+                  ? d.questionCount
+                  : qList.length
+
+              const subs = Array.isArray(d.submissions)
+                ? d.submissions
+                : (Array.isArray(d.onlineExam?.submissions) ? d.onlineExam.submissions : [])
+
+              const subCount =
+                typeof d.submissionCount === 'number'
+                  ? d.submissionCount
+                  : subs.length
+
+              return {
+                id: d.id,
+                title: d.title,
+                classId: d.classId,
+                subjectId: d.subjectId,
+                passingMark: d.passingMark,
+                duration: d.duration,
+                questions: qList,
+                questionCount: qCount,
+                examDate: d.startDate || null,
+                createdAt: d.createdAt,
+                class: d.class,
+                subject: d.subject,
+                submissions: subs,
+                submissionCount: subCount,
+                startDate: d.startDate,
+                endDate: d.endDate,
+                shuffleQuestions: d.shuffleQuestions,
+                showResults: d.showResults,
+              }
+            })
           )
         }
       } else {
@@ -2284,8 +2323,14 @@ ANSWER: A`)
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
                 {onlineExams.map((exam, idx) => {
-                  const qCount = Array.isArray(exam.questions) ? exam.questions.length : 0
-                  const subCount = exam.submissions?.length || 0
+                  const qCount =
+                    typeof exam.questionCount === 'number' && exam.questionCount > 0
+                      ? exam.questionCount
+                      : (Array.isArray(exam.questions) ? exam.questions.length : 0)
+                  const subCount =
+                    typeof exam.submissionCount === 'number'
+                      ? exam.submissionCount
+                      : (exam.submissions?.length || 0)
 
                   return (
                     <div
