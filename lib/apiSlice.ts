@@ -27,6 +27,7 @@ export const endpoints = {
     logout: typeof window !== 'undefined' ? '/api/auth/logout' : `${BASE_URL}/auth/logout`,
     register: `${BASE_URL}/auth/register`,
     me: typeof window !== 'undefined' ? '/api/auth/me' : `${BASE_URL}/auth/me`,
+    refresh: typeof window !== 'undefined' ? '/api/auth/refresh' : `${BASE_URL}/auth/refresh`,
     forgotPassword: `${BASE_URL}/auth/forgot-password`,
     verifyResetToken: `${BASE_URL}/auth/verify-reset-token`,
     resetPassword: `${BASE_URL}/auth/reset-password`,
@@ -525,7 +526,7 @@ export const endpoints = {
 
 import { safeStorage } from './safeStorage';
 import { getCacheBustingHeaders, appendCacheBuster } from './cacheBuster';
-import { isExpiredAuthMessage, redirectExpiredSession } from './authSession';
+import { isExpiredAuthMessage, redirectExpiredSession, refreshAuthSession } from './authSession';
 export { getCacheBustingHeaders, appendCacheBuster };
 
 // Helper to get authorization headers
@@ -756,10 +757,13 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorMessage = data?.message || `Request failed with status ${response.status}`;
     const requestUrl = response.url || '';
-    const isAuthFormRequest = /\/auth\/(login|register|forgot-password|reset-password)/i.test(requestUrl);
+    const isAuthFormRequest = /\/auth\/(login|register|forgot-password|reset-password|refresh)/i.test(requestUrl);
 
     if (!isAuthFormRequest && isExpiredAuthMessage(response.status, errorMessage)) {
-      redirectExpiredSession();
+      const refreshed = await refreshAuthSession();
+      if (!refreshed) {
+        redirectExpiredSession();
+      }
       throw new Error(errorMessage);
     }
 

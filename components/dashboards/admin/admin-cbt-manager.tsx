@@ -119,6 +119,19 @@ interface AnalyticsData {
   }>
 }
 
+export const CBT_SCALE_PRESETS = [
+  { value: 10, label: '10 Marks (Quiz / Micro-test)' },
+  { value: 15, label: '15 Marks (15 CBT + Theory)' },
+  { value: 20, label: '20 Marks (Standard Test / CA)' },
+  { value: 25, label: '25 Marks (Midterm / CA Component)' },
+  { value: 30, label: '30 Marks (30 Marks CA)' },
+  { value: 40, label: '40 Marks (Standard CBT / CA)' },
+  { value: 50, label: '50 Marks (50% Assessment / Exam)' },
+  { value: 60, label: '60 Marks (Exam Scale)' },
+  { value: 70, label: '70 Marks (Exam Scale)' },
+  { value: 100, label: '100 Marks (Direct % / Full Exam)' },
+]
+
 export function AdminCbtManager() {
   const [activeTab, setActiveTab] = useState<'distributions' | 'groups' | 'bank' | 'exams'>('distributions')
 
@@ -169,11 +182,24 @@ export function AdminCbtManager() {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
   const [isSyncingMarks, setIsSyncingMarks] = useState(false)
-  const [maxScoreBase, setMaxScoreBase] = useState(40)
+  const [maxScoreBase, setMaxScoreBase] = useState(20)
+  const [isCustomScale, setIsCustomScale] = useState(false)
   const [correctingStudentId, setCorrectingStudentId] = useState<number | null>(null)
   const [correctionScore, setCorrectionScore] = useState('')
   const [correctionReason, setCorrectionReason] = useState('')
   const [isSavingCorrection, setIsSavingCorrection] = useState(false)
+
+  // Close analytics modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && analyticsDistId) {
+        setAnalyticsDistId(null)
+        setAnalyticsData(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [analyticsDistId])
 
   const showToast = (msg: string) => {
     setNotification(msg)
@@ -1109,21 +1135,38 @@ export function AdminCbtManager() {
 
       {/* MODAL 2: ANALYTICS & MARKSHEET SCORE SYNC */}
       {analyticsDistId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
-            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
-              <div className="flex items-center gap-2 font-black text-sm">
-                <BarChart3 size={18} className="text-amber-400" /> CBT Test Performance Analytics & Marksheet Sync
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-3 sm:p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setAnalyticsDistId(null)
+              setAnalyticsData(null)
+            }
+          }}
+        >
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* STICKY HEADER */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 font-black text-sm">
+                <BarChart3 size={18} className="text-amber-400" />
+                <span>CBT Test Performance Analytics & Marksheet Sync</span>
               </div>
               <button
-                onClick={() => { setAnalyticsDistId(null); setAnalyticsData(null) }}
-                className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setAnalyticsDistId(null)
+                  setAnalyticsData(null)
+                }}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Close Analytics (Esc)"
               >
-                <X size={18} />
+                <X size={15} />
+                <span>Close</span>
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            {/* SCROLLABLE BODY */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {loadingAnalytics ? (
                 <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-3">
                   <Loader2 className="animate-spin text-amber-500" size={32} />
@@ -1152,7 +1195,7 @@ export function AdminCbtManager() {
                   </div>
 
                   {analyticsData.pendingCount > 0 && (
-                    <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-sm font-bold text-slate-900">{analyticsData.pendingCount} student{analyticsData.pendingCount === 1 ? '' : 's'} have not submitted</h4>
                         <p className="text-xs text-slate-500 mt-0.5">Reschedule this same examination. Do not create a new test for missed sittings.</p>
@@ -1165,7 +1208,7 @@ export function AdminCbtManager() {
                           setAnalyticsData(null)
                           if (dist) openRescheduleDistribution(dist)
                         }}
-                        className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Calendar size={14} /> Change date/time
                       </button>
@@ -1185,20 +1228,48 @@ export function AdminCbtManager() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 text-xs">
-                          <span className="text-slate-500 font-bold text-[10px]">Max Scale:</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs shadow-xs">
+                          <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wide">Max Scale:</span>
                           <select
-                            value={maxScoreBase}
-                            onChange={(e) => setMaxScoreBase(Number(e.target.value))}
-                            className="font-bold text-slate-800 focus:outline-hidden"
+                            value={CBT_SCALE_PRESETS.some((p) => p.value === maxScoreBase) && !isCustomScale ? maxScoreBase : 'custom'}
+                            onChange={(e) => {
+                              if (e.target.value === 'custom') {
+                                setIsCustomScale(true)
+                              } else {
+                                setIsCustomScale(false)
+                                setMaxScoreBase(Number(e.target.value))
+                              }
+                            }}
+                            className="font-bold text-slate-800 focus:outline-hidden bg-transparent cursor-pointer"
                           >
-                            <option value={40}>40 Marks (Standard CBT/CA)</option>
-                            <option value={30}>30 Marks</option>
-                            <option value={20}>20 Marks</option>
+                            <option value={10}>10 Marks (Quiz / Micro-test)</option>
+                            <option value={15}>15 Marks (15 CBT + Theory)</option>
+                            <option value={20}>20 Marks (Standard Test / CA)</option>
+                            <option value={25}>25 Marks (Midterm / CA Component)</option>
+                            <option value={30}>30 Marks (30 Marks CA)</option>
+                            <option value={40}>40 Marks (Standard CBT / CA)</option>
+                            <option value={50}>50 Marks (Midterm / Exam)</option>
+                            <option value={60}>60 Marks (Exam Scale)</option>
+                            <option value={70}>70 Marks (Exam Scale)</option>
                             <option value={100}>100 Marks (Direct %)</option>
+                            <option value="custom">Custom Scale...</option>
                           </select>
                         </div>
+
+                        {isCustomScale && (
+                          <div className="flex items-center gap-1 bg-white px-2.5 py-1.5 rounded-xl border border-amber-300 text-xs shadow-xs animate-in fade-in">
+                            <span className="text-slate-500 font-bold text-[10px]">Marks:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={500}
+                              value={maxScoreBase}
+                              onChange={(e) => setMaxScoreBase(Math.max(1, Number(e.target.value)))}
+                              className="w-16 font-bold text-slate-800 text-xs focus:outline-hidden text-center"
+                            />
+                          </div>
+                        )}
 
                         <button
                           onClick={handleSyncMarks}
@@ -1256,7 +1327,15 @@ export function AdminCbtManager() {
                               </TableCell>
                               <TableCell className="text-xs">
                                 <div className="font-mono font-black text-slate-800">
-                                  {st.reportCbtMark != null && st.reportCbtMark !== '' ? st.reportCbtMark : '-'}
+                                  {st.reportCbtMark != null && st.reportCbtMark !== '' ? (
+                                    st.reportCbtMark
+                                  ) : st.isSubmitted && st.totalMark !== null ? (
+                                    <span className="text-slate-500 font-medium text-[11px]" title={`Projected: (${st.totalMark}% of ${maxScoreBase})`}>
+                                      {((Number(st.totalMark) / 100) * maxScoreBase).toFixed(1)} <span className="text-[10px] text-amber-600 font-semibold">(proj)</span>
+                                    </span>
+                                  ) : (
+                                    '-'
+                                  )}
                                 </div>
                                 {st.cbtSource === 'ADMIN_OVERRIDE' ? (
                                   <span className="text-[10px] font-bold text-amber-700">Admin corrected</span>
@@ -1333,6 +1412,31 @@ export function AdminCbtManager() {
                   </div>
                 </>
               ) : null}
+            </div>
+
+            {/* STICKY MODAL FOOTER WITH DEDICATED CLOSE BUTTON */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="text-xs text-slate-500 font-medium">
+                {analyticsData ? (
+                  <span>
+                    Current Scale: <strong className="text-slate-800 font-bold">{maxScoreBase} Marks</strong> · Submissions: <strong className="text-emerald-700 font-bold">{analyticsData.submittedCount}</strong> of <strong className="text-slate-800">{analyticsData.totalEnrolled}</strong>
+                  </span>
+                ) : (
+                  <span>Test Analytics</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAnalyticsDistId(null)
+                    setAnalyticsData(null)
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <X size={14} /> Close Analytics
+                </button>
+              </div>
             </div>
           </div>
         </div>

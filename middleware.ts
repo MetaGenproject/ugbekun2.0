@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
   const hostHeader = request.headers.get('host') || ''
   
   // Extract hostname without port
-  const hostname = hostHeader.split(':')[0].toLowerCase()
+  const rawHostname = hostHeader.split(':')[0].trim().toLowerCase()
 
   // Ignore static assets, next internal files, and api routes
   if (
@@ -32,18 +32,25 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Check if current hostname is a known apex platform domain
+  const isPlatformApex = PLATFORM_HOSTS.includes(rawHostname)
+
+  // Normalize host: if it is not a platform host and starts with 'www.', strip 'www.'
+  // so that www.school.com.ng and school.com.ng consistently match the tenant configuration.
+  const normalizedHostname = (!isPlatformApex && rawHostname.startsWith('www.'))
+    ? rawHostname.slice(4)
+    : rawHostname
+
   // Clone headers to inject tenant metadata
   const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-tenant-host', hostname)
-
-  // Check if current hostname is a known apex platform domain
-  const isPlatformApex = PLATFORM_HOSTS.includes(hostname)
+  requestHeaders.set('x-tenant-host', normalizedHostname)
+  requestHeaders.set('x-tenant-raw-host', rawHostname)
 
   // Check for platform subdomain (e.g. "uiss.ugbekun.edu.ng" or "uiss.localhost")
   let detectedSubdomain: string | null = null
   for (const apex of PLATFORM_HOSTS) {
-    if (hostname.endsWith(`.${apex}`)) {
-      const sub = hostname.slice(0, hostname.length - apex.length - 1)
+    if (normalizedHostname.endsWith(`.${apex}`)) {
+      const sub = normalizedHostname.slice(0, normalizedHostname.length - apex.length - 1)
       if (sub && sub !== 'www' && sub !== 'app' && sub !== 'api' && sub !== 'admin') {
         detectedSubdomain = sub
         break
@@ -63,7 +70,7 @@ export function middleware(request: NextRequest) {
     if (detectedSubdomain) {
       rewriteUrl.searchParams.set('subdomain', detectedSubdomain)
     } else if (isCustomDomain) {
-      rewriteUrl.searchParams.set('domain', hostname)
+      rewriteUrl.searchParams.set('domain', normalizedHostname)
     }
 
     return NextResponse.rewrite(rewriteUrl, {

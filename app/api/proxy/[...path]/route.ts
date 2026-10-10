@@ -88,7 +88,7 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
     }
 
     const responseContentType = response.headers.get('content-type') || ''
-    const issuesSession = /^(auth\/(login|register)|onboarding\/.*register)/i.test(path)
+    const issuesSession = /^(auth\/(login|register|refresh)|onboarding\/.*register)/i.test(path)
 
     if (responseContentType.includes('application/json')) {
       const jsonOrText = await response.json().catch(() => null)

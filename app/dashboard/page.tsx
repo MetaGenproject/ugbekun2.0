@@ -60,6 +60,8 @@ import { DefaultDashboard } from '@/components/dashboards/default/default-dashbo
 import { endAuthSession, getAuthSession, redirectExpiredSession, setAuthSession, type AuthUser } from '@/lib/authSession'
 import { safeStorage } from '@/lib/safeStorage'
 import { getAvatarUrl } from '@/lib/avatar'
+import { useInactivityTracker } from '@/lib/useInactivityTracker'
+import { InactivityWarningModal } from '@/components/shared/inactivity-warning-modal'
 
 // Role names mapping (verified against ugbekunc_Saas (2).sql)
 // Role 1 = 1 global user  → Superadmin / Master
@@ -212,6 +214,18 @@ export default function DashboardPage() {
   const [isOseModalOpen, setIsOseModalOpen] = useState(false)
   const [oseInput, setOseInput] = useState('')
   const [oseChatHistory, setOseChatHistory] = useState<Array<{ sender: 'ai' | 'user'; text: string }>>([])
+
+  // Smart Inactivity Management (30m idle limit, 5m warning countdown, sliding heartbeat renewal)
+  const {
+    isWarningVisible,
+    secondsRemaining,
+    extendSession,
+    handleManualLogout,
+  } = useInactivityTracker({
+    onTimeout: () => {
+      handleLogout()
+    },
+  })
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -791,6 +805,14 @@ export default function DashboardPage() {
 
       {/* Global Unified OSe AI Assistant */}
       <OSeAiAssistant isOpen={isOseModalOpen} onClose={() => setIsOseModalOpen(false)} />
+
+      {/* Smart Inactivity Timeout Warning Modal */}
+      <InactivityWarningModal
+        isOpen={isWarningVisible}
+        secondsRemaining={secondsRemaining}
+        onExtend={extendSession}
+        onLogout={handleManualLogout}
+      />
     </div>
   )
 }

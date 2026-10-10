@@ -89,7 +89,47 @@ export function clearAuthSession(): void {
   wipeLegacyTokenStorage()
 }
 
-let endingExpiredSession = false
+let refreshingSessionPromise: Promise<boolean> | null = null
+
+export async function refreshAuthSession(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  if (refreshingSessionPromise) return refreshingSessionPromise
+
+  refreshingSessionPromise = (async () => {
+    try {
+      const token = safeStorage.getItem('ugbekun_token') || safeStorage.getItem('token')
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        return false
+      }
+
+      const data = await res.json().catch(() => null)
+      if (data?.success && data?.user) {
+        setAuthSession(data.user, data.token || token)
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      refreshingSessionPromise = null
+    }
+  })()
+
+  return refreshingSessionPromise
+}
 
 export function isExpiredAuthMessage(status: number, message?: string | null) {
   if (status !== 401) return false
@@ -104,7 +144,9 @@ export function isExpiredAuthMessage(status: number, message?: string | null) {
   return true
 }
 
-export function redirectExpiredSession() {
+let endingExpiredSession = false
+
+export function redirectExpiredSession(reason: string = 'session') {
   if (typeof window === 'undefined' || endingExpiredSession) return
   const path = window.location.pathname || ''
   if (path.startsWith('/login') || path.startsWith('/onboarding')) return
@@ -115,7 +157,7 @@ export function redirectExpiredSession() {
 
   const next = `${path}${window.location.search || ''}`
   const params = new URLSearchParams()
-  params.set('reason', 'session')
+  params.set('reason', reason)
   if (next && next !== '/dashboard') params.set('next', next)
   window.location.replace(`/login?${params.toString()}`)
 }

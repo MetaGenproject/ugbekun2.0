@@ -87,6 +87,7 @@ import { StudentLiveClassrooms } from './student-live-classrooms'
 import PointsHub from './points-hub'
 import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
+import { safeStorage } from '@/lib/safeStorage'
 
 interface DashboardProps {
   user: {
@@ -575,6 +576,24 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     return () => clearInterval(interval)
   }, [activeCbtExam, timeRemaining])
 
+  // Synchronize CBT active status with global session manager & inactivity shield
+  useEffect(() => {
+    const isExam = Boolean(activeCbtExam)
+    if (typeof window !== 'undefined') {
+      (window as any).__ugbekun_cbt_active = isExam
+      window.dispatchEvent(new CustomEvent('ugbekun:cbt-active', { detail: { active: isExam } }))
+    }
+  }, [activeCbtExam])
+
+  // LocalStorage Auto-Checkpointing for CBT Answers
+  useEffect(() => {
+    if (!activeCbtExam || !user?.id) return
+    const checkpointKey = `ugbekun_cbt_checkpoint_${user.id}_${activeCbtExam.id}`
+    if (Object.keys(selectedAnswers).length > 0) {
+      safeStorage.setItem(checkpointKey, JSON.stringify(selectedAnswers))
+    }
+  }, [selectedAnswers, activeCbtExam, user?.id])
+
   const fetchCbtExams = async (targetSession?: string, targetExamType?: string) => {
     setLoadingCbtList(true)
     try {
@@ -620,9 +639,19 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     try {
       const res = await apiSlice.get<{ success: boolean; exam: any }>(endpoints.student.cbtTakeExam(examId))
       if (res.success && res.exam) {
+        // Restore checkpoint if student previously answered questions
+        let initialAnswers: Record<number, string> = {}
+        const checkpointKey = `ugbekun_cbt_checkpoint_${user?.id}_${res.exam.id}`
+        const saved = safeStorage.getItem(checkpointKey)
+        if (saved) {
+          try {
+            initialAnswers = JSON.parse(saved) || {}
+          } catch {}
+        }
+
         setActiveCbtExam(res.exam)
         setActiveQuestionIdx(0)
-        setSelectedAnswers({})
+        setSelectedAnswers(initialAnswers)
         setFlaggedQuestions(new Set())
         setTimeRemaining((res.exam.duration || 30) * 60)
       }
@@ -647,13 +676,15 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
       )
 
       if (res.success && res.result) {
+        const checkpointKey = `ugbekun_cbt_checkpoint_${user?.id}_${activeCbtExam.id}`
+        safeStorage.removeItem(checkpointKey)
         setCbtResultModal(res.result)
         setActiveCbtExam(null)
         setShowConfirmSubmit(false)
         fetchCbtExams()
       }
     } catch (err: any) {
-      alert(err?.message || 'Failed to submit CBT examination.')
+      alert(err?.message || 'Failed to submit CBT examination. Your answers are saved locally; please check your connection and retry.')
     } finally {
       setIsSubmittingExam(false)
     }
