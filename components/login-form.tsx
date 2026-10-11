@@ -39,11 +39,21 @@ export function LoginForm() {
   useEffect(() => {
     const fetchBranding = async () => {
       try {
-        const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
         const host = typeof window !== 'undefined' ? window.location.hostname : ''
-        const res = await fetch(`${backendUrl}/api/public/tenant/branding?domain=${host}`)
-        const json = await res.json()
-        if (json.success && json.data?.isCustomDomain) {
+        let json: any = null
+
+        try {
+          const proxyRes = await fetch(`/api/proxy/public/tenant/branding?domain=${encodeURIComponent(host)}`)
+          if (proxyRes.ok) json = await proxyRes.json().catch(() => null)
+        } catch {}
+
+        if (!json || !json.success) {
+          const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.ugbekun.com').replace(/\/api\/?$/, '')
+          const res = await fetch(`${backendUrl}/api/public/tenant/branding?domain=${encodeURIComponent(host)}`)
+          json = await res.json()
+        }
+
+        if (json?.success && json.data?.isCustomDomain) {
           setTenantBranding(json.data)
         }
       } catch {

@@ -20,7 +20,6 @@ function TenantHomeContent() {
     setError(null)
 
     try {
-      const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
       const query = new URLSearchParams()
       if (domainParam) query.set('domain', domainParam)
       if (subdomainParam) query.set('subdomain', subdomainParam)
@@ -32,13 +31,29 @@ function TenantHomeContent() {
         query.set('domain', host)
       }
 
-      const res = await fetch(`${backendUrl}/api/public/tenant/homepage?${query.toString()}`)
-      const json = await res.json()
+      let json: any = null
 
-      if (json.success && json.data) {
+      // 1. Try same-origin Next.js proxy route first (bypasses browser CORS and mixed-content blocks)
+      try {
+        const proxyRes = await fetch(`/api/proxy/public/tenant/homepage?${query.toString()}`)
+        if (proxyRes.ok) {
+          json = await proxyRes.json().catch(() => null)
+        }
+      } catch {
+        // Fall back to direct backend URL if proxy is unavailable
+      }
+
+      // 2. Fallback to direct backend URL if proxy did not return valid data
+      if (!json || !json.success) {
+        const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.ugbekun.com').replace(/\/api\/?$/, '')
+        const directRes = await fetch(`${backendUrl}/api/public/tenant/homepage?${query.toString()}`)
+        json = await directRes.json()
+      }
+
+      if (json && json.success && json.data) {
         setHomepageData(json.data)
       } else {
-        throw new Error(json.message || 'Failed to load school homepage.')
+        throw new Error(json?.message || 'Failed to load school homepage.')
       }
     } catch (err: any) {
       console.error('[TENANT HOME] Fetch error:', err)

@@ -27,10 +27,21 @@ export function SchoolSelector() {
     async function loadLiveSchools() {
       setIsLoading(true)
       try {
-        const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001').replace(/\/api\/?$/, '')
-        const res = await fetch(`${backendUrl}/api/public/tenant/schools${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`)
-        const json = await res.json()
-        if (!isCancelled && json.success && Array.isArray(json.data)) {
+        let json: any = null
+        const searchPath = `/api/proxy/public/tenant/schools${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`
+
+        try {
+          const proxyRes = await fetch(searchPath)
+          if (proxyRes.ok) json = await proxyRes.json().catch(() => null)
+        } catch {}
+
+        if (!json || !json.success) {
+          const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.ugbekun.com').replace(/\/api\/?$/, '')
+          const res = await fetch(`${backendUrl}/api/public/tenant/schools${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`)
+          json = await res.json()
+        }
+
+        if (!isCancelled && json?.success && Array.isArray(json.data)) {
           setSchools(json.data)
           if (json.data.length > 0 && !selectedSchoolId) {
             setSelectedSchoolId(json.data[0].id)

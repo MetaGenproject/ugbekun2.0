@@ -1,7 +1,7 @@
 export const AUTH_COOKIE_NAME = 'ugbekun_token'
 export const AUTH_COOKIE_MAX_AGE_SEC = 60 * 60 * 8
 
-const PRODUCTION_BACKEND = 'https://ugbekunsmp-backend.onrender.com'
+const PRODUCTION_BACKEND = 'https://api.ugbekun.com'
 
 export function getBackendUrl(): string {
   const configured = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL
