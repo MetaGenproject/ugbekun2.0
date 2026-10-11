@@ -79,6 +79,9 @@ export function setAuthSession(user: AuthUser, token?: string | null): void {
     safeStorage.setItem('token', token)
   }
   safeStorage.setItem('ugbekun_user', JSON.stringify(user))
+  safeStorage.setItem('ugbekun_last_active_time', String(Date.now()))
+  safeStorage.removeItem('ugbekun_admin_impersonated_teacher_id')
+  safeStorage.removeItem('ugbekun_admin_branch_id')
 }
 
 export function clearAuthSession(): void {
@@ -86,6 +89,9 @@ export function clearAuthSession(): void {
   safeStorage.removeItem('ugbekun_token')
   safeStorage.removeItem('token')
   safeStorage.removeItem('ugbekun_user')
+  safeStorage.removeItem('ugbekun_last_active_time')
+  safeStorage.removeItem('ugbekun_admin_impersonated_teacher_id')
+  safeStorage.removeItem('ugbekun_admin_branch_id')
   wipeLegacyTokenStorage()
 }
 

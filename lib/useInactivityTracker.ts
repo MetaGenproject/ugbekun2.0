@@ -103,10 +103,9 @@ export function useInactivityTracker({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Initialize timestamp on mount if not set
-    if (!safeStorage.getItem(STORAGE_KEY)) {
-      safeStorage.setItem(STORAGE_KEY, String(Date.now()))
-    }
+    // Always reset activity timer to Date.now() when tracker mounts to avoid stale timeouts
+    safeStorage.setItem(STORAGE_KEY, String(Date.now()))
+    lastThrottleRef.current = Date.now()
 
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click']
     const handleEvent = () => recordActivity()

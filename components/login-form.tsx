@@ -28,7 +28,8 @@ export function LoginForm() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (params.get('reason') === 'session') setSessionEnded(true)
+    const reason = params.get('reason')
+    if (reason === 'session' || reason === 'idle_timeout' || reason === 'manual') setSessionEnded(true)
     const next = params.get('next') || ''
     if (next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login')) {
       setPostLoginPath(next)

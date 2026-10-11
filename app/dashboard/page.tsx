@@ -223,7 +223,7 @@ export default function DashboardPage() {
     handleManualLogout,
   } = useInactivityTracker({
     onTimeout: () => {
-      handleLogout()
+      redirectExpiredSession('idle_timeout')
     },
   })
 
