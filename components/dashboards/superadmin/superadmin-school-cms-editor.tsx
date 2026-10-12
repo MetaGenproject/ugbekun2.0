@@ -28,7 +28,7 @@ import {
   Layers
 } from 'lucide-react'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
-import { BASE_URL } from '@/lib/apiSlice'
+import { apiSlice, endpoints } from '@/lib/apiSlice'
 
 interface BranchOption {
   id: number
@@ -60,13 +60,10 @@ export function SuperadminSchoolCmsEditor() {
     const fetchBranches = async () => {
       setLoadingBranches(true)
       try {
-        const res = await fetch(`${BASE_URL}/superadmin/branches`, {
-          credentials: 'include',
-        })
-        const json = await res.json()
+        const json = await apiSlice.get<{ success: boolean; data: BranchOption[] }>(endpoints.superadmin.branches)
         if (json.success && Array.isArray(json.data)) {
           setBranches(json.data)
-          if (json.data.length > 0) {
+          if (json.data.length > 0 && !selectedBranchId) {
             setSelectedBranchId(json.data[0].id)
           }
         }
@@ -88,14 +85,13 @@ export function SuperadminSchoolCmsEditor() {
       setLoadingCms(true)
       setErrorMessage('')
       try {
-        const res = await fetch(`${BASE_URL}/superadmin/branches/${selectedBranchId}/landing-page`, {
-          credentials: 'include',
-        })
-        const json = await res.json()
+        const json = await apiSlice.get<{ success: boolean; data: SchoolHomepageData }>(
+          endpoints.superadmin.branchLandingPage(selectedBranchId)
+        )
         if (json.success && json.data) {
           setCmsData(json.data)
         } else {
-          throw new Error(json.message || 'Failed to load landing page data.')
+          throw new Error('Failed to load landing page data.')
         }
       } catch (err: any) {
         setErrorMessage(err.message || 'Error loading CMS data.')
@@ -115,39 +111,36 @@ export function SuperadminSchoolCmsEditor() {
     setErrorMessage('')
 
     try {
-      const res = await fetch(`${BASE_URL}/superadmin/branches/${selectedBranchId}/landing-page`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          isEnabled: cmsData.isEnabled,
-          heroHeadline: cmsData.heroHeadline,
-          heroSubheadline: cmsData.heroSubheadline,
-          heroBanners: cmsData.heroBanners,
-          welcomeTitle: cmsData.welcomeTitle,
-          welcomeMessage: cmsData.welcomeMessage,
-          welcomeAuthor: cmsData.welcomeAuthor,
-          welcomePhoto: cmsData.welcomePhoto,
-          aboutText: cmsData.aboutText,
-          photoGallery: cmsData.photoGallery,
-          academicPrograms: cmsData.academicPrograms,
-          announcements: cmsData.announcements,
-          primaryColor: cmsData.primaryColor,
-          secondaryColor: cmsData.secondaryColor,
-          showAdmissionCta: cmsData.showAdmissionCta,
-          showPortalLoginCta: cmsData.showPortalLoginCta,
-          showGallery: cmsData.showGallery,
-          showAnnouncements: cmsData.showAnnouncements,
-          facebookUrl: cmsData.socials?.facebook,
-          instagramUrl: cmsData.socials?.instagram,
-          youtubeUrl: cmsData.socials?.youtube,
-          twitterUrl: cmsData.socials?.twitter
-        })
-      })
+      const payload = {
+        isEnabled: cmsData.isEnabled,
+        heroHeadline: cmsData.heroHeadline,
+        heroSubheadline: cmsData.heroSubheadline,
+        heroBanners: cmsData.heroBanners,
+        welcomeTitle: cmsData.welcomeTitle,
+        welcomeMessage: cmsData.welcomeMessage,
+        welcomeAuthor: cmsData.welcomeAuthor,
+        welcomePhoto: cmsData.welcomePhoto,
+        aboutText: cmsData.aboutText,
+        photoGallery: cmsData.photoGallery,
+        academicPrograms: cmsData.academicPrograms,
+        announcements: cmsData.announcements,
+        primaryColor: cmsData.primaryColor,
+        secondaryColor: cmsData.secondaryColor,
+        showAdmissionCta: cmsData.showAdmissionCta,
+        showPortalLoginCta: cmsData.showPortalLoginCta,
+        showGallery: cmsData.showGallery,
+        showAnnouncements: cmsData.showAnnouncements,
+        facebookUrl: cmsData.socials?.facebook,
+        instagramUrl: cmsData.socials?.instagram,
+        youtubeUrl: cmsData.socials?.youtube,
+        twitterUrl: cmsData.socials?.twitter,
+      }
 
-      const json = await res.json()
+      const json = await apiSlice.put<{ success: boolean; message?: string; data?: SchoolHomepageData }>(
+        endpoints.superadmin.branchLandingPage(selectedBranchId),
+        payload
+      )
+
       if (json.success) {
         setSuccessMessage('School Landing Page published and synchronized live!')
         if (json.data) {
@@ -297,6 +290,26 @@ export function SuperadminSchoolCmsEditor() {
             </select>
             <ChevronDown size={18} className="absolute right-3 top-3 text-slate-400 pointer-events-none" />
           </div>
+
+          {/* View Live Website Link */}
+          {selectedBranchId && (
+            <a
+              href={
+                (() => {
+                  const b = branches.find((item) => item.id === selectedBranchId)
+                  if (b?.customDomain) return `https://${b.customDomain}`
+                  if (b?.subdomain) return `https://${b.subdomain}.ugbekun.edu.ng`
+                  return `/tenant-home?branchId=${selectedBranchId}`
+                })()
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold bg-slate-800 text-cyan-400 hover:bg-slate-700 border border-slate-700 shadow transition-all cursor-pointer"
+            >
+              <ExternalLink size={14} />
+              <span>View Live Website</span>
+            </a>
+          )}
 
           {/* Save / Publish Button */}
           <button

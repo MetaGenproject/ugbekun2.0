@@ -322,12 +322,12 @@ interface DashboardOverviewData {
 }
 
 interface TeacherContact {
-  id: number
+  id?: number
   name: string
   email: string | null
   phone: string | null
-  photo: string | null
-  department: string | null
+  photo?: string | null
+  department?: string | null
   role?: string
   subjects?: Array<{ id: number; name: string; code: string }>
 }
@@ -1694,7 +1694,7 @@ function normalizeQuestions(raw: any): any[] {
 
                   <button
                     onClick={() => {
-                      setSelectedRecipientId(st.id)
+                      setSelectedRecipientId(st.id ?? null)
                       setRecipientRole('TEACHER')
                       setRecipientName(`${st.name} (Subject Teacher)`)
                       setShowMsgModal(true)

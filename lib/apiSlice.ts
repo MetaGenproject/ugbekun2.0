@@ -50,6 +50,8 @@ export const endpoints = {
     branches: `${BASE_URL}/superadmin/branches`,
     addBranch: `${BASE_URL}/superadmin/branches`,
     branch: (id: number) => `${BASE_URL}/superadmin/branches/${id}`,
+    branchLandingPage: (branchId: number | string) => `${BASE_URL}/superadmin/branches/${branchId}/landing-page`,
+    uploadLandingPageMedia: (branchId: number | string) => `${BASE_URL}/superadmin/branches/${branchId}/landing-page/upload-media`,
     exportCsv: `${BASE_URL}/superadmin/branches/export.csv`,
     exportPdf: `${BASE_URL}/superadmin/branches/export.pdf`,
     sessions: `${BASE_URL}/superadmin/sessions`,

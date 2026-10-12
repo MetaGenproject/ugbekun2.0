@@ -122,6 +122,8 @@ interface PendingStudent {
     currentAddress: string
     previousDetails: string
     photoBase64?: string
+    username?: string
+    password?: string
     birthCertBase64?: string
     reportCardBase64?: string
     medicalReportBase64?: string
