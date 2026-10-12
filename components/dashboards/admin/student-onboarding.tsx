@@ -718,6 +718,8 @@ export function StudentOnboarding() {
     birthCertBase64: '',
     reportCardBase64: '',
     medicalReportBase64: '',
+    username: '',
+    password: '',
   })
 
   const [parentForm, setParentForm] = useState({
@@ -1233,6 +1235,8 @@ export function StudentOnboarding() {
           sectionId: String(effectiveSectionId),
           firstName: sName,
           lastName: sLastName,
+          username: studentForm.username?.trim() || undefined,
+          password: studentForm.password?.trim() || undefined,
         },
         parent: {
           ...parentForm,
@@ -1372,6 +1376,8 @@ export function StudentOnboarding() {
       birthCertBase64: '',
       reportCardBase64: '',
       medicalReportBase64: '',
+      username: '',
+      password: '',
     }))
     handleClearExistingParent()
     setActiveStep(1)
@@ -1400,6 +1406,8 @@ export function StudentOnboarding() {
       birthCertBase64: '',
       reportCardBase64: '',
       medicalReportBase64: '',
+      username: '',
+      password: '',
     })
     handleClearExistingParent()
     setParseSuccessMsg('')
@@ -2246,6 +2254,41 @@ export function StudentOnboarding() {
                         onChange={e => setStudentForm({ ...studentForm, previousDetails: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 h-16 resize-none"
                       />
+                    </div>
+                  </div>
+
+                  {/* Student Portal Login Details (Optional) */}
+                  <div className="p-4 rounded-xl border border-blue-200/80 bg-blue-50/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                        <Key size={14} className="text-blue-600" /> Student Portal Login Credentials (Optional)
+                      </h4>
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Customizable</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Specify a custom username and password for this student, or leave blank to automatically generate from the student's name with default password (<code className="font-mono text-blue-800">student123</code>).
+                    </p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Custom Username</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. chidinma.adeleke or chidinma2026"
+                          value={studentForm.username}
+                          onChange={e => setStudentForm({ ...studentForm, username: e.target.value })}
+                          className="w-full text-xs font-mono px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Custom Password</label>
+                        <input
+                          type="text"
+                          placeholder="Defaults to student123 if left blank"
+                          value={studentForm.password}
+                          onChange={e => setStudentForm({ ...studentForm, password: e.target.value })}
+                          className="w-full text-xs font-mono px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-white"
+                        />
+                      </div>
                     </div>
                   </div>
 

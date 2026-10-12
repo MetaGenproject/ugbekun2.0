@@ -68,6 +68,8 @@ interface ClassData {
 
 interface Student {
   id: number
+  userId?: number | null
+  username?: string | null
   registerNo: string | null
   firstName: string | null
   lastName: string | null
@@ -935,7 +937,7 @@ export function ClassroomStudents() {
                                     <Camera size={13} /> Photo
                                   </button>
                                   <button
-                                    onClick={() => setManageUserCredentials({ userId: (student as any).userId || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
+                                    onClick={() => setManageUserCredentials({ userId: student.userId || (student as any).user?.id || student.id, name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student', role: 'Student' })}
                                     className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
                                     title="View / Reset Password"
                                   >

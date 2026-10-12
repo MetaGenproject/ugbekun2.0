@@ -698,65 +698,79 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
         setLoading(true)
         setError(null)
 
-        // 1. Fetch Aggregated Dashboard Overview (Real DB averages, Timetable, Fees)
+        // 1. Fetch Aggregated Dashboard Overview (Single round-trip with real DB averages, Timetable, Fees, Profile)
         const overviewRes = await apiSlice.get<{ success: boolean } & DashboardOverviewData>(endpoints.student.dashboardOverview).catch(() => null)
         if (!active) return
 
         if (overviewRes && overviewRes.success) {
           setDashboardOverview(overviewRes)
+
+          // Immediately hydrate profile, form teacher and subject teachers from overview
+          if (overviewRes.profile) {
+            setProfile(overviewRes.profile)
+            if (overviewRes.profile.username) setNewUsername(overviewRes.profile.username)
+            if (overviewRes.profile.formTeacher) setFormTeacher(overviewRes.profile.formTeacher)
+            if (Array.isArray(overviewRes.profile.subjects) && overviewRes.profile.subjects.length > 0) {
+              const tMap = new Map<number, TeacherContact>()
+              overviewRes.profile.subjects.forEach((s) => {
+                if (s.teacher && !tMap.has(s.teacher.id)) {
+                  tMap.set(s.teacher.id, s.teacher)
+                }
+              })
+              setSubjectTeachers(Array.from(tMap.values()))
+            }
+          }
+
+          if (overviewRes.attendance) {
+            setAttendance(overviewRes.attendance)
+          }
+
+          // FAST TIME-TO-INTERACTIVE: Dismiss blocking spinner immediately once primary overview is loaded!
+          setLoading(false)
         }
 
-        // 2. Fetch Profile
-        const profileRes = await apiSlice.get<{ success: boolean } & StudentProfile>(endpoints.student.profile).catch(() => null)
-        if (!active) return
-
-        if (profileRes?.success) {
-          setProfile(profileRes)
-          if (profileRes.username) setNewUsername(profileRes.username)
-        } else if (overviewRes?.profile) {
-          setProfile(overviewRes.profile)
-          if (overviewRes.profile.username) setNewUsername(overviewRes.profile.username)
-        } else {
-          throw new Error('Failed to load student profile.')
-        }
-
-        // 3. Fetch Attendance
-        const attendanceRes = await apiSlice.get<{ success: boolean } & AttendanceData>(endpoints.student.attendance).catch(() => null)
-        if (attendanceRes?.success) setAttendance(attendanceRes)
-
-        // 4. Fetch Tasks
-        const tasksRes = await apiSlice.get<{ success: boolean } & TaskData>(endpoints.student.tasks).catch(() => null)
-        if (tasksRes?.success) setTasks(tasksRes)
-
-        // 5. Fetch Grades & Full Report Cards
-        const gradesRes = await apiSlice.get<{ success: boolean } & GradeData>(endpoints.student.grades).catch(() => null)
-        if (gradesRes?.success) setGrades(gradesRes)
-
-        // 6. Fetch Reminders / Study Checklist
-        const remindersRes = await apiSlice.get<{ success: boolean; reminders: any[] }>(endpoints.student.reminders).catch(() => null)
-        if (remindersRes?.success) setRemindersList(remindersRes.reminders || [])
-
-        // 7. Fetch CBT Exams (filtered to current session 2026-2027 by default)
-        const cbtRes = await apiSlice.get<{
-          success: boolean
-          currentSession?: string
-          availableSessions?: string[]
-          availableExamTypes?: string[]
-          exams: any[]
-        }>(endpoints.student.cbtActiveExams('session=2026-2027')).catch(() => null)
-        if (cbtRes?.success && cbtRes.exams) {
-          setCbtExamsList(cbtRes.exams)
-          if (cbtRes.currentSession) {
-            setCbtCurrentSession(cbtRes.currentSession)
-            setCbtSelectedSession(cbtRes.currentSession)
-          }
-          if (Array.isArray(cbtRes.availableSessions) && cbtRes.availableSessions.length > 0) {
-            setCbtAvailableSessions(cbtRes.availableSessions)
-          }
-          if (Array.isArray(cbtRes.availableExamTypes) && cbtRes.availableExamTypes.length > 0) {
-            setCbtAvailableExamTypes(cbtRes.availableExamTypes)
-          }
-        }
+        // 2. Fetch Secondary Datasets Concurrently in the Background via Promise.allSettled
+        Promise.allSettled([
+          apiSlice.get<{ success: boolean } & StudentProfile>(endpoints.student.profile).then((profileRes) => {
+            if (!active) return
+            if (profileRes?.success) {
+              setProfile(profileRes)
+              if (profileRes.username) setNewUsername(profileRes.username)
+            }
+          }),
+          apiSlice.get<{ success: boolean } & TaskData>(endpoints.student.tasks).then((tasksRes) => {
+            if (active && tasksRes?.success) setTasks(tasksRes)
+          }),
+          apiSlice.get<{ success: boolean } & GradeData>(endpoints.student.grades).then((gradesRes) => {
+            if (active && gradesRes?.success) setGrades(gradesRes)
+          }),
+          apiSlice.get<{ success: boolean; reminders: any[] }>(endpoints.student.reminders).then((remindersRes) => {
+            if (active && remindersRes?.success) setRemindersList(remindersRes.reminders || [])
+          }),
+          apiSlice.get<{
+            success: boolean
+            currentSession?: string
+            availableSessions?: string[]
+            availableExamTypes?: string[]
+            exams: any[]
+          }>(endpoints.student.cbtActiveExams('session=2026-2027')).then((cbtRes) => {
+            if (active && cbtRes?.success && cbtRes.exams) {
+              setCbtExamsList(cbtRes.exams)
+              if (cbtRes.currentSession) {
+                setCbtCurrentSession(cbtRes.currentSession)
+                setCbtSelectedSession(cbtRes.currentSession)
+              }
+              if (Array.isArray(cbtRes.availableSessions) && cbtRes.availableSessions.length > 0) {
+                setCbtAvailableSessions(cbtRes.availableSessions)
+              }
+              if (Array.isArray(cbtRes.availableExamTypes) && cbtRes.availableExamTypes.length > 0) {
+                setCbtAvailableExamTypes(cbtRes.availableExamTypes)
+              }
+            }
+          }),
+        ]).catch(() => {
+          // Non-blocking
+        })
 
       } catch (err: any) {
         if (active) {
@@ -774,12 +788,18 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     }
   }, [user])
 
-  // Sub-view data fetchers
+  // Sub-view data fetchers with in-memory memoization (Instant 0ms tab navigation)
   useEffect(() => {
     if (activeSection === 'academics' || activeSection === 'teachers') {
+      // If teachers and subjects are already hydrated from overview, avoid showing blocking loaders
+      if (subjectTeachers.length > 0 && formTeacher) {
+        return
+      }
       async function fetchTeachers() {
         try {
-          setLoadingTeachers(true)
+          if (subjectTeachers.length === 0 && !formTeacher) {
+            setLoadingTeachers(true)
+          }
           const res = await apiSlice.get<{ success: boolean; formTeacher: TeacherContact | null; subjectTeachers: TeacherContact[] }>(endpoints.student.teachers)
           if (res.success) {
             setFormTeacher(res.formTeacher)
@@ -795,6 +815,9 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     }
 
     if (activeSection === 'school-fees' || activeSection === 'finances' || activeSection === 'billing') {
+      if (invoices.length > 0) {
+        return
+      }
       async function fetchInvoices() {
         try {
           setLoadingInvoices(true)
@@ -823,6 +846,9 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     }
 
     if (activeSection === 'timetable') {
+      if (timetableSlots.length > 0) {
+        return
+      }
       async function fetchTimetable() {
         try {
           setLoadingTimetable(true)
@@ -841,6 +867,9 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
     }
 
     if (activeSection === 'communication' || activeSection === 'messages') {
+      if (studentMessages.length > 0) {
+        return
+      }
       async function fetchMessages() {
         try {
           const res = await apiSlice.get<{ success: boolean; messages: any[] }>(endpoints.student.messages)

@@ -312,7 +312,7 @@ export const endpoints = {
     libraryIssues: `${BASE_URL}/admin/library/issues`,
     returnLibraryBook: (id: number) => `${BASE_URL}/admin/library/issues/${id}/return`,
     deleteLibraryResource: (id: number) => `${BASE_URL}/admin/library/resources/${id}`,
-    userCredentials: (userId: number) => `${BASE_URL}/admin/users/${userId}/credentials`,
+    userCredentials: (userId: number, role?: string) => `${BASE_URL}/admin/users/${userId}/credentials${role ? `?role=${encodeURIComponent(role)}` : ''}`,
     resetUserPassword: (userId: number) => `${BASE_URL}/admin/users/${userId}/reset-password`,
     feeGroups: `${BASE_URL}/admin/finances/fee-groups`,
     feeGroupItem: (id: number) => `${BASE_URL}/admin/finances/fee-groups/${id}`,

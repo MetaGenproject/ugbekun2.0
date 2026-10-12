@@ -194,7 +194,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
 
             {data.showAdmissionCta && (
               <Link
-                href="/subscribe"
+                href="/admissions"
                 className="inline-flex items-center space-x-2 px-5 py-2 rounded-xl text-sm font-bold text-white shadow-lg transition-all hover:scale-105"
                 style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
               >
@@ -241,7 +241,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
 
                 <div className="flex flex-wrap items-center gap-4">
                   <Link
-                    href={banner.ctaLink || '/subscribe'}
+                    href={banner.ctaLink || '/admissions'}
                     className="inline-flex items-center space-x-3 px-7 py-3.5 rounded-2xl text-base font-bold text-white shadow-xl hover:scale-105 transition-all"
                     style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
                   >
@@ -608,7 +608,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
 
                 <div className="flex flex-wrap items-center justify-center gap-4">
                   <Link
-                    href="/subscribe"
+                    href="/admissions"
                     className="inline-flex items-center space-x-3 px-8 py-4 rounded-2xl text-base font-bold bg-white text-slate-950 hover:bg-slate-100 shadow-2xl transition-all hover:scale-105"
                   >
                     <span>Start Online Admission</span>
@@ -684,7 +684,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
                 <li><a href="#about" className="hover:text-white transition-colors">About Our School</a></li>
                 <li><a href="#academics" className="hover:text-white transition-colors">Academic Programs</a></li>
                 <li><a href="#gallery" className="hover:text-white transition-colors">Campus Photo Gallery</a></li>
-                <li><Link href="/subscribe" className="hover:text-white transition-colors">Online Admission</Link></li>
+                <li><Link href="/admissions" className="hover:text-white transition-colors">Online Admission</Link></li>
                 <li><Link href="/login" className="hover:text-white transition-colors">Student & Staff Portal</Link></li>
               </ul>
             </div>
@@ -716,7 +716,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
             <div className="flex items-center space-x-4">
               <Link href="/login" className="hover:text-slate-300">Staff Portal</Link>
               <span>•</span>
-              <Link href="/subscribe" className="hover:text-slate-300">Admissions</Link>
+              <Link href="/admissions" className="hover:text-slate-300">Admissions</Link>
               <span>•</span>
               <a href="#contact" className="hover:text-slate-300">Privacy Policy</a>
             </div>
