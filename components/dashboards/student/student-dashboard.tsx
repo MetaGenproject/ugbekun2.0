@@ -238,6 +238,7 @@ interface GradeData {
     subjectName: string
     subjectCode: string
     cbtMark?: string | null
+    cbtScale?: number | null
     theoryMark?: string | null
     mark: string | null
     absent: boolean
@@ -1909,9 +1910,9 @@ function normalizeQuestions(raw: any): any[] {
                           <span className="text-[10px] text-slate-400 font-mono">{item.subjectCode}</span>
                         </td>
                         <td className="p-4 font-medium text-slate-700">{item.examName}</td>
-                        <td className="p-4 font-mono font-semibold">{item.cbtMark ? `${item.cbtMark} / 40` : '-'}</td>
-                        <td className="p-4 font-mono font-semibold">{item.theoryMark ? `${item.theoryMark} / 60` : '-'}</td>
-                        <td className="p-4 font-black text-slate-900 text-sm">{item.mark !== null ? `${item.mark}%` : 'N/A'}</td>
+                        <td className="p-4 font-mono font-semibold">{item.cbtMark ? (item.cbtScale ? `${item.cbtMark} / ${item.cbtScale}` : item.cbtMark) : '-'}</td>
+                        <td className="p-4 font-mono font-semibold">{item.theoryMark ? item.theoryMark : '-'}</td>
+                        <td className="p-4 font-black text-slate-900 text-sm">{item.mark !== null ? item.mark : 'N/A'}</td>
                         <td className="p-4 font-mono text-slate-500">{item.classAverage}%</td>
                         <td className="p-4">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${gradeInfo.bg} ${gradeInfo.color}`}>
