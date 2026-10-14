@@ -118,6 +118,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'Dashboard', icon: LayoutGrid, hasSub: false },
         { id: 'classrooms', label: 'Campus & Students', icon: Building2, hasSub: true },
+        { id: 'promotions', label: 'Student Promotions', icon: TrendingUp, hasSub: false },
         { id: 'staff', label: 'Staff Directory', icon: UserCheck, hasSub: true },
         { id: 'departments', label: 'Departments', icon: Building2, hasSub: true },
         { id: 'parents', label: 'Parents & Guardians', icon: Users, hasSub: true },

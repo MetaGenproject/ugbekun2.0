@@ -224,8 +224,14 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
   // User credentials modal state
   const [manageUserCredentials, setManageUserCredentials] = useState<{ userId: number; name: string; role: string } | null>(null)
 
-  // Student promotion trigger state
-  const [promotingStudent, setPromotingStudent] = useState<{ id: number; name: string; currentClass: string } | null>(null)
+  // Student promotion trigger state (single or batch)
+  const [promotingStudent, setPromotingStudent] = useState<{
+    id?: number
+    name?: string
+    currentClass?: string
+    students?: Array<{ id: number; name: string; currentClass?: string }>
+  } | null>(null)
+  const [selectedDashboardStudentIds, setSelectedDashboardStudentIds] = useState<number[]>([])
 
   // Teacher management modal states
   const [isOnboardOpen, setIsOnboardOpen] = useState(false)
@@ -415,7 +421,51 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
         </div>
 
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm overflow-hidden">
-          <h3 className="text-base font-extrabold text-slate-900 px-2 py-2">Students</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-2 py-2 border-b border-slate-100 mb-2">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Students Directory (Quick List)</h3>
+              <p className="text-xs text-slate-400 font-semibold">Manage students, quick promotions, or launch cohort batch promotions.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedDashboardStudentIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selectedList = students
+                      .filter((s) => selectedDashboardStudentIds.includes(s.id))
+                      .map((s) => ({
+                        id: s.id,
+                        name: `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student',
+                        currentClass: s.className || 'Unassigned',
+                      }))
+                    setPromotingStudent({
+                      students: selectedList,
+                      currentClass: selectedList[0]?.currentClass,
+                    })
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs"
+                >
+                  <TrendingUp size={13} /> Batch Promote ({selectedDashboardStudentIds.length})
+                </button>
+              )}
+              {selectedDashboardStudentIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDashboardStudentIds([])}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onNavigate?.('promotions')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs transition cursor-pointer"
+              >
+                <TrendingUp size={13} /> Full Promotions Desk →
+              </button>
+            </div>
+          </div>
           {isLoadingList ? (
             <div className="p-8 text-center text-slate-500">Loading students...</div>
           ) : students.length === 0 ? (
@@ -424,6 +474,21 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      checked={students.length > 0 && selectedDashboardStudentIds.length === students.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDashboardStudentIds(students.map((s) => s.id))
+                        } else {
+                          setSelectedDashboardStudentIds([])
+                        }
+                      }}
+                      className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                      title="Select / Deselect All Students"
+                    />
+                  </TableHead>
                   <TableHead>Reg. No</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Class</TableHead>
@@ -435,47 +500,64 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell>{student.registerNo || '—'}</TableCell>
-                    <TableCell className="font-bold">{[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}</TableCell>
-                    <TableCell>
-                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase">
-                        {student.className || 'Unassigned'}
-                      </span>
-                    </TableCell>
-                    <TableCell>{student.gender || '—'}</TableCell>
-                    <TableCell>{student.parentName || '—'}</TableCell>
-                    <TableCell>{student.mobileno || '—'}</TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleStudentStatus(student.id)}
-                        disabled={togglingStatusId === student.id}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
-                          student.active !== false
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                        }`}
-                        title={student.active !== false ? "Click to suspend student" : "Click to activate student"}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        {student.active !== false ? 'Active' : 'Suspended'}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        onClick={() => setPromotingStudent({
-                          id: student.id,
-                          name: `${student.firstName} ${student.lastName}`,
-                          currentClass: student.className || 'Unassigned'
-                        })}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold text-xs transition cursor-pointer"
-                      >
-                        <TrendingUp size={12} /> Promote
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {students.map((student) => {
+                  const isChecked = selectedDashboardStudentIds.includes(student.id)
+                  return (
+                    <TableRow key={student.id} className={isChecked ? 'bg-indigo-50/40' : undefined}>
+                      <TableCell className="w-10">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDashboardStudentIds((prev) => [...prev, student.id])
+                            } else {
+                              setSelectedDashboardStudentIds((prev) => prev.filter((id) => id !== student.id))
+                            }
+                          }}
+                          className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                        />
+                      </TableCell>
+                      <TableCell>{student.registerNo || '—'}</TableCell>
+                      <TableCell className="font-bold">{[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}</TableCell>
+                      <TableCell>
+                        <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase">
+                          {student.className || 'Unassigned'}
+                        </span>
+                      </TableCell>
+                      <TableCell>{student.gender || '—'}</TableCell>
+                      <TableCell>{student.parentName || '—'}</TableCell>
+                      <TableCell>{student.mobileno || '—'}</TableCell>
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleStudentStatus(student.id)}
+                          disabled={togglingStatusId === student.id}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer select-none ${
+                            student.active !== false
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+                          }`}
+                          title={student.active !== false ? "Click to suspend student" : "Click to activate student"}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${student.active !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          {student.active !== false ? 'Active' : 'Suspended'}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <button
+                          onClick={() => setPromotingStudent({
+                            id: student.id,
+                            name: `${student.firstName} ${student.lastName}`,
+                            currentClass: student.className || 'Unassigned',
+                          })}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold text-xs transition cursor-pointer"
+                        >
+                          <TrendingUp size={12} /> Promote
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
               <TableCaption>{students.length} student{students.length === 1 ? '' : 's'} in this branch.</TableCaption>
             </Table>
@@ -599,9 +681,11 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
             studentId={promotingStudent.id}
             studentName={promotingStudent.name}
             currentClass={promotingStudent.currentClass}
+            students={promotingStudent.students}
             onClose={() => setPromotingStudent(null)}
             onSuccess={() => {
               setPromotingStudent(null)
+              setSelectedDashboardStudentIds([])
               loadList()
             }}
           />

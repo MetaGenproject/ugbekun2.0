@@ -40,6 +40,7 @@ import {
 import { EditStudentModal } from './student-modals'
 import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
 import { StudentPromotions } from './student-promotions'
+import { StudentPromotionModal } from './student-promotion-modal'
 import { IdProvisioning } from './id-provisioning'
 import {
   Table,
@@ -165,6 +166,16 @@ export function ClassroomStudents() {
   const [transferReason, setTransferReason] = useState('')
   const [transferStudentId, setTransferStudentId] = useState<number | null>(null)
   const [isTransferring, setIsTransferring] = useState(false)
+
+  // Multi-select & promotion modal state
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([])
+  const [promotingStudent, setPromotingStudent] = useState<{
+    id?: number
+    name?: string
+    currentClass?: string
+    students?: Array<{ id: number; name: string; currentClass?: string }>
+    sourceClassId?: number
+  } | null>(null)
 
   // Edit student modal state
   const [editingStudentId, setEditingStudentId] = useState<number | null>(null)
@@ -798,7 +809,60 @@ export function ClassroomStudents() {
                     <p className="text-xs text-slate-400 font-medium">All active students in this classroom.</p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedStudentIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const selectedList = students
+                            .filter((s) => selectedStudentIds.includes(s.id))
+                            .map((s) => ({
+                              id: s.id,
+                              name: [s.firstName, s.lastName].filter(Boolean).join(' ') || 'Student',
+                              currentClass: classroomLabel,
+                            }))
+                          setPromotingStudent({
+                            students: selectedList,
+                            currentClass: classroomLabel,
+                            sourceClassId: Number(selectedClassId),
+                          })
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs"
+                      >
+                        <TrendingUp size={13} /> Promote Selected ({selectedStudentIds.length})
+                      </button>
+                    )}
+
+                    {selectedStudentIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStudentIds([])}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allStudentsList = students.map((s) => ({
+                          id: s.id,
+                          name: [s.firstName, s.lastName].filter(Boolean).join(' ') || 'Student',
+                          currentClass: classroomLabel,
+                        }))
+                        setPromotingStudent({
+                          students: allStudentsList,
+                          currentClass: classroomLabel,
+                          sourceClassId: Number(selectedClassId),
+                        })
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs transition cursor-pointer shadow-xs"
+                      title="Promote all students enrolled in this classroom"
+                    >
+                      <TrendingUp size={13} /> Batch Promote Class
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setShowActions(prev => !prev)}
@@ -842,6 +906,21 @@ export function ClassroomStudents() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-10">
+                              <input
+                                type="checkbox"
+                                checked={students.length > 0 && selectedStudentIds.length === students.length}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedStudentIds(students.map((s) => s.id))
+                                  } else {
+                                    setSelectedStudentIds([])
+                                  }
+                                }}
+                                className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                                title="Select / Deselect all students in this class"
+                              />
+                            </TableHead>
                             <TableHead className="w-12 text-slate-500 font-bold">#</TableHead>
                             <TableHead className="w-14">Photo</TableHead>
                             <TableHead className="w-32">Reg. No</TableHead>
@@ -854,8 +933,24 @@ export function ClassroomStudents() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {paginatedStudents.map((student, idx) => (
-                            <TableRow key={student.id} className="hover:bg-slate-50/50">
+                          {paginatedStudents.map((student, idx) => {
+                            const isChecked = selectedStudentIds.includes(student.id)
+                            return (
+                            <TableRow key={student.id} className={`hover:bg-slate-50/50 ${isChecked ? 'bg-indigo-50/40' : ''}`}>
+                              <TableCell className="w-10">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedStudentIds((prev) => [...prev, student.id])
+                                    } else {
+                                      setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id))
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                                />
+                              </TableCell>
                               <TableCell className="font-extrabold text-slate-400 text-xs">
                                 {startIndex + idx + 1}
                               </TableCell>
@@ -929,6 +1024,18 @@ export function ClassroomStudents() {
                               </TableCell>
                               {showActions && (
                                 <TableCell className="text-right space-x-1">
+                                  <button
+                                    onClick={() => setPromotingStudent({
+                                      id: student.id,
+                                      name: [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Student',
+                                      currentClass: classroomLabel,
+                                      sourceClassId: Number(selectedClassId),
+                                    })}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer"
+                                    title="Promote Student or Class"
+                                  >
+                                    <TrendingUp size={13} /> Promote
+                                  </button>
                                   <button
                                     onClick={() => setPhotoStudent(student)}
                                     className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
@@ -1008,7 +1115,8 @@ export function ClassroomStudents() {
                                 </TableCell>
                               )}
                             </TableRow>
-                          ))}
+                          )
+                        })}
                         </TableBody>
                       </Table>
                     </div>
@@ -1790,6 +1898,23 @@ export function ClassroomStudents() {
         currentPhoto={photoStudent?.photo || undefined}
         onSavePhoto={handleSaveStudentPhoto}
       />
+
+      {/* STUDENT PROMOTION MODAL (SINGLE / BATCH / WHOLE CLASS) */}
+      {promotingStudent && (
+        <StudentPromotionModal
+          studentId={promotingStudent.id}
+          studentName={promotingStudent.name}
+          currentClass={promotingStudent.currentClass}
+          students={promotingStudent.students}
+          sourceClassId={promotingStudent.sourceClassId}
+          onClose={() => setPromotingStudent(null)}
+          onSuccess={() => {
+            setPromotingStudent(null)
+            setSelectedStudentIds([])
+            handleSearch()
+          }}
+        />
+      )}
     </div>
   )
 }

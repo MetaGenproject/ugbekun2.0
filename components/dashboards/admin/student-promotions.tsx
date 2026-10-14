@@ -77,6 +77,7 @@ export function StudentPromotions() {
   ])
 
   // Step 1 & 2: Source selection & students
+  const [sourceSessionId, setSourceSessionId] = useState<string>('')
   const [sourceClassId, setSourceClassId] = useState<string>('')
   const [sourceSectionId, setSourceSectionId] = useState<string>('ALL')
   const [students, setStudents] = useState<EnrolledStudent[]>([])
@@ -112,7 +113,7 @@ export function StudentPromotions() {
       setStudents([])
       setSelectedStudentIds([])
     }
-  }, [sourceClassId, sourceSectionId])
+  }, [sourceClassId, sourceSectionId, sourceSessionId])
 
   const fetchClassesAndSections = async () => {
     try {
@@ -158,6 +159,12 @@ export function StudentPromotions() {
         const current = sessRes.sessions.find((s) => s.isCurrent)
         if (current) {
           setTargetSessionId(String(current.id))
+          const curIdx = sorted.findIndex((s) => s.id === current.id)
+          if (curIdx > 0) {
+            setSourceSessionId(String(sorted[curIdx - 1].id))
+          } else {
+            setSourceSessionId(String(current.id))
+          }
         }
       }
     } catch (sessErr) {
@@ -169,7 +176,7 @@ export function StudentPromotions() {
     if (!sourceClassId) return
     setIsLoadingStudents(true)
     try {
-      const url = `${endpoints.admin.promotionsClassStudents}?classId=${sourceClassId}&sectionId=${sourceSectionId}`
+      const url = `${endpoints.admin.promotionsClassStudents}?classId=${sourceClassId}&sectionId=${sourceSectionId}${sourceSessionId ? `&sessionId=${sourceSessionId}` : ''}`
       const res = await apiSlice.get<{ success: boolean; data: EnrolledStudent[] }>(url)
       if (res.success) {
         setStudents(res.data)
@@ -248,6 +255,8 @@ export function StudentPromotions() {
         targetClassId: parseInt(targetClassId, 10),
         targetSectionId: parseInt(targetSectionId, 10),
         targetSessionId: parseInt(targetSessionId, 10),
+        sourceClassId: sourceClassId ? parseInt(sourceClassId, 10) : undefined,
+        sourceSessionId: sourceSessionId ? parseInt(sourceSessionId, 10) : undefined,
         action: promotionAction
       })
 
@@ -374,7 +383,23 @@ export function StudentPromotions() {
                 <span className="w-5 h-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[10px]">1</span>
                 Select Source Class Cohort
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Source Academic Session</label>
+                  <select
+                    value={sourceSessionId}
+                    onChange={(e) => setSourceSessionId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Current / Active Session</option>
+                    {sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Source Class *</label>
                   <select
