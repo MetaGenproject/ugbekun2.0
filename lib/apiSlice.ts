@@ -197,8 +197,14 @@ export const endpoints = {
     aiDistributeMarks: `${BASE_URL}/admin/marks-entry/ai-distribute`,
     cbtGroups: (subjectId?: number) => `${BASE_URL}/admin/cbt/groups${subjectId ? `?subjectId=${subjectId}` : ''}`,
     cbtGroupDetail: (id: number) => `${BASE_URL}/admin/cbt/groups/${id}`,
-    cbtDistributions: (classId?: number, sectionId?: number, subjectId?: number) =>
-      `${BASE_URL}/admin/cbt/distributions?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${subjectId ? `&subjectId=${subjectId}` : ''}`,
+    cbtDistributions: (classId?: number, sectionId?: number, subjectId?: number) => {
+      const params = new URLSearchParams()
+      if (classId) params.set('classId', String(classId))
+      if (sectionId) params.set('sectionId', String(sectionId))
+      if (subjectId) params.set('subjectId', String(subjectId))
+      const qs = params.toString()
+      return `${BASE_URL}/admin/cbt/distributions${qs ? `?${qs}` : ''}`
+    },
     cbtDistributionDetail: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}`,
     toggleCbtDistributionPublish: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/toggle-publish`,
     rescheduleCbtDistribution: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/reschedule`,
@@ -216,6 +222,7 @@ export const endpoints = {
     cbtDistributionSyncMarks: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/sync-marks`,
     cbtDistributionOverrideMark: (id: number) => `${BASE_URL}/admin/cbt/distributions/${id}/override-mark`,
     onlineExams: `${BASE_URL}/admin/online-exams`,
+    onlineExamDetail: (id: number) => `${BASE_URL}/admin/online-exams/${id}`,
     studentAttendance: (classId?: number, sectionId?: number, date?: string, extra?: { page?: number; pageSize?: number; q?: string }) => {
       const params = new URLSearchParams()
       if (classId) params.set('classId', String(classId))

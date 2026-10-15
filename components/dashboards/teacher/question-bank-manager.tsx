@@ -1145,7 +1145,7 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
   const handleDeleteOnlineExam = async (id: number) => {
     if (!confirm('Are you sure you want to delete this CBT assessment?')) return
     try {
-      const deleteUrl = isAdminPortal ? `${endpoints.admin.cbtDistributions()}/${id}` : `${endpoints.teacher.onlineExams}/${id}`
+      const deleteUrl = isAdminPortal ? endpoints.admin.cbtDistributionDetail(id) : `${endpoints.teacher.onlineExams}/${id}`
       const res = await apiSlice.delete<{ success: boolean }>(deleteUrl)
       if (res.success) {
         setOnlineExams((prev) => prev.filter((ex) => ex.id !== id))

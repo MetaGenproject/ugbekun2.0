@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { QuestionBankManager } from '../teacher/question-bank-manager'
 import {
@@ -138,6 +138,7 @@ export function AdminCbtManager() {
   // Core setup list data
   const [exams, setExams] = useState<OnlineExam[]>([])
   const [classes, setClasses] = useState<any[]>([])
+  const [sections, setSections] = useState<any[]>([])
   const [subjects, setSubjects] = useState<any[]>([])
   const [questionGroups, setQuestionGroups] = useState<QuestionGroupItem[]>([])
   const [distributions, setDistributions] = useState<CbtDistributionItem[]>([])
@@ -280,12 +281,15 @@ export function AdminCbtManager() {
     setLoadingConfig(true)
     try {
       const [classRes, subjectRes] = await Promise.all([
-        apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections),
+        apiSlice.get<{ success: boolean; classes: any[]; sections?: any[] }>(endpoints.admin.classesSections),
         apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
       ])
 
       if (classRes.success && classRes.classes) {
         setClasses(classRes.classes)
+        if (Array.isArray(classRes.sections)) {
+          setSections(classRes.sections)
+        }
         if (classRes.classes.length > 0) {
           setDistClassId(String(classRes.classes[0].id))
         }
@@ -370,17 +374,35 @@ export function AdminCbtManager() {
 
   // Delete Distribution
   const handleDeleteDistribution = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this CBT distribution?')) return
+    if (!confirm('Are you sure you want to delete this CBT distribution? It will be removed across student, teacher, and administrative records.')) return
     try {
       const res = await apiSlice.delete<{ success: boolean }>(
         endpoints.admin.cbtDistributionDetail(id)
       )
       if (res.success) {
         setDistributions(distributions.filter((d) => d.id !== id))
+        fetchExams()
         showToast('CBT distribution deleted.')
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete distribution.')
+    }
+  }
+
+  // Delete Online Exam
+  const handleDeleteOnlineExam = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this CBT examination? It will be removed across student and teacher portals.')) return
+    try {
+      const res = await apiSlice.delete<{ success: boolean; message?: string }>(
+        endpoints.admin.onlineExamDetail(id)
+      )
+      if (res.success) {
+        setExams(exams.filter((ex) => ex.id !== id))
+        fetchDistributions()
+        showToast('CBT examination deleted.')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete online exam.')
     }
   }
 
@@ -561,7 +583,49 @@ export function AdminCbtManager() {
     }
   }
 
-  const activeSectionsForClass = classes.find((c) => String(c.id) === String(distClassId))?.sections || []
+  const selectedClass = classes.find((c) => String(c.id) === String(distClassId))
+  const activeSectionsForClass = useMemo(() => {
+    // 1. Check if class has allocated sections (SectionsAllocation records or direct section objects)
+    const rawClassSections = selectedClass?.sections || []
+    const mappedClassSections = rawClassSections
+      .map((item: any) => {
+        if (!item) return null
+        if (item.section && item.section.id && item.section.name) {
+          return {
+            id: item.section.id,
+            name: item.section.name,
+          }
+        }
+        if (item.id && item.name) {
+          return {
+            id: item.id,
+            name: item.name,
+          }
+        }
+        if (item.sectionId) {
+          const matched = sections.find((s) => Number(s.id) === Number(item.sectionId))
+          if (matched) return { id: matched.id, name: matched.name }
+        }
+        return null
+      })
+      .filter(Boolean)
+
+    if (mappedClassSections.length > 0) {
+      return mappedClassSections
+    }
+
+    // 2. If the class has no specific sections_allocation rows, provide the school's sections
+    if (sections.length > 0) {
+      return sections
+        .map((s: any) => ({
+          id: s.id,
+          name: s.name,
+        }))
+        .filter((s: any) => s && s.id && s.name)
+    }
+
+    return []
+  }, [selectedClass, sections])
 
   return (
     <div className="space-y-6 font-sans">
@@ -869,12 +933,13 @@ export function AdminCbtManager() {
                 <TableHead>Subject</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Passing Mark</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {exams.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-400 py-6">
+                  <TableCell colSpan={6} className="text-center text-slate-400 py-6">
                     No scheduled exams found.
                   </TableCell>
                 </TableRow>
@@ -886,6 +951,15 @@ export function AdminCbtManager() {
                     <TableCell>{ex.subject?.name || '-'}</TableCell>
                     <TableCell>{ex.duration} Mins</TableCell>
                     <TableCell>{ex.passingMark}%</TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={() => handleDeleteOnlineExam(ex.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                        title="Delete CBT Examination"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
