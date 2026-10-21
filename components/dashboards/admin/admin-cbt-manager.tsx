@@ -95,6 +95,17 @@ interface CbtDistributionItem {
   group?: { id: number; title: string; groupCode: string; questionIds?: number[] }
 }
 
+interface ExamMasterItem {
+  id: number
+  name: string
+  term?: string | null
+  termId?: number | null
+  sessionId?: number | null
+  examCategory?: string | null
+  cbtTotalMarks?: number | null
+  totalQuestionCount?: number | null
+}
+
 interface AnalyticsData {
   distribution: CbtDistributionItem
   totalEnrolled: number
@@ -177,6 +188,23 @@ export function AdminCbtManager() {
   const [distEndDate, setDistEndDate] = useState('')
   const [distModalMode, setDistModalMode] = useState<'create' | 'edit' | 'reschedule'>('create')
   const [isSavingDist, setIsSavingDist] = useState(false)
+  const [examMasters, setExamMasters] = useState<ExamMasterItem[]>([])
+  const [selectedExamMasterId, setSelectedExamMasterId] = useState<string>('')
+
+  // Selected Exam Master & Question Group Cap Enforcement
+  const activeExam = useMemo(() => {
+    return examMasters.find(
+      (e) => String(e.id) === selectedExamMasterId || e.name.trim().toLowerCase() === distTitle.trim().toLowerCase()
+    )
+  }, [examMasters, selectedExamMasterId, distTitle])
+
+  const selectedBundle = useMemo(() => {
+    return questionGroups.find((g) => String(g.id) === String(distGroupId))
+  }, [questionGroups, distGroupId])
+
+  const bundleCount = selectedBundle && Array.isArray(selectedBundle.questionIds) ? selectedBundle.questionIds.length : 0
+  const activeCap = activeExam?.totalQuestionCount || null
+  const isExceedingCap = Boolean(activeCap && bundleCount > activeCap)
 
   // Analytics & Marksheet Sync Modal State
   const [analyticsDistId, setAnalyticsDistId] = useState<number | null>(null)
@@ -224,6 +252,7 @@ export function AdminCbtManager() {
   const resetDistForm = () => {
     setEditingDistId(null)
     setDistTitle('')
+    setSelectedExamMasterId('')
     setDistInstructions('')
     setDistStartDate('')
     setDistEndDate('')
@@ -239,6 +268,10 @@ export function AdminCbtManager() {
     setDistModalMode('edit')
     setEditingDistId(dist.id)
     setDistTitle(dist.title)
+    const match = examMasters.find(
+      (em) => em.name.trim().toLowerCase() === dist.title.trim().toLowerCase()
+    )
+    setSelectedExamMasterId(match ? String(match.id) : '')
     setDistClassId(String(dist.classId))
     setDistSectionId(dist.sectionId ? String(dist.sectionId) : '')
     setDistSubjectId(String(dist.subjectId))
@@ -280,9 +313,10 @@ export function AdminCbtManager() {
   const loadConfig = async () => {
     setLoadingConfig(true)
     try {
-      const [classRes, subjectRes] = await Promise.all([
+      const [classRes, subjectRes, examRes] = await Promise.all([
         apiSlice.get<{ success: boolean; classes: any[]; sections?: any[] }>(endpoints.admin.classesSections),
         apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
+        apiSlice.get<{ success: boolean; exams: ExamMasterItem[] }>(endpoints.admin.exams).catch(() => ({ success: false, exams: [] })),
       ])
 
       if (classRes.success && classRes.classes) {
@@ -300,6 +334,9 @@ export function AdminCbtManager() {
           setDistSubjectId(String(subjectRes.subjects[0].id))
           setGroupSubjectId(String(subjectRes.subjects[0].id))
         }
+      }
+      if (examRes.success && examRes.exams) {
+        setExamMasters(examRes.exams)
       }
     } catch (err) {
       console.error('Error loading config:', err)
@@ -458,6 +495,11 @@ export function AdminCbtManager() {
       return
     }
 
+    if (isExceedingCap && activeCap) {
+      alert(`Maximum of ${activeCap} questions approved for this exam.`)
+      return
+    }
+
     setIsSavingDist(true)
     try {
       if (distModalMode === 'reschedule' && editingDistId) {
@@ -482,6 +524,7 @@ export function AdminCbtManager() {
       const payload = {
         id: editingDistId || undefined,
         title: distTitle.trim(),
+        examMasterId: selectedExamMasterId ? Number(selectedExamMasterId) : (activeExam ? activeExam.id : undefined),
         classId: Number(distClassId),
         sectionId: distSectionId ? Number(distSectionId) : null,
         subjectId: Number(distSubjectId),
@@ -1007,15 +1050,51 @@ export function AdminCbtManager() {
               ) : (
                 <>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assessment Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. JSS1 Mathematics Midterm CBT Test"
-                  value={distTitle}
-                  onChange={(e) => setDistTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">Assessment Title / Exam Master *</label>
+                  {activeCap && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                      Cap: {activeCap} Qs · Total Marks: {activeExam?.cbtTotalMarks ?? 'N/A'}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={selectedExamMasterId}
+                    onChange={(e) => {
+                      const exId = e.target.value
+                      setSelectedExamMasterId(exId)
+                      const found = examMasters.find((em) => String(em.id) === exId)
+                      if (found) {
+                        setDistTitle(found.name)
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
+                  >
+                    <option value="">-- Bind to Exam Master --</option>
+                    {examMasters
+                      .filter((em) => !em.examCategory || em.examCategory === 'CBT')
+                      .map((em) => (
+                        <option key={em.id} value={em.id}>
+                          {em.name} (Cap: {em.totalQuestionCount || 'None'} Qs)
+                        </option>
+                      ))}
+                  </select>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. CBT 1, Midterm CBT Test"
+                    value={distTitle}
+                    onChange={(e) => {
+                      setDistTitle(e.target.value)
+                      const match = examMasters.find(
+                        (em) => em.name.trim().toLowerCase() === e.target.value.trim().toLowerCase()
+                      )
+                      if (match) setSelectedExamMasterId(String(match.id))
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1084,10 +1163,16 @@ export function AdminCbtManager() {
                       .filter((g) => !distSubjectId || g.subjectId === Number(distSubjectId))
                       .map((g) => (
                         <option key={g.id} value={g.id}>
-                          {g.title} ({g.groupCode})
+                          {g.title} ({g.groupCode}) — {Array.isArray(g.questionIds) ? g.questionIds.length : 0} Qs
                         </option>
                       ))}
                   </select>
+                  {isExceedingCap && activeCap && (
+                    <div className="mt-1.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
+                      <AlertCircle size={14} className="shrink-0 text-rose-600" />
+                      <span>Maximum of {activeCap} questions approved for this exam. (Bundle contains {bundleCount} questions)</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1195,7 +1280,8 @@ export function AdminCbtManager() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSavingDist}
+                  disabled={isSavingDist || isExceedingCap}
+                  title={isExceedingCap && activeCap ? `Maximum of ${activeCap} questions approved for this exam.` : undefined}
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingDist ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

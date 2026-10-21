@@ -57,6 +57,8 @@ interface ClassItem {
   id: number
   name: string
   isEcd: boolean
+  usesScores?: boolean
+  isCommentBased?: boolean
   isPublished?: boolean
   totalEnrolled: number
   sections: ClassSectionItem[]
@@ -74,6 +76,16 @@ interface SubjectScoreItem {
   classAverage?: number
 }
 
+export interface SubjectCommentItem {
+  id: number
+  subjectId: number
+  subjectName: string
+  subjectCode: string
+  comment: string
+  rating: number
+  ratingLabel?: string
+}
+
 interface StudentReportPreview {
   id: number
   studentName: string
@@ -83,11 +95,13 @@ interface StudentReportPreview {
   registerNo: string | null
   className: string
   gender: string
-  totalMarks: number
-  average: number
-  grade: string
-  position: string
-  rank: number | null
+  usesScores?: boolean
+  isCommentBased?: boolean
+  totalMarks?: number | null
+  average?: number | null
+  grade?: string | null
+  position?: string | null
+  rank?: number | null
   attendanceDays: string
   presentCount: number
   absentCount: number
@@ -111,6 +125,7 @@ interface StudentReportPreview {
   isEcd: boolean
   subjectsCount: number
   reportCard: SubjectScoreItem[]
+  subjectComments?: SubjectCommentItem[]
 }
 
 export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: number[] } = {}) {
@@ -137,11 +152,43 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [isBatchGeneratingPdf, setIsBatchGeneratingPdf] = useState(false)
   const [downloadingStudentId, setDownloadingStudentId] = useState<number | null>(null)
 
-  // Report Card Publication State
+  // Assessment Stage Filter & Term Selection
+  const [assessmentStage, setAssessmentStage] = useState<'FULL' | 'CA1' | 'CA2' | 'EXAM'>('FULL')
+  const [selectedTermId, setSelectedTermId] = useState<number>(1)
+
+  // Report Card Granular Publication State
   const [isPublished, setIsPublished] = useState<boolean>(false)
+  const [pubDetails, setPubDetails] = useState<{
+    isPublished: boolean
+    releaseCa1: boolean
+    releaseCa2: boolean
+    releaseExam: boolean
+    releaseFull: boolean
+    termId: number
+  }>({
+    isPublished: false,
+    releaseCa1: false,
+    releaseCa2: false,
+    releaseExam: false,
+    releaseFull: false,
+    termId: 1,
+  })
   const [isTogglingPublish, setIsTogglingPublish] = useState<boolean>(false)
   const [showPublishConfirmModal, setShowPublishConfirmModal] = useState<boolean>(false)
   const [publishScope, setPublishScope] = useState<'class' | 'all'>('class')
+  const [modalReleaseCa1, setModalReleaseCa1] = useState<boolean>(false)
+  const [modalReleaseCa2, setModalReleaseCa2] = useState<boolean>(false)
+  const [modalReleaseExam, setModalReleaseExam] = useState<boolean>(false)
+  const [modalReleaseFull, setModalReleaseFull] = useState<boolean>(false)
+
+  const openPublishModal = () => {
+    setPublishScope('class')
+    setModalReleaseCa1(Boolean(pubDetails.releaseCa1))
+    setModalReleaseCa2(Boolean(pubDetails.releaseCa2))
+    setModalReleaseExam(Boolean(pubDetails.releaseExam))
+    setModalReleaseFull(Boolean(pubDetails.releaseFull))
+    setShowPublishConfirmModal(true)
+  }
 
   // AI Comment Generator State
   const [selectedAiStudentId, setSelectedAiStudentId] = useState<number | null>(null)
@@ -263,50 +310,94 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
   }, [])
 
-  // Fetch Students when selected class/section/session changes
+  // Fetch Students when selected class/section/session/stage/term changes
   useEffect(() => {
     if (selectedClassId && selectedSectionId) {
-      fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined)
+      fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined, assessmentStage, selectedTermId)
+      fetchPublishStatus(selectedSessionId || undefined, selectedClassId, selectedTermId)
     } else {
       setStudents([])
     }
-  }, [selectedClassId, selectedSectionId, selectedSessionId])
+  }, [selectedClassId, selectedSectionId, selectedSessionId, assessmentStage, selectedTermId])
 
-  const fetchPublishStatus = async (sessionId?: number) => {
+  const fetchPublishStatus = async (sessionId?: number, classId?: number, termId: number = selectedTermId) => {
     try {
-      const res = await apiSlice.get<{ success: boolean; isPublished: boolean }>(
-        endpoints.admin.reportCards.publishStatus(sessionId)
-      )
-      if (res.success && res.isPublished !== undefined) {
-        setIsPublished(res.isPublished)
+      const res = await apiSlice.get<{
+        success: boolean
+        isPublished: boolean
+        releaseCa1?: boolean
+        releaseCa2?: boolean
+        releaseExam?: boolean
+        releaseFull?: boolean
+        termId?: number
+      }>(endpoints.admin.reportCards.publishStatus(sessionId, classId || selectedClassId || undefined, termId))
+      if (res.success) {
+        setIsPublished(Boolean(res.isPublished))
+        setPubDetails({
+          isPublished: Boolean(res.isPublished),
+          releaseCa1: Boolean(res.releaseCa1),
+          releaseCa2: Boolean(res.releaseCa2),
+          releaseExam: Boolean(res.releaseExam),
+          releaseFull: Boolean(res.releaseFull),
+          termId: res.termId || termId,
+        })
       }
     } catch {
       // ignore
     }
   }
 
-  const handleTogglePublish = async (nextState: boolean, scopeOverride?: 'class' | 'all') => {
-    const activeScope = scopeOverride || publishScope
+  const handleTogglePublish = async (params: {
+    publish?: boolean
+    releaseCa1?: boolean
+    releaseCa2?: boolean
+    releaseExam?: boolean
+    releaseFull?: boolean
+    scopeOverride?: 'class' | 'all'
+  }) => {
+    const activeScope = params.scopeOverride || publishScope
     setIsTogglingPublish(true)
     try {
-      const res = await apiSlice.post<{ success: boolean; isPublished: boolean; message: string }>(
+      const res = await apiSlice.post<{
+        success: boolean
+        isPublished: boolean
+        releaseCa1: boolean
+        releaseCa2: boolean
+        releaseExam: boolean
+        releaseFull: boolean
+        termId: number
+        message: string
+      }>(
         endpoints.admin.reportCards.togglePublish,
         {
           classId: activeScope === 'class' ? selectedClassId || undefined : undefined,
           sectionId: activeScope === 'class' ? selectedSectionId || undefined : undefined,
           sessionId: selectedSessionId || undefined,
-          publish: nextState,
+          termId: selectedTermId,
+          publish: params.publish,
           publishAllClasses: activeScope === 'all',
+          releaseCa1: params.releaseCa1,
+          releaseCa2: params.releaseCa2,
+          releaseExam: params.releaseExam,
+          releaseFull: params.releaseFull,
         }
       )
       if (res.success) {
         setIsPublished(res.isPublished)
+        setPubDetails({
+          isPublished: res.isPublished,
+          releaseCa1: res.releaseCa1,
+          releaseCa2: res.releaseCa2,
+          releaseExam: res.releaseExam,
+          releaseFull: res.releaseFull,
+          termId: res.termId,
+        })
         if (selectedSessionId) {
           fetchClasses(selectedSessionId)
         } else {
           fetchClasses()
         }
-        toast.success(res.message || (nextState ? 'Report cards published to students & parents!' : 'Report cards reverted to draft mode.'))
+        toast.success(res.message || 'Report card publication state updated successfully!')
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to update publication status.')
@@ -316,18 +407,27 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     }
   }
 
-  const fetchStudents = async (classId: number, sectionId: number, sessionId?: number) => {
+  const fetchStudents = async (
+    classId: number,
+    sectionId: number,
+    sessionId?: number,
+    stage: string = assessmentStage,
+    termId: number = selectedTermId
+  ) => {
     setLoadingStudents(true)
     try {
       const res = await apiSlice.get<{
         success: boolean
         sessionId?: number
         className: string
+        stage?: string
+        termId?: number
         isEcd: boolean
         isPublished?: boolean
+        publication?: any
         totalStudents: number
         students: StudentReportPreview[]
-      }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId))
+      }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId, stage, termId))
 
       if (res.success && res.students) {
         if (res.sessionId && !selectedSessionId) {
@@ -337,16 +437,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         if (res.isPublished !== undefined) {
           setIsPublished(res.isPublished)
         }
+        if (res.publication) {
+          setPubDetails(res.publication)
+          setIsPublished(res.publication.isPublished)
+        }
         
         // Populate initial AI selection
         if (res.students.length > 0) {
           const s0 = res.students[0]
           setSelectedAiStudentId(s0.id)
           setAiStudentName(s0.studentName)
-          setAiAverage(String(s0.average))
+          setAiAverage(s0.average !== null && s0.average !== undefined ? String(s0.average) : 'Qualitative')
           setAiAttendance(s0.totalAttendanceDays > 0 ? `${Math.round((s0.presentCount / s0.totalAttendanceDays) * 100)}%` : '95%')
           setTeacherComment(s0.teacherComment || `${s0.studentName} has displayed commendable academic dedication and consistent progress this term.`)
-          setPrincipalComment(s0.principalComment || (s0.average >= 70 ? 'Promoted with distinction.' : 'Promoted.'))
+          setPrincipalComment(s0.principalComment || ((s0.average ?? 0) >= 70 ? 'Promoted with distinction.' : 'Promoted.'))
         }
 
         // Populate psychomotor & affective ratings maps
@@ -372,10 +476,10 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     const st = students.find(s => s.id === studentId)
     if (st) {
       setAiStudentName(st.studentName)
-      setAiAverage(String(st.average))
+      setAiAverage(st.average !== null && st.average !== undefined ? String(st.average) : 'Qualitative')
       setAiAttendance(st.totalAttendanceDays > 0 ? `${Math.round((st.presentCount / st.totalAttendanceDays) * 100)}%` : '95%')
       setTeacherComment(st.teacherComment || `${st.studentName} has displayed commendable academic dedication and consistent progress this term.`)
-      setPrincipalComment(st.principalComment || (st.average >= 70 ? 'Promoted with distinction.' : 'Promoted.'))
+      setPrincipalComment(st.principalComment || ((st.average ?? 0) >= 70 ? 'Promoted with distinction.' : 'Promoted.'))
     }
   }
 
@@ -383,7 +487,8 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const handleDownloadSinglePdf = async (st: StudentReportPreview) => {
     if (!selectedClassId || !selectedSectionId) return
     setDownloadingStudentId(st.id)
-    toast.info(`Compiling official report card for ${st.studentName}…`)
+    const stageLabel = assessmentStage === 'FULL' ? 'Terminal Report' : assessmentStage
+    toast.info(`Compiling official ${stageLabel} card for ${st.studentName}…`)
 
     try {
       const url = endpoints.admin.reportCards.exportPdf(
@@ -392,11 +497,13 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         selectedSectionId,
         rankingType,
         rankingLimit,
-        selectedSessionId || undefined
+        selectedSessionId || undefined,
+        assessmentStage,
+        selectedTermId
       )
       const safeName = (st.lastName || 'Student').replace(/\s+/g, '_')
       const safeFirst = (st.firstName || 'Record').replace(/\s+/g, '_')
-      await apiSlice.download(url, `Report_Card_${safeName}_${safeFirst}.pdf`)
+      await apiSlice.download(url, `Report_Card_${safeName}_${safeFirst}_${assessmentStage}.pdf`)
       toast.success(`Report Card downloaded for ${st.studentName}!`)
     } catch (err: any) {
       toast.error(err.message || 'Failed to download report card PDF.')
@@ -422,8 +529,9 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     const currentSec = currentClass?.sections.find(s => s.id === selectedSectionId)
     const className = currentClass?.name || 'Class'
     const sectionName = currentSec?.name || 'Main'
+    const stageLabel = assessmentStage === 'FULL' ? 'Full Terminal' : assessmentStage
 
-    toast.info(`Compiling 1-Click Batch PDF for ${className} (${sectionName}) with ${students.length} students…`)
+    toast.info(`Compiling Batch PDF for ${className} (${sectionName}) [${stageLabel}] with ${students.length} students…`)
 
     try {
       const url = endpoints.admin.reportCards.exportBatchPdf(
@@ -431,11 +539,13 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         selectedSectionId,
         rankingType,
         rankingLimit,
-        selectedSessionId || undefined
+        selectedSessionId || undefined,
+        assessmentStage,
+        selectedTermId
       )
       const safeCls = className.replace(/\s+/g, '_')
       const safeSec = sectionName.replace(/\s+/g, '_')
-      await apiSlice.download(url, `Batch_Report_Cards_${safeCls}_${safeSec}.pdf`)
+      await apiSlice.download(url, `Batch_Report_Cards_${safeCls}_${safeSec}_${assessmentStage}.pdf`)
       toast.success(`Classroom Batch Report Cards compiled successfully! (${students.length} Pages)`)
     } catch (err: any) {
       toast.error(err.message || 'Batch report card generation failed.')
@@ -721,20 +831,40 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Live Publish Status Badge */}
             <div className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
-              isPublished
+              pubDetails.releaseFull
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-amber-50 border-amber-200 text-amber-800'
+                : pubDetails.releaseExam
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                : (pubDetails.releaseCa1 || pubDetails.releaseCa2)
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-slate-50 border-slate-200 text-slate-700'
             }`}>
-              {isPublished ? (
+              {pubDetails.releaseFull ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <Globe size={14} className="text-emerald-600" />
-                  <span>{currentClass?.name || 'Class'}: Live to Students</span>
+                  <span>{currentClass?.name || 'Class'}: Full Report Live</span>
+                </>
+              ) : pubDetails.releaseExam ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                  <Globe size={14} className="text-indigo-600" />
+                  <span>{currentClass?.name || 'Class'}: Exam Only Live</span>
+                </>
+              ) : (pubDetails.releaseCa1 || pubDetails.releaseCa2) ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <Globe size={14} className="text-amber-600" />
+                  <span>
+                    {currentClass?.name || 'Class'}: Mid-Term CA (
+                    {[pubDetails.releaseCa1 && 'CA1', pubDetails.releaseCa2 && 'CA2'].filter(Boolean).join(' + ')}
+                    ) Live
+                  </span>
                 </>
               ) : (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  <EyeOff size={14} className="text-amber-600" />
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  <EyeOff size={14} className="text-slate-500" />
                   <span>{currentClass?.name || 'Class'}: Hidden (Draft)</span>
                 </>
               )}
@@ -742,25 +872,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
             {/* Toggle Publish Button */}
             <button
-              onClick={() => {
-                setPublishScope('class')
-                setShowPublishConfirmModal(true)
-              }}
+              onClick={openPublishModal}
               disabled={isTogglingPublish || !selectedClassId}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer disabled:opacity-50 ${
                 isPublished
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300'
+                  ? 'bg-slate-900 hover:bg-slate-800 text-white'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
               }`}
             >
               {isTogglingPublish ? (
                 <Loader2 size={14} className="animate-spin" />
-              ) : isPublished ? (
-                <EyeOff size={14} className="text-slate-600" />
               ) : (
                 <Send size={14} />
               )}
-              <span>{isPublished ? `Unpublish ${currentClass?.name || 'Class'}` : `Publish ${currentClass?.name || 'Class'} Results`}</span>
+              <span>Granular Release Engine</span>
             </button>
 
             <button
@@ -899,6 +1024,35 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             </select>
           </div>
 
+          {/* Term Selector */}
+          <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+            <span className="text-xs font-bold text-slate-500">Term:</span>
+            <select
+              value={selectedTermId}
+              onChange={e => setSelectedTermId(Number(e.target.value))}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 text-slate-800"
+            >
+              <option value={1}>1st Term</option>
+              <option value={2}>2nd Term</option>
+              <option value={3}>3rd Term</option>
+            </select>
+          </div>
+
+          {/* Assessment Stage Filter */}
+          <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+            <span className="text-xs font-bold text-slate-500">Stage:</span>
+            <select
+              value={assessmentStage}
+              onChange={e => setAssessmentStage(e.target.value as any)}
+              className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-xs font-bold bg-rose-50/60 text-rose-900"
+            >
+              <option value="FULL">Full Terminal Report</option>
+              <option value="CA1">CA1 Progress Slip</option>
+              <option value="CA2">CA2 Progress Slip</option>
+              <option value="EXAM">Terminal Exam Only</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
             <span className="text-xs font-bold text-slate-500">Ranking:</span>
             <select
@@ -979,14 +1133,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                 </div>
 
                 <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Class Average</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    {currentClass?.usesScores === false ? 'Assessment Standard' : 'Class Average'}
+                  </span>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xl font-black text-slate-900">
-                      {students.length > 0
-                        ? (students.reduce((acc, s) => acc + s.average, 0) / students.length).toFixed(1)
-                        : 0}%
+                    <span className="text-base sm:text-xl font-black text-slate-900">
+                      {currentClass?.usesScores === false
+                        ? 'Qualitative Domains'
+                        : `${students.length > 0 ? (students.reduce((acc, s) => acc + (s.average || 0), 0) / students.length).toFixed(1) : 0}%`}
                     </span>
-                    <Award size={18} className="text-emerald-500" />
+                    {currentClass?.usesScores === false ? (
+                      <Sparkles size={18} className="text-emerald-500" />
+                    ) : (
+                      <Award size={18} className="text-emerald-500" />
+                    )}
                   </div>
                 </div>
 
@@ -994,7 +1154,11 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Evaluation Mode</span>
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-xs font-black text-slate-900 uppercase">
-                      {currentClass?.isEcd ? 'Montessori ECD' : 'Standard 100-Point'}
+                      {currentClass?.usesScores === false
+                        ? 'Zero-Score Montessori'
+                        : currentClass?.isEcd
+                        ? 'Montessori ECD'
+                        : 'Standard 100-Point'}
                     </span>
                     <GraduationCap size={18} className="text-indigo-500" />
                   </div>
@@ -1014,70 +1178,133 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
               {/* Student Report Cards Preview Grid */}
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredStudents.map((st) => (
-                  <div
-                    key={st.id}
-                    className="p-5 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-900">{st.studentName}</h4>
-                        <p className="text-[11px] font-mono text-slate-400">
-                          {st.admissionNo} • {st.className}
+                {filteredStudents.map((st) => {
+                  const isCommentBased = currentClass?.usesScores === false || st.usesScores === false || st.isCommentBased === true
+
+                  return (
+                    <div
+                      key={st.id}
+                      className="p-5 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-sm hover:shadow-md transition"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-900">{st.studentName}</h4>
+                          <p className="text-[11px] font-mono text-slate-400">
+                            {st.admissionNo} • {st.className}
+                          </p>
+                        </div>
+                        {isCommentBased ? (
+                          <span className="px-2.5 py-0.5 rounded text-xs font-black border bg-emerald-100 text-emerald-800 border-emerald-200">
+                            Qualitative Report
+                          </span>
+                        ) : assessmentStage === 'FULL' ? (
+                          <span
+                            className={`px-2.5 py-0.5 rounded text-xs font-black border ${
+                              st.grade === 'A'
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                : st.grade === 'B'
+                                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                : st.grade === 'C'
+                                ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                : 'bg-rose-100 text-rose-800 border-rose-200'
+                            }`}
+                          >
+                            Grade {st.grade}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded text-xs font-black border bg-amber-100 text-amber-800 border-amber-200">
+                            {assessmentStage} Slip
+                          </span>
+                        )}
+                      </div>
+
+                      {isCommentBased ? (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80">
+                            <span className="text-[10px] text-emerald-700 block font-bold">
+                              ASSESSMENT SYSTEM
+                            </span>
+                            <span className="font-bold text-emerald-950 text-xs">
+                              Developmental Domains
+                            </span>
+                          </div>
+                          <div className="p-2.5 bg-blue-50/70 rounded-xl border border-blue-200/80">
+                            <span className="text-[10px] text-blue-700 block font-bold">
+                              EVALUATED DOMAINS
+                            </span>
+                            <span className="font-bold text-blue-950 text-xs">
+                              {st.subjectComments && st.subjectComments.length > 0
+                                ? `${st.subjectComments.length} Domains Recorded`
+                                : 'Milestones Active'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                            <span className="text-[10px] text-slate-400 block font-bold">
+                              {assessmentStage === 'FULL' ? 'AVERAGE SCORE' : `${assessmentStage} STAGE AVG`}
+                            </span>
+                            <span className="font-mono font-black text-slate-900 text-sm">{st.average}%</span>
+                          </div>
+                          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                            <span className="text-[10px] text-slate-400 block font-bold">
+                              {assessmentStage === 'FULL' ? 'CLASS RANK' : 'STAGE STATUS'}
+                            </span>
+                            <span className="font-bold text-indigo-700 text-sm">
+                              {assessmentStage === 'FULL' ? st.position : 'Progress Recorded'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Observed Domains Snippet (For Comment-Based Classes) */}
+                      {isCommentBased && st.subjectComments && st.subjectComments.length > 0 && (
+                        <div className="space-y-1 pt-1 border-t border-slate-100">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                            Observed Domains & Competencies:
+                          </span>
+                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                            {st.subjectComments.map((sc) => (
+                              <span
+                                key={sc.id || sc.subjectId}
+                                className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold flex items-center gap-1"
+                              >
+                                <span>{sc.subjectName}:</span>
+                                <span className="font-black text-emerald-950">{sc.ratingLabel || `Level ${sc.rating}`}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5 text-[11px] text-slate-600">
+                        <p className="flex items-center justify-between">
+                          <strong className="text-slate-700">Attendance Log:</strong>
+                          <span className="font-mono font-semibold text-slate-800">{st.attendanceDays}</span>
+                        </p>
+                        <p className="truncate text-slate-500">
+                          <strong className="text-slate-700">Remarks:</strong> {st.teacherComment || 'Pending assessment remarks.'}
                         </p>
                       </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded text-xs font-black border ${
-                          st.grade === 'A'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                            : st.grade === 'B'
-                            ? 'bg-blue-100 text-blue-800 border-blue-200'
-                            : st.grade === 'C'
-                            ? 'bg-amber-100 text-amber-800 border-amber-200'
-                            : 'bg-rose-100 text-rose-800 border-rose-200'
-                        }`}
-                      >
-                        Grade {st.grade}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
-                        <span className="text-[10px] text-slate-400 block font-bold">AVERAGE SCORE</span>
-                        <span className="font-mono font-black text-slate-900 text-sm">{st.average}%</span>
-                      </div>
-                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
-                        <span className="text-[10px] text-slate-400 block font-bold">CLASS RANK</span>
-                        <span className="font-bold text-indigo-700 text-sm">{st.position}</span>
+                      <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                        <button
+                          onClick={() => handleDownloadSinglePdf(st)}
+                          disabled={downloadingStudentId === st.id}
+                          className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                        >
+                          {downloadingStudentId === st.id ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Download size={13} />
+                          )}
+                          {isCommentBased ? '1-Click Developmental PDF' : assessmentStage === 'FULL' ? '1-Click PDF Report' : `1-Click ${assessmentStage} Slip`}
+                        </button>
                       </div>
                     </div>
-
-                    <div className="space-y-1.5 text-[11px] text-slate-600">
-                      <p className="flex items-center justify-between">
-                        <strong className="text-slate-700">Attendance Log:</strong>
-                        <span className="font-mono font-semibold text-slate-800">{st.attendanceDays}</span>
-                      </p>
-                      <p className="truncate text-slate-500">
-                        <strong className="text-slate-700">Remarks:</strong> {st.teacherComment || 'Pending assessment remarks.'}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                      <button
-                        onClick={() => handleDownloadSinglePdf(st)}
-                        disabled={downloadingStudentId === st.id}
-                        className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                      >
-                        {downloadingStudentId === st.id ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <Download size={13} />
-                        )}
-                        1-Click PDF Report
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </>
           )}
@@ -1134,7 +1361,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                 >
                   {students.map(s => (
                     <option key={s.id} value={s.id}>
-                      {s.studentName} ({s.average}%)
+                      {s.studentName} {s.average !== null && s.average !== undefined ? `(${s.average}%)` : '(Qualitative)'}
                     </option>
                   ))}
                 </select>
@@ -1486,26 +1713,31 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         </div>
       )}
 
-      {/* Report Card Publish Confirmation Modal */}
+      {/* Report Card Granular Publication Engine Modal */}
       {showPublishConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 space-y-5 font-sans">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                isPublished ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
-              }`}>
-                {isPublished ? <EyeOff size={24} /> : <Globe size={24} />}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 space-y-5 font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                  <Globe size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Granular Parent Release Engine
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Multi-stage progressive disclosure for student & parent portals
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  {isPublished ? `Unpublish ${currentClass?.name || 'Class'}?` : `Publish Official Report Cards`}
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  {isPublished
-                    ? 'Hide results from student and parent portals'
-                    : 'Targeted class release or school-wide publication'}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowPublishConfirmModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
             </div>
 
             {/* Scope Selection: Targeted Class vs All Classes */}
@@ -1519,7 +1751,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                   onClick={() => setPublishScope('class')}
                   className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
                     publishScope === 'class'
-                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20'
+                      ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
@@ -1527,12 +1759,12 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                     <span className="text-xs font-black text-slate-900">
                       {currentClass?.name || 'Selected Class'} Only
                     </span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                      Recommended
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                      Targeted
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500 leading-tight">
-                    Releases solely this class without disrupting other classes still being graded.
+                    Releases solely this class without altering other classes still in grading.
                   </span>
                 </button>
 
@@ -1541,7 +1773,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                   onClick={() => setPublishScope('all')}
                   className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
                     publishScope === 'all'
-                      ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20'
+                      ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
                       : 'border-slate-200 hover:border-slate-300 bg-white'
                   }`}
                 >
@@ -1550,70 +1782,223 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                       All Classes ({classes.length})
                     </span>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      Batch
+                      Cohort Batch
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500 leading-tight">
-                    Publish results for all classes across the school session in one click.
+                    Apply publication state across the entire school session in one click.
                   </span>
                 </button>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs text-slate-600 space-y-2 leading-relaxed">
-              {isPublished ? (
-                <>
-                  <p className="font-semibold text-slate-800">
-                    {publishScope === 'class'
-                      ? `Reverting report cards for ${currentClass?.name || 'this class'} to unpublished draft mode.`
-                      : 'Reverting report cards for ALL classes to unpublished draft mode.'}
-                  </p>
-                  <p>
-                    Students and parents in {publishScope === 'class' ? currentClass?.name || 'this class' : 'all classes'} will immediately be unable to view subject scores, rankings, or download report card PDFs until republished.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold text-slate-800">
-                    {publishScope === 'class'
-                      ? `Releasing report cards for ${currentClass?.name || 'this class'} to student and parent portals.`
-                      : 'Releasing official report cards for ALL classrooms in this session.'}
-                  </p>
-                  <p>
-                    {publishScope === 'class'
-                      ? `Students in ${currentClass?.name || 'this class'} will instantly see their final grades and download PDFs. Other classes will remain shielded and unaffected.`
-                      : 'All students across the entire institution will gain immediate access to view and download their results.'}
-                  </p>
-                </>
-              )}
+            {/* Term Selection */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <span className="text-xs font-bold text-slate-700">Academic Term:</span>
+              <div className="flex items-center gap-1.5">
+                {[1, 2, 3].map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTermId(t)
+                      fetchPublishStatus(selectedSessionId || undefined, selectedClassId || undefined, t)
+                    }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                      selectedTermId === t
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {t === 1 ? '1st Term' : t === 2 ? '2nd Term' : '3rd Term'}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowPublishConfirmModal(false)}
-                disabled={isTogglingPublish}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTogglePublish(!isPublished)}
-                disabled={isTogglingPublish}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-2 transition cursor-pointer ${
-                  isPublished
-                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
-                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-                }`}
-              >
-                {isTogglingPublish && <Loader2 size={14} className="animate-spin" />}
-                <span>
-                  {isPublished
-                    ? `Confirm Unpublish (${publishScope === 'class' ? currentClass?.name || 'Class' : 'All Classes'})`
-                    : `Confirm & Publish (${publishScope === 'class' ? currentClass?.name || 'Class' : 'All Classes'})`}
-                </span>
-              </button>
+            {/* 4 Granular Stage Toggles */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                Granular Stage Release Toggles:
+              </label>
+              <div className="grid grid-cols-1 gap-2.5">
+                {/* Stage 1: CA1 */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                  modalReleaseCa1 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
+                }`}>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">Stage 1: CA 1 Progress Slip</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                        Mid-Term
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Releases Continuous Assessment 1 scores & teacher progress notes to parent portal.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalReleaseCa1}
+                    onChange={e => setModalReleaseCa1(e.target.checked)}
+                    className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Stage 2: CA2 */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                  modalReleaseCa2 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
+                }`}>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">Stage 2: CA 2 Progress Slip</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                        Mid-Term
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Releases Continuous Assessment 2 marks & progress slips to students/parents.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalReleaseCa2}
+                    onChange={e => setModalReleaseCa2(e.target.checked)}
+                    className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Stage 3: Exam */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                  modalReleaseExam ? 'bg-indigo-50/60 border-indigo-300' : 'bg-slate-50/50 border-slate-200'
+                }`}>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">Stage 3: Terminal Exam Marks</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-indigo-100 text-indigo-800">
+                        Exam Paper
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Releases terminal examination scores for individual subjects.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalReleaseExam}
+                    onChange={e => setModalReleaseExam(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded-md border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  />
+                </label>
+
+                {/* Stage 4: Full */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                  modalReleaseFull ? 'bg-emerald-50/60 border-emerald-300' : 'bg-slate-50/50 border-slate-200'
+                }`}>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">Stage 4: Full Terminal Composite Report</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
+                        Complete
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Releases cumulative composite grade (100%), GPA, class positions, and final PDF downloads.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalReleaseFull}
+                    onChange={e => setModalReleaseFull(e.target.checked)}
+                    className="w-5 h-5 text-emerald-600 rounded-md border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Zero Data Leakage Info */}
+            <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200/80 text-xs text-blue-900 space-y-1">
+              <span className="font-bold flex items-center gap-1.5 text-blue-800 text-[11px]">
+                🛡️ Zero Data Leakage Invariant Enforced
+              </span>
+              <p className="text-[11px] text-blue-800/90 leading-relaxed">
+                When Exam or Full Report is unchecked, backend APIs strictly nullify examination marks, composite totals, GPA grades, and class rank from both parent JSON payloads and PDF downloads, guaranteeing zero exposure before official publication.
+              </p>
+            </div>
+
+            {/* Quick Actions & Confirm Buttons */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalReleaseCa1(false)
+                      setModalReleaseCa2(false)
+                      setModalReleaseExam(false)
+                      setModalReleaseFull(false)
+                      handleTogglePublish({
+                        publish: false,
+                        releaseCa1: false,
+                        releaseCa2: false,
+                        releaseExam: false,
+                        releaseFull: false,
+                      })
+                    }}
+                    disabled={isTogglingPublish}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition cursor-pointer"
+                  >
+                    Unpublish / Shield All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalReleaseCa1(true)
+                      setModalReleaseCa2(true)
+                      setModalReleaseExam(true)
+                      setModalReleaseFull(true)
+                      handleTogglePublish({
+                        publish: true,
+                        releaseCa1: true,
+                        releaseCa2: true,
+                        releaseExam: true,
+                        releaseFull: true,
+                      })
+                    }}
+                    disabled={isTogglingPublish}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition cursor-pointer"
+                  >
+                    Release Full Terminal
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowPublishConfirmModal(false)}
+                    disabled={isTogglingPublish}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleTogglePublish({
+                        releaseCa1: modalReleaseCa1,
+                        releaseCa2: modalReleaseCa2,
+                        releaseExam: modalReleaseExam,
+                        releaseFull: modalReleaseFull,
+                      })
+                    }
+                    disabled={isTogglingPublish}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm flex items-center gap-2 transition cursor-pointer"
+                  >
+                    {isTogglingPublish && <Loader2 size={14} className="animate-spin" />}
+                    <span>Save Granular Configuration</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

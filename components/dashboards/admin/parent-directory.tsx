@@ -19,6 +19,8 @@ import {
   Sparkles,
   Bot,
   UserPlus,
+  UserMinus,
+  Plus,
   Bell,
   MapPin,
   Briefcase,
@@ -56,6 +58,16 @@ interface LinkedStudent {
   registerNo?: string
   className?: string
   sectionName?: string
+}
+
+interface SchoolStudent {
+  id: number
+  name: string
+  registerNo?: string
+  className?: string
+  sectionName?: string
+  parentId?: number | null
+  parentName?: string | null
 }
 
 interface ParentRecord {
@@ -108,6 +120,15 @@ export function ParentDirectory() {
   // Edit Parent Modal State
   const [editingParent, setEditingParent] = useState<ParentRecord | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  // Student Allocation States (Attach / Detach / Reassign)
+  const [allStudents, setAllStudents] = useState<SchoolStudent[]>([])
+  const [selectedStudentToAttach, setSelectedStudentToAttach] = useState<number | ''>('')
+  const [isAttachingStudent, setIsAttachingStudent] = useState(false)
+  const [reassigningStudent, setReassigningStudent] = useState<{ id: number; name: string } | null>(null)
+  const [targetParentIdForReassign, setTargetParentIdForReassign] = useState<number | ''>('')
+  const [isReassigning, setIsReassigning] = useState(false)
+  const [studentSearchInAttach, setStudentSearchInAttach] = useState('')
 
   // Delete Parent Modal State
   const [deletingParent, setDeletingParent] = useState<ParentRecord | null>(null)
@@ -165,6 +186,20 @@ export function ParentDirectory() {
         }))
 
         setParents(formatted)
+
+        // Parse and store full school students list for allocation
+        const rawStudents = (!Array.isArray(res.data) && res.data?.students) || []
+        const studentList: SchoolStudent[] = rawStudents.map((s: any) => ({
+          id: s.id,
+          name: `${s.firstName || ''} ${s.lastName || ''}`.trim() || `Student #${s.id}`,
+          registerNo: s.registerNo || '',
+          className: s.className || '',
+          sectionName: s.sectionName || '',
+          parentId: s.parentId || null,
+          parentName: s.parentName || null,
+        }))
+        setAllStudents(studentList)
+
         if (formatted.length > 0) {
           setSelectedParentForChat(formatted[0])
         } else {
@@ -230,6 +265,123 @@ export function ParentDirectory() {
       alert(err?.message || 'Failed to save parent details.')
     } finally {
       setIsSavingEdit(false)
+    }
+  }
+
+  const handleAttachStudent = async () => {
+    if (!editingParent || !selectedStudentToAttach) return
+
+    setIsAttachingStudent(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string; children: LinkedStudent[] }>(
+        endpoints.admin.attachStudentToParent(editingParent.id),
+        { studentId: Number(selectedStudentToAttach) }
+      )
+
+      if (res.success && res.children) {
+        const updatedParent: ParentRecord = {
+          ...editingParent,
+          students: res.children,
+          studentCount: res.children.length,
+        }
+        setEditingParent(updatedParent)
+        setParents(prev => prev.map(p => p.id === updatedParent.id ? updatedParent : p))
+
+        // Update allStudents cache
+        setAllStudents(prev =>
+          prev.map(s => s.id === Number(selectedStudentToAttach) ? { ...s, parentId: editingParent.id, parentName: editingParent.name } : s)
+        )
+        setSelectedStudentToAttach('')
+        alert(res.message || 'Student successfully linked to parent.')
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to attach student to parent.')
+    } finally {
+      setIsAttachingStudent(false)
+    }
+  }
+
+  const handleDetachStudent = async (studentId: number, studentName: string) => {
+    if (!editingParent) return
+    const confirmDetach = confirm(`Are you sure you want to unlink ${studentName} from ${editingParent.name}?\n\nThe student will no longer be assigned to this parent profile.`)
+    if (!confirmDetach) return
+
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string; children: LinkedStudent[] }>(
+        endpoints.admin.detachStudentFromParent(editingParent.id),
+        { studentId }
+      )
+
+      if (res.success && res.children) {
+        const updatedParent: ParentRecord = {
+          ...editingParent,
+          students: res.children,
+          studentCount: res.children.length,
+        }
+        setEditingParent(updatedParent)
+        setParents(prev => prev.map(p => p.id === updatedParent.id ? updatedParent : p))
+
+        // Update allStudents cache
+        setAllStudents(prev =>
+          prev.map(s => s.id === studentId ? { ...s, parentId: null, parentName: null } : s)
+        )
+        alert(res.message || `${studentName} unlinked successfully.`)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to unlink student.')
+    }
+  }
+
+  const handleReassignStudent = async (studentId: number, newParentId: number) => {
+    if (!editingParent || !newParentId) return
+    const targetParent = parents.find(p => p.id === newParentId)
+    const targetName = targetParent ? targetParent.name : 'new parent'
+
+    setIsReassigning(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message: string; children: LinkedStudent[] }>(
+        endpoints.admin.reassignStudentParent(editingParent.id),
+        { studentId, targetParentId: newParentId }
+      )
+
+      if (res.success) {
+        const remainingStudents = (editingParent.students || []).filter(s => s.id !== studentId)
+        const updatedSourceParent: ParentRecord = {
+          ...editingParent,
+          students: remainingStudents,
+          studentCount: remainingStudents.length,
+        }
+        setEditingParent(updatedSourceParent)
+
+        // Update parents list for both source and target
+        setParents(prev =>
+          prev.map(p => {
+            if (p.id === updatedSourceParent.id) return updatedSourceParent
+            if (p.id === newParentId) {
+              const movedStudent = (editingParent.students || []).find(s => s.id === studentId)
+              const updatedTargetStudents = movedStudent ? [...(p.students || []), movedStudent] : (p.students || [])
+              return {
+                ...p,
+                students: updatedTargetStudents,
+                studentCount: updatedTargetStudents.length,
+              }
+            }
+            return p
+          })
+        )
+
+        // Update allStudents cache
+        setAllStudents(prev =>
+          prev.map(s => s.id === studentId ? { ...s, parentId: newParentId, parentName: targetName } : s)
+        )
+        setReassigningStudent(null)
+        setTargetParentIdForReassign('')
+        alert(res.message || `Student successfully reassigned to ${targetName}.`)
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Failed to reassign student.')
+    } finally {
+      setIsReassigning(false)
     }
   }
 
@@ -903,121 +1055,325 @@ export function ParentDirectory() {
 
       {/* EDIT PARENT MODAL */}
       {editingParent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-5 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                <Edit3 size={16} className="text-blue-600" /> Edit Parent Record
-              </h3>
-              <button onClick={() => setEditingParent(null)} className="p-1 text-slate-400 hover:text-slate-600 transition">
+              <div>
+                <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                  <Edit3 size={16} className="text-blue-600" /> Edit Parent Profile & Student Allocations
+                </h3>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Update parent contact information or correct linked children and siblings.
+                </p>
+              </div>
+              <button onClick={() => setEditingParent(null)} className="p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveParentEdit} className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={editingParent.name}
-                  onChange={e => setEditingParent({ ...editingParent, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                  required
-                />
-              </div>
+            <form onSubmit={handleSaveParentEdit} className="space-y-4">
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <PhoneCall size={14} className="text-emerald-600" /> Parent Profile Information
+                </h4>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Relationship</label>
-                  <select
-                    value={['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '') ? editingParent.relation : 'Other'}
-                    onChange={e => {
-                      const val = e.target.value
-                      if (val !== 'Other') {
-                        setEditingParent({ ...editingParent, relation: val })
-                      } else if (['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) {
-                        setEditingParent({ ...editingParent, relation: '' })
-                      }
-                    }}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white cursor-pointer mb-1.5"
-                  >
-                    <option value="Father">Father</option>
-                    <option value="Mother">Mother</option>
-                    <option value="Guardian">Guardian</option>
-                    <option value="Uncle">Uncle</option>
-                    <option value="Aunt">Aunt</option>
-                    <option value="Grandparent">Grandparent</option>
-                    <option value="Sponsor">Sponsor</option>
-                    <option value="Other">Other (Type below)</option>
-                  </select>
-
-                  {(!['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) && (
-                    <input
-                      type="text"
-                      placeholder="Specify custom relationship (e.g. Stepfather, Next of kin...)"
-                      value={editingParent.relation || ''}
-                      onChange={e => setEditingParent({ ...editingParent, relation: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                      required
-                    />
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Phone Number</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Full Name</label>
                   <input
                     type="text"
-                    value={editingParent.mobileno || ''}
-                    onChange={e => setEditingParent({ ...editingParent, mobileno: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold font-mono"
+                    value={editingParent.name}
+                    onChange={e => setEditingParent({ ...editingParent, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
                     required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Relationship</label>
+                    <select
+                      value={['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '') ? editingParent.relation : 'Other'}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val !== 'Other') {
+                          setEditingParent({ ...editingParent, relation: val })
+                        } else if (['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) {
+                          setEditingParent({ ...editingParent, relation: '' })
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white cursor-pointer mb-1.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                    >
+                      <option value="Father">Father</option>
+                      <option value="Mother">Mother</option>
+                      <option value="Guardian">Guardian</option>
+                      <option value="Uncle">Uncle</option>
+                      <option value="Aunt">Aunt</option>
+                      <option value="Grandparent">Grandparent</option>
+                      <option value="Sponsor">Sponsor</option>
+                      <option value="Other">Other (Type below)</option>
+                    </select>
+
+                    {(!['Father', 'Mother', 'Guardian', 'Uncle', 'Aunt', 'Grandparent', 'Sponsor'].includes(editingParent.relation || '')) && (
+                      <input
+                        type="text"
+                        placeholder="Specify custom relationship (e.g. Stepfather, Next of kin...)"
+                        value={editingParent.relation || ''}
+                        onChange={e => setEditingParent({ ...editingParent, relation: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                        required
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      value={editingParent.mobileno || ''}
+                      onChange={e => setEditingParent({ ...editingParent, mobileno: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={editingParent.email || ''}
+                      onChange={e => setEditingParent({ ...editingParent, email: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Occupation</label>
+                    <input
+                      type="text"
+                      value={editingParent.occupation || ''}
+                      onChange={e => setEditingParent({ ...editingParent, occupation: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Residential Address</label>
+                  <input
+                    type="text"
+                    value={editingParent.address || ''}
+                    onChange={e => setEditingParent({ ...editingParent, address: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={editingParent.email || ''}
-                  onChange={e => setEditingParent({ ...editingParent, email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                />
-              </div>
+              {/* Linked Children / Allocated Students Section */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                      <Users size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 tracking-tight">
+                        Allocated Children ({editingParent.students?.length || 0})
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Students linked to this parent profile. You can unlink or reassign wrongly assigned children.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Occupation</label>
-                <input
-                  type="text"
-                  value={editingParent.occupation || ''}
-                  onChange={e => setEditingParent({ ...editingParent, occupation: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                />
-              </div>
+                {/* Allocated Children List */}
+                {editingParent.students && editingParent.students.length > 0 ? (
+                  <div className="space-y-2">
+                    {editingParent.students.map((child) => (
+                      <div
+                        key={child.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 gap-2"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                            {child.name.charAt(0) || 'S'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">{child.name}</p>
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              {child.className || 'Class Unassigned'} {child.sectionName ? `(${child.sectionName})` : ''} • Reg: {child.registerNo || 'N/A'}
+                            </p>
+                          </div>
+                        </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Residential Address</label>
-                <input
-                  type="text"
-                  value={editingParent.address || ''}
-                  onChange={e => setEditingParent({ ...editingParent, address: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
-                />
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                          {/* Reassign Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (reassigningStudent?.id === child.id) {
+                                setReassigningStudent(null)
+                                setTargetParentIdForReassign('')
+                              } else {
+                                setReassigningStudent({ id: child.id, name: child.name })
+                                setTargetParentIdForReassign('')
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Reassign this student to another parent"
+                          >
+                            <RefreshCw size={12} /> Reassign
+                          </button>
+
+                          {/* Unlink Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleDetachStudent(child.id, child.name)}
+                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Unlink student from this parent"
+                          >
+                            <UserMinus size={12} /> Unlink
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-900 text-xs text-center font-medium">
+                    No children are currently linked to this parent profile. You can attach a student below.
+                  </div>
+                )}
+
+                {/* Inline Reassign Modal / Dropdown Box if active */}
+                {reassigningStudent && (
+                  <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-2.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-950">
+                        Reassign <strong>{reassigningStudent.name}</strong> to Another Parent:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReassigningStudent(null)
+                          setTargetParentIdForReassign('')
+                        }}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <select
+                        value={targetParentIdForReassign}
+                        onChange={(e) => setTargetParentIdForReassign(e.target.value ? Number(e.target.value) : '')}
+                        className="flex-1 text-xs font-semibold px-3 py-2 border border-indigo-300 rounded-xl bg-white outline-none cursor-pointer"
+                      >
+                        <option value="">-- Choose Target Parent in School --</option>
+                        {parents
+                          .filter((p) => p.id !== editingParent.id)
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} {p.mobileno ? `(${p.mobileno})` : ''} • {p.studentCount} child(ren)
+                            </option>
+                          ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={!targetParentIdForReassign || isReassigning}
+                        onClick={() => {
+                          if (targetParentIdForReassign) {
+                            handleReassignStudent(reassigningStudent.id, Number(targetParentIdForReassign))
+                          }
+                        }}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        {isReassigning ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                        Confirm Move
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Attach Student Section */}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 bg-emerald-600 text-white rounded-md">
+                      <Plus size={14} />
+                    </div>
+                    <h5 className="text-xs font-black text-emerald-950">Attach / Link Student to this Parent</h5>
+                  </div>
+
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Type student name or reg no to filter..."
+                      value={studentSearchInAttach}
+                      onChange={(e) => setStudentSearchInAttach(e.target.value)}
+                      className="w-full text-xs px-3 py-1.5 border border-emerald-200 rounded-xl bg-white outline-none"
+                    />
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <select
+                        value={selectedStudentToAttach}
+                        onChange={(e) => setSelectedStudentToAttach(e.target.value ? Number(e.target.value) : '')}
+                        className="flex-1 text-xs font-semibold px-3 py-2 border border-emerald-300 rounded-xl bg-white outline-none cursor-pointer"
+                      >
+                        <option value="">-- Select Student to Attach --</option>
+                        {allStudents
+                          .filter((s) => {
+                            // Don't show students already linked to this parent
+                            if (editingParent.students?.some((st) => st.id === s.id)) return false
+                            if (!studentSearchInAttach.trim()) return true
+                            const q = studentSearchInAttach.toLowerCase()
+                            return (
+                              s.name.toLowerCase().includes(q) ||
+                              (s.registerNo && s.registerNo.toLowerCase().includes(q)) ||
+                              (s.className && s.className.toLowerCase().includes(q))
+                            )
+                          })
+                          .slice(0, 100)
+                          .map((s) => {
+                            const parentNote = s.parentId
+                              ? ` [Currently with: ${s.parentName || `Parent #${s.parentId}`}]`
+                              : ' [Unassigned]'
+                            return (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.className || 'No Class'} • {s.registerNo || 'No Reg'}){parentNote}
+                              </option>
+                            )
+                          })}
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={!selectedStudentToAttach || isAttachingStudent}
+                        onClick={handleAttachStudent}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        {isAttachingStudent ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                        + Attach Child
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingParent(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition"
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingEdit}
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
                 >
-                  {isSavingEdit ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Save Changes
+                  {isSavingEdit ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Save Parent Profile
                 </button>
               </div>
             </form>

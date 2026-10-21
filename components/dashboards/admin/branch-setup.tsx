@@ -27,6 +27,7 @@ interface ClassData {
   name: string
   nameNumeric: string
   isEcd: boolean
+  usesScores?: boolean
   sections: {
     section: {
       id: number
@@ -83,6 +84,7 @@ export function BranchSetup() {
   const [newClassName, setNewClassName] = useState('')
   const [newClassNumeric, setNewClassNumeric] = useState('')
   const [newClassIsEcd, setNewClassIsEcd] = useState(false)
+  const [newClassUsesScores, setNewClassUsesScores] = useState(true)
   const [newSectionName, setNewSectionName] = useState('')
   const [newSectionCapacity, setNewSectionCapacity] = useState('')
   const [isSubmittingClass, setIsSubmittingClass] = useState(false)
@@ -252,10 +254,12 @@ export function BranchSetup() {
         name: newClassName,
         nameNumeric: newClassNumeric,
         isEcd: newClassIsEcd,
+        usesScores: newClassUsesScores,
       })
       setNewClassName('')
       setNewClassNumeric('')
       setNewClassIsEcd(false)
+      setNewClassUsesScores(true)
       showNotification('success', 'Academic Class successfully registered!')
       await loadClassrooms()
     } catch (err) {
@@ -276,6 +280,7 @@ export function BranchSetup() {
         name: editingClass.name,
         nameNumeric: editingClass.nameNumeric,
         isEcd: editingClass.isEcd,
+        usesScores: editingClass.usesScores,
       })
       showNotification('success', 'Class updated successfully!')
       setEditingClass(null)
@@ -770,12 +775,33 @@ export function BranchSetup() {
                           type="checkbox" 
                           id="newClassIsEcd"
                           checked={newClassIsEcd}
-                          onChange={e => setNewClassIsEcd(e.target.checked)}
+                          onChange={e => {
+                            const checked = e.target.checked
+                            setNewClassIsEcd(checked)
+                            if (checked) setNewClassUsesScores(false)
+                          }}
                           className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                         <label htmlFor="newClassIsEcd" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
                           ECD / Montessori Class
                         </label>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-slate-50">
+                        <div>
+                          <label htmlFor="newClassUsesScores" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                            Uses Numerical Scores
+                          </label>
+                          <p className="text-[10px] text-slate-500">
+                            {newClassUsesScores ? 'Continuous Assessment & Exams' : 'Zero-Score Qualitative Comments'}
+                          </p>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          id="newClassUsesScores"
+                          checked={newClassUsesScores}
+                          onChange={e => setNewClassUsesScores(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
                       </div>
                       <button 
                         type="submit" 
@@ -900,6 +926,15 @@ export function BranchSetup() {
                                   <h4 className="font-extrabold text-slate-800 text-base">{cls.name}</h4>
                                   {cls.isEcd && (
                                     <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-full font-bold uppercase">ECD</span>
+                                  )}
+                                  {cls.usesScores === false ? (
+                                    <span className="text-[9px] bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded-full font-bold">
+                                      Qualitative Comments
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-medium">
+                                      Scores
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -1409,12 +1444,36 @@ export function BranchSetup() {
                   type="checkbox" 
                   id="editClassIsEcd"
                   checked={editingClass.isEcd}
-                  onChange={e => setEditingClass({ ...editingClass, isEcd: e.target.checked })}
+                  onChange={e => {
+                    const checked = e.target.checked
+                    setEditingClass({
+                      ...editingClass,
+                      isEcd: checked,
+                      ...(checked ? { usesScores: false } : {}),
+                    })
+                  }}
                   className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
                 />
                 <label htmlFor="editClassIsEcd" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
                   ECD / Montessori Class
                 </label>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-slate-50">
+                <div>
+                  <label htmlFor="editClassUsesScores" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                    Uses Numerical Scores
+                  </label>
+                  <p className="text-[10px] text-slate-500">
+                    {editingClass.usesScores ?? true ? 'Continuous Assessment & Exams' : 'Zero-Score Qualitative Comments'}
+                  </p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  id="editClassUsesScores"
+                  checked={editingClass.usesScores ?? true}
+                  onChange={e => setEditingClass({ ...editingClass, usesScores: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
               </div>
               <div className="flex items-center gap-2 pt-2">
                 <button

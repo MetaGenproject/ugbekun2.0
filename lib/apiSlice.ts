@@ -109,6 +109,9 @@ export const endpoints = {
     studentsParents: `${BASE_URL}/admin/students-parents`,
     deleteParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}`,
     updateParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}`,
+    attachStudentToParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}/attach-student`,
+    detachStudentFromParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}/detach-student`,
+    reassignStudentParent: (id: number | string) => `${BASE_URL}/admin/parents/${id}/reassign-student`,
     parentMessages: (parentId: number | string) => `${BASE_URL}/admin/parents/${parentId}/messages`,
     sendParentMessage: (parentId: number | string) => `${BASE_URL}/admin/parents/${parentId}/messages`,
     updateParentMessage: (messageId: number | string) => `${BASE_URL}/admin/parent-messages/${messageId}`,
@@ -122,6 +125,7 @@ export const endpoints = {
     classDetail: (id: number | string) => `${BASE_URL}/admin/classes/${id}`,
     seedClassPreset: `${BASE_URL}/admin/classes/seed-preset`,
     toggleEcdClass: `${BASE_URL}/admin/classes/toggle-ecd`,
+    toggleClassUsesScores: `${BASE_URL}/admin/classes/toggle-uses-scores`,
     sections: `${BASE_URL}/admin/sections`,
     sectionDetail: (id: number | string) => `${BASE_URL}/admin/sections/${id}`,
     allocateSections: `${BASE_URL}/admin/classes/allocate-sections`,
@@ -193,6 +197,16 @@ export const endpoints = {
     marksEntry: (classId?: number, sectionId?: number, subjectId?: number, sessionId?: number) =>
       `${BASE_URL}/admin/marks-entry?${classId ? `classId=${classId}` : ''}${sectionId ? `&sectionId=${sectionId}` : ''}${subjectId ? `&subjectId=${subjectId}` : ''}${sessionId ? `&sessionId=${sessionId}` : ''}`,
     saveMarksBatch: `${BASE_URL}/admin/marks-entry/batch-save`,
+    subjectComments: (classId?: number, sectionId?: number, subjectId?: number, sessionId?: number, termId?: number) => {
+      const p = new URLSearchParams()
+      if (classId) p.set('classId', String(classId))
+      if (sectionId) p.set('sectionId', String(sectionId))
+      if (subjectId) p.set('subjectId', String(subjectId))
+      if (sessionId) p.set('sessionId', String(sessionId))
+      if (termId) p.set('termId', String(termId))
+      return `${BASE_URL}/admin/subject-comments?${p.toString()}`
+    },
+    saveSubjectCommentsBatch: `${BASE_URL}/admin/subject-comments/batch-save`,
     assignClassMatrix: `${BASE_URL}/admin/evaluation-matrices/assign-class`,
     aiDistributeMarks: `${BASE_URL}/admin/marks-entry/ai-distribute`,
     cbtGroups: (subjectId?: number) => `${BASE_URL}/admin/cbt/groups${subjectId ? `?subjectId=${subjectId}` : ''}`,
@@ -340,6 +354,12 @@ export const endpoints = {
     officeTransactionVoid: (id: number) => `${BASE_URL}/admin/finances/office-transactions/${id}/void`,
     schoolBank: `${BASE_URL}/admin/finances/school-bank`,
     comprehensiveReports: `${BASE_URL}/admin/reports/comprehensive`,
+    reportAttendanceAnalytics: (query = '') => `${BASE_URL}/admin/reports/attendance-analytics${query}`,
+    reportFinancialAging: (query = '') => `${BASE_URL}/admin/reports/financial-aging${query}`,
+    reportAdmissionsFunnel: (query = '') => `${BASE_URL}/admin/reports/admissions-funnel${query}`,
+    reportInventoryValuation: `${BASE_URL}/admin/reports/inventory-valuation`,
+    reportStaffAttendanceAudit: (query = '') => `${BASE_URL}/admin/reports/staff-attendance-audit${query}`,
+    reportExportCsv: (type: string) => `${BASE_URL}/admin/reports/export-csv?type=${type}`,
     systemSettings: `${BASE_URL}/admin/settings`,
     academicSessions: `${BASE_URL}/admin/sessions`,
     academicSession: (id: number | string) => `${BASE_URL}/admin/sessions/${id}`,
@@ -355,18 +375,50 @@ export const endpoints = {
     reportCards: {
       classes: (sessionId?: number) =>
         `${BASE_URL}/admin/report-cards/classes${sessionId ? `?sessionId=${sessionId}` : ''}`,
-      students: (classId: number, sectionId: number, sessionId?: number) =>
-        `${BASE_URL}/admin/report-cards/students?classId=${classId}&sectionId=${sectionId}${sessionId ? `&sessionId=${sessionId}` : ''}`,
-      exportPdf: (studentId: number, classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number) =>
-        `${BASE_URL}/admin/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}${sessionId ? `&sessionId=${sessionId}` : ''}`,
-      exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number) =>
-        `${BASE_URL}/admin/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}${sessionId ? `&sessionId=${sessionId}` : ''}`,
+      students: (classId: number, sectionId: number, sessionId?: number, stage?: string, termId?: number) => {
+        const params = new URLSearchParams({ classId: String(classId), sectionId: String(sectionId) })
+        if (sessionId) params.append('sessionId', String(sessionId))
+        if (stage) params.append('stage', stage)
+        if (termId) params.append('termId', String(termId))
+        return `${BASE_URL}/admin/report-cards/students?${params.toString()}`
+      },
+      exportPdf: (studentId: number, classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number, stage?: string, termId?: number) => {
+        const params = new URLSearchParams({
+          studentId: String(studentId),
+          classId: String(classId),
+          sectionId: String(sectionId),
+          rankingType,
+          rankingLimit: String(rankingLimit),
+        })
+        if (sessionId) params.append('sessionId', String(sessionId))
+        if (stage) params.append('stage', stage)
+        if (termId) params.append('termId', String(termId))
+        return `${BASE_URL}/admin/report-cards/export-pdf?${params.toString()}`
+      },
+      exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, sessionId?: number, stage?: string, termId?: number) => {
+        const params = new URLSearchParams({
+          classId: String(classId),
+          sectionId: String(sectionId),
+          rankingType,
+          rankingLimit: String(rankingLimit),
+        })
+        if (sessionId) params.append('sessionId', String(sessionId))
+        if (stage) params.append('stage', stage)
+        if (termId) params.append('termId', String(termId))
+        return `${BASE_URL}/admin/report-cards/export-batch-pdf?${params.toString()}`
+      },
       commentary: `${BASE_URL}/admin/report-cards/commentary`,
       behavioral: `${BASE_URL}/admin/report-cards/behavioral`,
       aiComments: `${BASE_URL}/admin/report-cards/ai-comments`,
       togglePublish: `${BASE_URL}/admin/report-cards/toggle-publish`,
-      publishStatus: (sessionId?: number) =>
-        `${BASE_URL}/admin/report-cards/publish-status${sessionId ? `?sessionId=${sessionId}` : ''}`,
+      publishStatus: (sessionId?: number, classId?: number, termId?: number) => {
+        const params = new URLSearchParams()
+        if (sessionId) params.append('sessionId', String(sessionId))
+        if (classId) params.append('classId', String(classId))
+        if (termId) params.append('termId', String(termId))
+        const qs = params.toString()
+        return `${BASE_URL}/admin/report-cards/publish-status${qs ? `?${qs}` : ''}`
+      },
     },
     myeduride: {
       config: `${BASE_URL}/admin/myeduride/config`,
@@ -445,6 +497,8 @@ export const endpoints = {
     gradebookBatchSave: `${BASE_URL}/teacher/gradebook/batch-save`,
     marksEntry: (query: string) => `${BASE_URL}/teacher/marks-entry?${query}`,
     saveMarksEntryBatch: `${BASE_URL}/teacher/marks-entry/batch-save`,
+    subjectComments: (query: string) => `${BASE_URL}/teacher/subject-comments?${query}`,
+    saveSubjectCommentsBatch: `${BASE_URL}/teacher/subject-comments/batch-save`,
     aiDistributeMarks: `${BASE_URL}/teacher/marks-entry/ai-distribute`,
     evaluationMatrices: `${BASE_URL}/teacher/evaluation-matrices`,
     gradingSystem: (classId?: number) => `${BASE_URL}/teacher/grading-system${classId ? `?classId=${classId}` : ''}`,
@@ -779,7 +833,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
     if (!isAuthFormRequest) {
       showSystemStatus(resolveHttpStatus(response.status, errorMessage));
     }
-    throw new Error(errorMessage);
+    const error: any = new Error(errorMessage);
+    error.status = response.status;
+    error.code = data?.code;
+    error.data = data;
+    throw error;
   }
 
   return data as T;

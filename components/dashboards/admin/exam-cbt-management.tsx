@@ -30,7 +30,8 @@ import {
   Check,
   AlertCircle,
   Layers,
-  GraduationCap
+  GraduationCap,
+  Trash2
 } from 'lucide-react'
 import {
   Table,
@@ -67,12 +68,21 @@ interface ClassData {
   sections: Array<{ section: { id: number; name: string } }>
 }
 
+interface ManualBreakdownItem {
+  componentName: string
+  marks: number
+}
+
 interface ExamRecord {
   id: number
   name: string
   termId: number
   typeId: number
   sessionId: number
+  examCategory?: string
+  cbtTotalMarks?: number | null
+  totalQuestionCount?: number | null
+  manualMarksBreakdown?: ManualBreakdownItem[] | null
   createdAt: string
   remark?: string
 }
@@ -107,13 +117,17 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
   const [publishedExams, setPublishedExams] = useState<ExamRecord[]>([])
   const [loadingExams, setLoadingExams] = useState(true)
 
-  // Exam Form State
+  // Exam Form State (Exam Master Stage 1)
   const [examName, setExamName] = useState('')
-  const [selectedClassId, setSelectedClassId] = useState('')
   const [termId, setTermId] = useState('1')
-  const [durationMins, setDurationMins] = useState('45')
-  const [totalQuestions, setTotalQuestions] = useState('40')
+  const [cbtTotalMarks, setCbtTotalMarks] = useState('10')
+  const [totalQuestions, setTotalQuestions] = useState('20')
+  const [manualBreakdown, setManualBreakdown] = useState<ManualBreakdownItem[]>([
+    { componentName: 'Theory / CA', marks: 10 },
+    { componentName: 'Practical / Project', marks: 10 },
+  ])
   const [isSubmittingExam, setIsSubmittingExam] = useState(false)
+  const [deletingExamId, setDeletingExamId] = useState<number | null>(null)
 
   // CBT Exam Simulator State
   const [cbtSimulatorQuestions, setCbtSimulatorQuestions] = useState<Array<{ id: number; q: string; options: string[]; correct: string }>>([
@@ -176,15 +190,79 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
     loadData()
   }, [])
 
+  const addManualRow = () => {
+    setManualBreakdown((prev) => [...prev, { componentName: `Theory Component ${prev.length + 1}`, marks: 10 }])
+  }
+
+  const removeManualRow = (index: number) => {
+    if (manualBreakdown.length <= 1) return
+    setManualBreakdown((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const updateManualRow = (index: number, field: 'componentName' | 'marks', value: any) => {
+    setManualBreakdown((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: field === 'marks' ? Math.max(1, Number(value) || 0) : value } : item))
+    )
+  }
+
+  const handleDeleteExam = async (examId: number) => {
+    if (!confirm('Are you sure you want to delete this Exam Master definition?')) return
+    try {
+      setDeletingExamId(examId)
+      const res = await apiSlice.delete<{ success: boolean; message: string }>(`${endpoints.admin.exams}/${examId}`)
+      if (res.success) {
+        setPublishedExams((prev) => prev.filter((e) => e.id !== examId))
+        showSystemStatus({
+          type: 'ACTION_SUCCESS',
+          title: 'Exam Deleted',
+          message: 'The Exam Master setup was removed successfully.'
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to delete exam.'))
+    } finally {
+      setDeletingExamId(null)
+    }
+  }
+
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!examName.trim()) {
       showSystemStatus({
         type: 'MISSING_INFO',
         title: 'Required information missing.',
-        message: 'Exam Name is required. Please enter an exam title before submitting.'
+        message: 'Exam Title is required. Please enter an exam title before submitting.'
       })
       return
+    }
+
+    const isCbt = examTypeMode === 'cbt'
+    if (isCbt) {
+      if (!cbtTotalMarks || Number(cbtTotalMarks) <= 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Valid CBT Total Marks required.',
+          message: 'Please specify total CBT marks (must be greater than 0).'
+        })
+        return
+      }
+      if (!totalQuestions || Number(totalQuestions) <= 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Total Question Count required.',
+          message: 'Please set the approved question count cap for this exam.'
+        })
+        return
+      }
+    } else {
+      if (manualBreakdown.length === 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Marks distribution required.',
+          message: 'Add at least one mark allocation component for this manual paper exam.'
+        })
+        return
+      }
     }
 
     try {
@@ -192,17 +270,18 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       showSystemStatus({
         type: 'PROCESSING',
         title: 'Processing...',
-        message: 'Publishing exam setup to database...',
+        message: 'Registering Exam Master definition in database...',
         durationMs: 0
       })
 
-      const isCbt = examTypeMode === 'cbt'
       const payload = {
         name: examName.trim(),
         termId: Number(termId || 1),
-        typeId: isCbt ? 3 : 1,
-        markDistribution: isCbt ? ['CBT Test', 'Theory', 'Objective'] : ['Theory', 'Objective'],
-        remark: isCbt ? `CBT Exam (${durationMins || 45} mins)` : 'Manual Paper Exam'
+        examCategory: isCbt ? 'CBT' : 'MANUAL',
+        cbtTotalMarks: isCbt ? Number(cbtTotalMarks) : null,
+        totalQuestionCount: isCbt ? Number(totalQuestions) : null,
+        manualMarksBreakdown: !isCbt ? manualBreakdown : null,
+        remark: isCbt ? `CBT Exam (${cbtTotalMarks} Marks - Cap: ${totalQuestions} Qs)` : 'Manual Paper Exam'
       }
 
       const res = await apiSlice.post<{ success: boolean; exam: ExamRecord }>(endpoints.admin.exams, payload)
@@ -212,8 +291,8 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
         setExamName('')
         showSystemStatus({
           type: 'ACTION_SUCCESS',
-          title: 'Successfully completed.',
-          message: `Exam "${res.exam.name}" successfully created and saved to database.`
+          title: 'Exam Master Initialized',
+          message: `Exam Master "${res.exam.name}" successfully created.`
         })
       }
     } catch (err: any) {
@@ -480,28 +559,14 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                 <input
                   type="text"
                   required
-                  placeholder={examTypeMode === 'cbt' ? 'e.g. 1st Term General Science CBT Examination' : 'e.g. 1st Term Mathematics Theory Examination'}
+                  placeholder={examTypeMode === 'cbt' ? 'e.g. CBT 1, CBT Mid-Term, Terminal CBT Exam' : 'e.g. Mid-Term Written CA, Terminal Theory Examination'}
                   value={examName}
                   onChange={(e) => setExamName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold focus:outline-cyan-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Target Class *</label>
-                  <select
-                    value={selectedClassId}
-                    onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
-                  >
-                    <option value="">All Branch Classes</option>
-                    {classesList.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Academic Term *</label>
                   <select
@@ -517,41 +582,95 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
 
                 {examTypeMode === 'cbt' ? (
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Duration (Mins) *</label>
+                    <label className="block font-bold text-slate-700 mb-1">CBT Total Marks * (Governing Mark)</label>
                     <input
                       type="number"
                       required
-                      value={durationMins}
-                      onChange={(e) => setDurationMins(e.target.value)}
+                      min={1}
+                      max={100}
+                      value={cbtTotalMarks}
+                      onChange={(e) => setCbtTotalMarks(e.target.value)}
+                      placeholder="e.g. 10 or 20"
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
                     />
+                    <p className="text-[10px] text-slate-400 mt-1">Duration is configured during question distribution sittings.</p>
                   </div>
                 ) : (
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Mark Allocation</label>
-                    <div className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-600 font-mono">
-                      Theory (60) + Objective (40)
+                    <label className="block font-bold text-slate-700 mb-1">Total Manual Marks</label>
+                    <div className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-700 font-bold flex items-center justify-between">
+                      <span>Configured Breakdown Sum:</span>
+                      <span className="text-cyan-700 font-mono text-sm">
+                        {manualBreakdown.reduce((sum, item) => sum + (Number(item.marks) || 0), 0)} Marks
+                      </span>
                     </div>
                   </div>
                 )}
               </div>
 
-              {examTypeMode === 'cbt' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Total Question Count *</label>
-                    <input
-                      type="number"
-                      required
-                      value={totalQuestions}
-                      onChange={(e) => setTotalQuestions(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
-                    />
+              {examTypeMode === 'cbt' ? (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Approved Question Count * (Hard Cap)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={200}
+                    value={totalQuestions}
+                    onChange={(e) => setTotalQuestions(e.target.value)}
+                    placeholder="e.g. 20"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                  />
+                  <p className="text-[10px] text-amber-600 font-medium mt-1">
+                    ⚠️ Validation Rule: Question uploads or distribution bundles exceeding this count will be blocked automatically.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800">Marks Distribution Builder</label>
+                    <button
+                      type="button"
+                      onClick={addManualRow}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-[11px] flex items-center gap-1 transition"
+                    >
+                      <Plus size={12} /> Add Component
+                    </button>
                   </div>
-                  <div className="flex items-center pt-5">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                      <input type="checkbox" defaultChecked className="rounded text-cyan-600" /> Randomize Questions per Student
-                    </label>
+                  <div className="space-y-2">
+                    {manualBreakdown.map((row, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={row.componentName}
+                          onChange={(e) => updateManualRow(idx, 'componentName', e.target.value)}
+                          placeholder="e.g. Theory/CA or Practical"
+                          className="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                        />
+                        <div className="flex items-center gap-1 w-28">
+                          <input
+                            type="number"
+                            required
+                            min={1}
+                            max={100}
+                            value={row.marks}
+                            onChange={(e) => updateManualRow(idx, 'marks', e.target.value)}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-right"
+                          />
+                          <span className="text-slate-400 font-bold text-[10px]">Marks</span>
+                        </div>
+                        {manualBreakdown.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeManualRow(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -563,7 +682,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                   className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition flex items-center gap-2"
                 >
                   {isSubmittingExam ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                  <span>{isSubmittingExam ? 'Creating Exam...' : (examTypeMode === 'cbt' ? 'Publish CBT Exam' : 'Create Paper Exam')}</span>
+                  <span>{isSubmittingExam ? 'Creating Exam Master...' : (examTypeMode === 'cbt' ? 'Save CBT Exam Master' : 'Save Manual Exam Master')}</span>
                 </button>
               </div>
             </form>
@@ -574,9 +693,9 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="font-bold text-sm text-slate-900">
-                  Published Branch Exams ({publishedExams.length})
+                  Exam Master Definitions ({publishedExams.length})
                 </h4>
-                <p className="text-slate-400 text-xs">Exams configured and recorded in master database.</p>
+                <p className="text-slate-400 text-xs">Governing assessment definitions for CBT and manual evaluation.</p>
               </div>
               <div className="relative w-full sm:w-64">
                 <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
@@ -601,32 +720,65 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b">
                     <tr>
                       <th className="p-3">Exam ID</th>
-                      <th className="p-3">Exam Name</th>
+                      <th className="p-3">Exam Title</th>
                       <th className="p-3">Term</th>
-                      <th className="p-3">Type</th>
-                      <th className="p-3">Remark</th>
-                      <th className="p-3">Created Date</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Marks Allocation</th>
+                      <th className="p-3">Question Cap</th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredExams.map((ex) => (
-                      <tr key={ex.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-3 font-mono font-bold text-slate-400">#{ex.id}</td>
-                        <td className="p-3 font-bold text-slate-900">{ex.name}</td>
-                        <td className="p-3 font-semibold text-cyan-600">
-                          {ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}
-                        </td>
-                        <td className="p-3 font-mono">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            ex.typeId === 3 ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {ex.typeId === 3 ? 'CBT Online' : 'Manual Paper'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-slate-500">{ex.remark || 'N/A'}</td>
-                        <td className="p-3 text-slate-500">{new Date(ex.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
+                    {filteredExams.map((ex) => {
+                      const isCbt = ex.examCategory === 'CBT' || ex.typeId === 3
+                      return (
+                        <tr key={ex.id} className="hover:bg-slate-50/80 transition">
+                          <td className="p-3 font-mono font-bold text-slate-400">#{ex.id}</td>
+                          <td className="p-3 font-bold text-slate-900">{ex.name}</td>
+                          <td className="p-3 font-semibold text-cyan-600">
+                            {ex.termId === 1 ? '1st Term' : (ex.termId === 2 ? '2nd Term' : '3rd Term')}
+                          </td>
+                          <td className="p-3 font-mono">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isCbt ? 'bg-cyan-100 text-cyan-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {isCbt ? '💻 CBT' : '📝 MANUAL'}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800">
+                            {isCbt ? (
+                              <span>{ex.cbtTotalMarks ? `${ex.cbtTotalMarks} Marks` : 'N/A'}</span>
+                            ) : (
+                              <span className="text-[11px] text-slate-600">
+                                {Array.isArray(ex.manualMarksBreakdown) && ex.manualMarksBreakdown.length > 0
+                                  ? ex.manualMarksBreakdown.map((m: any) => `${m.componentName} (${m.marks})`).join(' + ')
+                                  : 'Manual Scheme'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {isCbt && ex.totalQuestionCount ? (
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 font-mono font-bold text-slate-700">
+                                {ex.totalQuestionCount} Qs Max
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">None</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <button
+                              type="button"
+                              disabled={deletingExamId === ex.id}
+                              onClick={() => handleDeleteExam(ex.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                              title="Delete Exam Master"
+                            >
+                              {deletingExamId === ex.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -656,7 +808,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       {/* 6. EVALUATION MATRIX */}
       {activeTab === 'evaluation-matrix' && (
         <div className="space-y-4">
-          <EvaluationMatrices />
+          <EvaluationMatrices onGoToExamSetup={() => setActiveTab('exam-setup')} />
         </div>
       )}
 

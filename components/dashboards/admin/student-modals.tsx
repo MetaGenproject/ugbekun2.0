@@ -15,7 +15,8 @@ import {
   AlertCircle,
   Camera,
   Upload,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react'
 import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
 
@@ -49,6 +50,10 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
 
+  // Parent selector state
+  const [availableParents, setAvailableParents] = useState<any[]>([])
+  const [isLoadingParents, setIsLoadingParents] = useState(false)
+
   // Form State
   const [formData, setFormData] = useState({
     firstName: '',
@@ -66,6 +71,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
     permanentAddress: '',
     city: '',
     state: '',
+    parentId: null as number | null,
     parentName: '',
     parentEmail: '',
     parentPhone: '',
@@ -80,10 +86,27 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
   // Available sections based on selected classId
   const [availableSections, setAvailableSections] = useState<Section[]>([])
 
+  const loadAvailableParents = async (query = '') => {
+    setIsLoadingParents(true)
+    try {
+      const res = await apiSlice.get<{ success: boolean; parents: any[] }>(
+        endpoints.admin.searchParents(query)
+      )
+      if (res.success && Array.isArray(res.parents)) {
+        setAvailableParents(res.parents)
+      }
+    } catch (e) {
+      console.error('Failed to load parents for dropdown:', e)
+    } finally {
+      setIsLoadingParents(false)
+    }
+  }
+
   // Load student details when modal opens with studentId
   useEffect(() => {
     if (isOpen && studentId) {
       loadStudentDetails(studentId)
+      loadAvailableParents()
     } else {
       resetForm()
     }
@@ -123,6 +146,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
       permanentAddress: '',
       city: '',
       state: '',
+      parentId: null,
       parentName: '',
       parentEmail: '',
       parentPhone: '',
@@ -144,6 +168,10 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
       )
       if (res.success && res.student) {
         const s = res.student
+        const resolvedParentId = s.parentId !== undefined && s.parentId !== null
+          ? Number(s.parentId)
+          : (s.parent?.id ? Number(s.parent.id) : null)
+
         setFormData({
           firstName: s.firstName || '',
           lastName: s.lastName || '',
@@ -160,6 +188,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
           permanentAddress: s.permanentAddress || '',
           city: s.city || '',
           state: s.state || '',
+          parentId: resolvedParentId,
           parentName: s.parent?.name || '',
           parentEmail: s.parent?.email || '',
           parentPhone: s.parent?.mobileno || '',
@@ -212,6 +241,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
         permanentAddress: formData.permanentAddress.trim() || null,
         city: formData.city.trim() || null,
         state: formData.state.trim() || null,
+        parentId: formData.parentId !== undefined ? (formData.parentId ? Number(formData.parentId) : null) : undefined,
         parentName: formData.parentName.trim() || null,
         parentEmail: formData.parentEmail.trim() || null,
         parentPhone: formData.parentPhone.trim() || null,
@@ -582,6 +612,124 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
               {/* Tab 4: Parent & Guardian */}
               {activeTab === 'parent' && (
                 <div className="space-y-4">
+                  {/* Parent Allocation & Dropdown Box */}
+                  <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-[#0063a6] text-white rounded-lg">
+                          <Users size={16} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-900 tracking-tight">Parent / Guardian Allocation</h4>
+                          <p className="text-[11px] text-slate-500 font-medium">Select an existing registered parent from the school branch, or enter custom details.</p>
+                        </div>
+                      </div>
+                      {formData.parentId && (
+                        <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Assigned (ID: #{formData.parentId})
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Select Existing Parent from School Branch:
+                          </label>
+                          <select
+                            value={formData.parentId || ''}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              if (!val) {
+                                // User chose to unlink
+                                setFormData(prev => ({
+                                  ...prev,
+                                  parentId: null,
+                                  parentName: '',
+                                  parentPhone: '',
+                                  parentEmail: '',
+                                  parentRelation: '',
+                                }))
+                              } else if (val === 'CUSTOM') {
+                                // User wants to type a custom / new parent
+                                setFormData(prev => ({
+                                  ...prev,
+                                  parentId: null,
+                                }))
+                              } else {
+                                const selParent = availableParents.find(p => String(p.id) === String(val))
+                                if (selParent) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    parentId: selParent.id,
+                                    parentName: selParent.name || '',
+                                    parentPhone: selParent.mobileno || '',
+                                    parentEmail: selParent.email || '',
+                                    parentRelation: selParent.relation || 'Parent',
+                                  }))
+                                }
+                              }
+                            }}
+                            className="w-full text-xs font-semibold px-3 py-2.5 border border-blue-300 rounded-xl bg-white shadow-xs focus:ring-2 focus:ring-blue-500/20 focus:border-[#0063a6] outline-none cursor-pointer"
+                          >
+                            <option value="">-- No Parent / Unlink Parent --</option>
+                            <option value="CUSTOM">➕ Type New / Unlinked Parent Profile</option>
+                            {availableParents.map((p) => {
+                              const phoneStr = p.mobileno ? ` • Phone: ${p.mobileno}` : ''
+                              const countStr = p.enrolledChildrenCount ? ` • ${p.enrolledChildrenCount} child(ren)` : ''
+                              return (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}{phoneStr}{countStr}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </div>
+                        
+                        <div className="self-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const term = prompt('Filter parent list by name, phone, or email:')
+                              if (term !== null) {
+                                loadAvailableParents(term.trim())
+                              }
+                            }}
+                            className="px-3 py-2.5 bg-white hover:bg-blue-100/70 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                            title="Search and filter parents"
+                          >
+                            <Search size={14} /> Filter
+                          </button>
+                        </div>
+                      </div>
+
+                      {formData.parentId && (
+                        <div className="flex items-center justify-between text-[11px] bg-white p-2.5 rounded-xl border border-blue-100 text-blue-900">
+                          <span>
+                            Attached to registered parent: <strong>{formData.parentName || 'Parent'}</strong> ({formData.parentPhone || 'No Phone'})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                parentId: null,
+                                parentName: '',
+                                parentPhone: '',
+                                parentEmail: '',
+                                parentRelation: '',
+                              }))
+                            }}
+                            className="text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                          >
+                            Unlink / Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Parent / Guardian Name</label>
@@ -590,6 +738,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                         value={formData.parentName}
                         onChange={e => handleChange('parentName', e.target.value)}
                         className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none"
+                        placeholder="e.g. Mr. & Mrs. Okonjo"
                       />
                     </div>
                     <div>
@@ -612,6 +761,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                         value={formData.parentEmail}
                         onChange={e => handleChange('parentEmail', e.target.value)}
                         className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none"
+                        placeholder="parent@example.com"
                       />
                     </div>
                     <div>
@@ -620,7 +770,8 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                         type="text"
                         value={formData.parentPhone}
                         onChange={e => handleChange('parentPhone', e.target.value)}
-                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none"
+                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none font-mono"
+                        placeholder="080XXXXXXXX"
                       />
                     </div>
                   </div>

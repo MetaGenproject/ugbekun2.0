@@ -30,6 +30,8 @@ import {
 interface ClassOption {
   id: number
   name: string
+  usesScores?: boolean
+  isEcd?: boolean
   evaluationMatrixId?: number | null
   sections: { section: { id: number; name: string } }[]
 }
@@ -65,6 +67,14 @@ interface StudentMarkState {
   absent: boolean
 }
 
+export const RATING_SCALES = [
+  { value: 1, label: '1 - Emerging', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { value: 2, label: '2 - Developing', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 3, label: '3 - Satisfactory', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 4, label: '4 - Proficient', badge: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { value: 5, label: '5 - Advanced', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+]
+
 export function MarksEntry() {
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [subjects, setSubjects] = useState<SubjectOption[]>([])
@@ -77,6 +87,13 @@ export function MarksEntry() {
   const [currentMatrix, setCurrentMatrix] = useState<EvaluationMatrixData | null>(null)
   const [students, setStudents] = useState<StudentItem[]>([])
   const [marksState, setMarksState] = useState<Record<number, StudentMarkState>>({})
+
+  // Phase 5: Comment-Based Qualitative Assessment States
+  const [isCommentBasedClass, setIsCommentBasedClass] = useState<boolean>(false)
+  const [commentAssessments, setCommentAssessments] = useState<
+    Record<number, { comment: string; rating: number }>
+  >({})
+  const [isSavingComments, setIsSavingComments] = useState<boolean>(false)
 
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -183,7 +200,18 @@ export function MarksEntry() {
             components?: Record<string, number | string>
           }
         >
-        classData: { id: number; name: string; evaluationMatrixId?: number | null }
+        commentsMap?: Record<
+          number,
+          {
+            id?: number
+            comment: string
+            rating: number
+            ratingLabel?: string
+          }
+        >
+        usesScores?: boolean
+        isCommentBased?: boolean
+        classData: { id: number; name: string; usesScores?: boolean; evaluationMatrixId?: number | null }
       }>(
         endpoints.admin.marksEntry(
           Number(selectedClassId),
@@ -193,55 +221,88 @@ export function MarksEntry() {
       )
 
       if (res.success) {
+        const isCommentBased = res.usesScores === false || res.isCommentBased === true || res.classData?.usesScores === false
+        setIsCommentBasedClass(isCommentBased)
         setCurrentMatrix(res.matrix)
         setStudents(res.students)
         setAssignedMatrixId(
           res.classData.evaluationMatrixId ? String(res.classData.evaluationMatrixId) : res.matrix?.id ? String(res.matrix.id) : ''
         )
 
-        // Build initial mark state per student
-        const initialMarks: Record<number, StudentMarkState> = {}
+        if (isCommentBased) {
+          // Initialize comment assessments
+          const initialComments: Record<number, { comment: string; rating: number }> = {}
+          res.students.forEach((stu) => {
+            const existing = res.commentsMap?.[stu.id]
+            initialComments[stu.id] = {
+              comment: existing?.comment || '',
+              rating: existing?.rating ? Number(existing.rating) : 3,
+            }
+          })
 
-        res.students.forEach((stu) => {
-          const existing = res.marksMap?.[stu.id]
-          const studentComponents: Record<string, number | string> = {}
-
-          if (res.matrix && Array.isArray(res.matrix.components)) {
-            res.matrix.components.forEach((comp) => {
-              const compKey = comp.code || comp.name
-              studentComponents[compKey] =
-                existing?.components?.[compKey] !== undefined ? existing.components[compKey] : ''
-            })
+          // Restore offline comments buffer if available
+          const commentBufferKey = `ugbekun_offline_comments_${selectedClassId}_${selectedSubjectId}`
+          const bufferedCommentStr = localStorage.getItem(commentBufferKey)
+          if (bufferedCommentStr) {
+            try {
+              const buffered = JSON.parse(bufferedCommentStr)
+              Object.keys(buffered).forEach((sIdStr) => {
+                const sId = Number(sIdStr)
+                if (initialComments[sId]) {
+                  initialComments[sId] = buffered[sId]
+                }
+              })
+            } catch (e) {
+              console.error('Failed to parse offline comments buffer:', e)
+            }
           }
 
-          initialMarks[stu.id] = {
-            components: studentComponents,
-            cbtMark: existing?.cbtMark || null,
-            cbtExamTitle: existing?.cbtExamTitle || null,
-            cbtTotalMarks: existing?.cbtTotalMarks || null,
-            cbtSource: existing?.cbtSource || null,
-            absent: existing?.absent || false,
-          }
-        })
+          setCommentAssessments(initialComments)
+        } else {
+          // Build initial mark state per student
+          const initialMarks: Record<number, StudentMarkState> = {}
 
-        // Check if there is an offline buffer for this class & subject
-        const bufferKey = `ugbekun_offline_marks_${selectedClassId}_${selectedSubjectId}`
-        const bufferedDataStr = localStorage.getItem(bufferKey)
-        if (bufferedDataStr) {
-          try {
-            const bufferedData = JSON.parse(bufferedDataStr)
-            Object.keys(bufferedData).forEach((sIdStr) => {
-              const sId = Number(sIdStr)
-              if (initialMarks[sId]) {
-                initialMarks[sId] = bufferedData[sId]
-              }
-            })
-          } catch (e) {
-            console.error('Failed to parse offline buffer:', e)
+          res.students.forEach((stu) => {
+            const existing = res.marksMap?.[stu.id]
+            const studentComponents: Record<string, number | string> = {}
+
+            if (res.matrix && Array.isArray(res.matrix.components)) {
+              res.matrix.components.forEach((comp) => {
+                const compKey = comp.code || comp.name
+                studentComponents[compKey] =
+                  existing?.components?.[compKey] !== undefined ? existing.components[compKey] : ''
+              })
+            }
+
+            initialMarks[stu.id] = {
+              components: studentComponents,
+              cbtMark: existing?.cbtMark || null,
+              cbtExamTitle: existing?.cbtExamTitle || null,
+              cbtTotalMarks: existing?.cbtTotalMarks || null,
+              cbtSource: existing?.cbtSource || null,
+              absent: existing?.absent || false,
+            }
+          })
+
+          // Check if there is an offline buffer for this class & subject
+          const bufferKey = `ugbekun_offline_marks_${selectedClassId}_${selectedSubjectId}`
+          const bufferedDataStr = localStorage.getItem(bufferKey)
+          if (bufferedDataStr) {
+            try {
+              const bufferedData = JSON.parse(bufferedDataStr)
+              Object.keys(bufferedData).forEach((sIdStr) => {
+                const sId = Number(sIdStr)
+                if (initialMarks[sId]) {
+                  initialMarks[sId] = bufferedData[sId]
+                }
+              })
+            } catch (e) {
+              console.error('Failed to parse offline buffer:', e)
+            }
           }
+
+          setMarksState(initialMarks)
         }
-
-        setMarksState(initialMarks)
       }
     } catch (err: any) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load marks entry roster.')
@@ -252,7 +313,9 @@ export function MarksEntry() {
 
   const checkOfflineBuffer = () => {
     if (!selectedClassId || !selectedSubjectId) return
-    const bufferKey = `ugbekun_offline_marks_${selectedClassId}_${selectedSubjectId}`
+    const bufferKey = isCommentBasedClass
+      ? `ugbekun_offline_comments_${selectedClassId}_${selectedSubjectId}`
+      : `ugbekun_offline_marks_${selectedClassId}_${selectedSubjectId}`
     const bufferedDataStr = localStorage.getItem(bufferKey)
     if (bufferedDataStr) {
       try {
@@ -353,6 +416,69 @@ export function MarksEntry() {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to save marks to server. Saved to offline buffer instead.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleStudentCommentChange = (studentId: number, comment: string) => {
+    setCommentAssessments((prev) => {
+      const current = prev[studentId] || { comment: '', rating: 3 }
+      const updated = {
+        ...prev,
+        [studentId]: { ...current, comment },
+      }
+      const bufferKey = `ugbekun_offline_comments_${selectedClassId}_${selectedSubjectId}`
+      localStorage.setItem(bufferKey, JSON.stringify(updated))
+      setOfflineBufferCount(students.length)
+      return updated
+    })
+  }
+
+  const handleStudentRatingChange = (studentId: number, rating: number) => {
+    setCommentAssessments((prev) => {
+      const current = prev[studentId] || { comment: '', rating: 3 }
+      const updated = {
+        ...prev,
+        [studentId]: { ...current, rating },
+      }
+      const bufferKey = `ugbekun_offline_comments_${selectedClassId}_${selectedSubjectId}`
+      localStorage.setItem(bufferKey, JSON.stringify(updated))
+      setOfflineBufferCount(students.length)
+      return updated
+    })
+  }
+
+  const handleSaveCommentsBatch = async () => {
+    if (!selectedClassId || !selectedSubjectId) return
+    setIsSavingComments(true)
+    setErrorMsg(null)
+
+    try {
+      const payloadAssessments = students.map((stu) => {
+        const data = commentAssessments[stu.id] || { comment: '', rating: 3 }
+        return {
+          studentId: stu.id,
+          comment: data.comment || '',
+          rating: Number(data.rating) || 3,
+        }
+      })
+
+      await apiSlice.post(endpoints.admin.saveSubjectCommentsBatch, {
+        classId: Number(selectedClassId),
+        sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
+        subjectId: Number(selectedSubjectId),
+        assessments: payloadAssessments,
+      })
+
+      const bufferKey = `ugbekun_offline_comments_${selectedClassId}_${selectedSubjectId}`
+      localStorage.removeItem(bufferKey)
+      setOfflineBufferCount(0)
+
+      setSuccessMsg('Qualitative developmental comments & ratings saved successfully!')
+      setTimeout(() => setSuccessMsg(null), 3500)
+    } catch (err: any) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to save qualitative comments.')
+    } finally {
+      setIsSavingComments(false)
     }
   }
 
@@ -509,34 +635,55 @@ export function MarksEntry() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+      <div className={`rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden ${
+        isCommentBasedClass
+          ? 'bg-gradient-to-r from-slate-900 via-teal-950 to-emerald-950'
+          : 'bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900'
+      }`}>
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 skew-x-12 pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-blue-200 border border-white/15">
-              <FileSpreadsheet size={14} className="text-blue-300" /> Offline & AI Marks Entry Desk
+              <FileSpreadsheet size={14} className={isCommentBasedClass ? 'text-emerald-300' : 'text-blue-300'} />
+              {isCommentBasedClass ? 'Early Childhood & Montessori Qualitative Desk' : 'Offline & AI Marks Entry Desk'}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">Marks Entry System</h1>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              {isCommentBasedClass ? 'Qualitative Developmental Assessment Desk' : 'Marks Entry System'}
+            </h1>
             <p className="text-xs sm:text-sm text-blue-200/80 max-w-xl">
-              Input student assessment scores online/offline, assign Evaluation Matrices to classes, or utilize AI to distribute scores across components.
+              {isCommentBasedClass
+                ? 'Assess student learning domains and early childhood milestones with qualitative observation narratives and 1–5 developmental competency ratings (Zero-Score Mode).'
+                : 'Input student assessment scores online/offline, assign Evaluation Matrices to classes, or utilize AI to distribute scores across components.'}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <button
-              onClick={() => setIsAiModalOpen(true)}
-              className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer"
-            >
-              <Wand2 size={15} /> AI Score Assistant
-            </button>
-            <button
-              onClick={handleSaveMarksBatch}
-              disabled={isSaving}
-              className="px-4 py-2.5 bg-[#0063a6] hover:bg-[#004d80] text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Marks to Server
-            </button>
+            {!isCommentBasedClass && (
+              <button
+                onClick={() => setIsAiModalOpen(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <Wand2 size={15} /> AI Score Assistant
+              </button>
+            )}
+            {isCommentBasedClass ? (
+              <button
+                onClick={handleSaveCommentsBatch}
+                disabled={isSavingComments}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              >
+                {isSavingComments ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Developmental Comments
+              </button>
+            ) : (
+              <button
+                onClick={handleSaveMarksBatch}
+                disabled={isSaving}
+                className="px-4 py-2.5 bg-[#0063a6] hover:bg-[#004d80] text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Marks to Server
+              </button>
+            )}
             <button
               onClick={() => window.print()}
               className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition border border-white/15 cursor-pointer"
@@ -571,7 +718,7 @@ export function MarksEntry() {
               >
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.name} {c.usesScores === false ? '(Qualitative)' : ''}
                   </option>
                 ))}
               </select>
@@ -600,7 +747,9 @@ export function MarksEntry() {
 
           {/* Subject Select */}
           <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Subject</label>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              {isCommentBasedClass ? 'Learning Domain / Subject' : 'Subject'}
+            </label>
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2">
               <BookOpen size={16} className="text-emerald-600" />
               <select
@@ -620,21 +769,28 @@ export function MarksEntry() {
           {/* Evaluation Matrix Assign Select */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Matrix Scheme</label>
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2">
-              <Award size={16} className="text-amber-500" />
-              <select
-                value={assignedMatrixId}
-                onChange={(e) => handleAssignMatrixToClass(e.target.value)}
-                disabled={isAssigningMatrix}
-                className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full"
-              >
-                {allMatrices.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {isCommentBasedClass ? (
+              <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500">
+                <Award size={16} className="text-slate-400" />
+                <span className="text-xs font-bold text-slate-500 italic">Qualitative Mode (Matrices Disabled)</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2">
+                <Award size={16} className="text-amber-500" />
+                <select
+                  value={assignedMatrixId}
+                  onChange={(e) => handleAssignMatrixToClass(e.target.value)}
+                  disabled={isAssigningMatrix}
+                  className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full"
+                >
+                  {allMatrices.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -654,7 +810,12 @@ export function MarksEntry() {
             )}
           </div>
 
-          {currentMatrix && (
+          {isCommentBasedClass ? (
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+              <Sparkles size={13} className="text-emerald-600" />
+              <span>Developmental Rating Scale: 1 - Emerging · 2 - Developing · 3 - Satisfactory · 4 - Proficient · 5 - Advanced</span>
+            </div>
+          ) : currentMatrix ? (
             <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
               <span className="text-slate-400">Matrix Breakdown:</span>
               {currentMatrix.components.map((c) => (
@@ -663,7 +824,7 @@ export function MarksEntry() {
                 </span>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -679,47 +840,73 @@ export function MarksEntry() {
         </div>
       )}
 
-      {/* Score View Mode, Search & Quick Actions Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        {/* Score View Mode Buttons */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setScoreViewMode('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
-              scoreViewMode === 'all'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Layers size={13} className="text-blue-600" />
-            <span>All Scores (Marks Entry + CBT)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setScoreViewMode('marks')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
-              scoreViewMode === 'marks'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <FileSpreadsheet size={13} className="text-emerald-600" />
-            <span>Marks Entry Only (CA Components)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setScoreViewMode('cbt')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
-              scoreViewMode === 'cbt'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Monitor size={13} className="text-cyan-600" />
-            <span>CBT Online Exam Scores Only</span>
-          </button>
+      {/* Comment-Based Early Childhood Development Banner (Phase 5) */}
+      {isCommentBasedClass && (
+        <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/90 rounded-2xl flex items-start gap-3 shadow-2xs">
+          <Info className="text-emerald-700 shrink-0 mt-0.5" size={20} />
+          <div className="space-y-1 text-xs">
+            <h4 className="font-black text-emerald-950 uppercase tracking-wider">
+              This class uses qualitative developmental comments. Numerical matrices are disabled.
+            </h4>
+            <p className="text-emerald-800/90 leading-relaxed">
+              Early Childhood & Montessori classrooms evaluate developmental domains (cognitive, motor, language, socio-emotional). Numerical marks (0–100, CA components, Exams, CBT), percentages, and student rankings are strictly suppressed. Record qualitative narratives and assign 1–5 developmental competency ratings below.
+            </p>
+          </div>
         </div>
+      )}
+
+      {/* Control Bar: Search & View Options */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        {!isCommentBasedClass ? (
+          /* Score View Mode Buttons (Standard Classes) */
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setScoreViewMode('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
+                scoreViewMode === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers size={13} className="text-blue-600" />
+              <span>All Scores (Marks Entry + CBT)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScoreViewMode('marks')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
+                scoreViewMode === 'marks'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileSpreadsheet size={13} className="text-emerald-600" />
+              <span>Marks Entry Only (CA Components)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScoreViewMode('cbt')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
+                scoreViewMode === 'cbt'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Monitor size={13} className="text-cyan-600" />
+              <span>CBT Online Exam Scores Only</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase tracking-wider">
+              Qualitative Assessment Roster
+            </span>
+            <span className="text-xs text-slate-500 font-semibold">
+              Enter developmental observations & competency ratings
+            </span>
+          </div>
+        )}
 
         {/* Search & Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -734,8 +921,8 @@ export function MarksEntry() {
             />
           </div>
 
-          {/* Sync All CBT Button */}
-          {cbtCount > 0 && (
+          {/* Sync All CBT Button (Only for score-based classes) */}
+          {!isCommentBasedClass && cbtCount > 0 && (
             <button
               type="button"
               onClick={handleSyncAllCbtToExam}
@@ -746,34 +933,69 @@ export function MarksEntry() {
               <span>Auto-Fill CBT to CA ({cbtCount})</span>
             </button>
           )}
+
+          {isCommentBasedClass && (
+            <button
+              type="button"
+              onClick={handleSaveCommentsBatch}
+              disabled={isSavingComments}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs disabled:opacity-50"
+            >
+              {isSavingComments ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              <span>Save Comments</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Class Score KPIs Ribbon */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Class Enrolled</span>
-          <p className="text-2xl font-black text-slate-900 mt-0.5">{students.length} <span className="text-xs font-semibold text-slate-400">Students</span></p>
+      {/* Class Score / Assessment KPIs Ribbon */}
+      {isCommentBasedClass ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Class Enrolled</span>
+            <p className="text-2xl font-black text-slate-900 mt-0.5">{students.length} <span className="text-xs font-semibold text-slate-400">Pupils</span></p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Observations Recorded</span>
+            <p className="text-2xl font-black text-emerald-800 mt-0.5">
+              {students.filter(s => (commentAssessments[s.id]?.comment || '').trim().length > 0).length} <span className="text-xs font-semibold text-emerald-600">/ {students.length}</span>
+            </p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-teal-100 bg-teal-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700">Competency Standard</span>
+            <p className="text-base font-black text-teal-800 mt-1">1 to 5 Rating Scale</p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">System Mode</span>
+            <p className="text-base font-black text-indigo-800 mt-1">Zero-Score Invariant</p>
+          </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-cyan-100 bg-cyan-50/20 shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-700">CBT Online Submissions</span>
-          <p className="text-2xl font-black text-cyan-800 mt-0.5">{cbtCount} <span className="text-xs font-semibold text-cyan-600">/ {students.length} ({students.length > 0 ? Math.round((cbtCount / students.length) * 100) : 0}%)</span></p>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Class Enrolled</span>
+            <p className="text-2xl font-black text-slate-900 mt-0.5">{students.length} <span className="text-xs font-semibold text-slate-400">Students</span></p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-cyan-100 bg-cyan-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-700">CBT Online Submissions</span>
+            <p className="text-2xl font-black text-cyan-800 mt-0.5">{cbtCount} <span className="text-xs font-semibold text-cyan-600">/ {students.length} ({students.length > 0 ? Math.round((cbtCount / students.length) * 100) : 0}%)</span></p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Marks Entry Average</span>
+            <p className="text-2xl font-black text-emerald-800 mt-0.5">{avgTotalScore} <span className="text-xs font-semibold text-emerald-600">/ {matrixTotalMarks}</span></p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">Average CBT Score</span>
+            <p className="text-2xl font-black text-indigo-800 mt-0.5">{Number(avgCbtScore) > 0 ? avgCbtScore : '—'} <span className="text-xs font-semibold text-indigo-600">pts</span></p>
+          </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Marks Entry Average</span>
-          <p className="text-2xl font-black text-emerald-800 mt-0.5">{avgTotalScore} <span className="text-xs font-semibold text-emerald-600">/ {matrixTotalMarks}</span></p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">Average CBT Score</span>
-          <p className="text-2xl font-black text-indigo-800 mt-0.5">{Number(avgCbtScore) > 0 ? avgCbtScore : '—'} <span className="text-xs font-semibold text-indigo-600">pts</span></p>
-        </div>
-      </div>
+      )}
 
-      {/* Student Roster Marks Table */}
+      {/* Student Roster Marks / Comments Table */}
       {isLoading ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 space-y-3">
           <Loader2 size={24} className="animate-spin text-[#0063a6] mx-auto" />
-          <p className="text-xs font-semibold text-slate-500">Loading student roster and assessment marks...</p>
+          <p className="text-xs font-semibold text-slate-500">Loading student roster and assessments...</p>
         </div>
       ) : filteredStudents.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-100 space-y-3">
@@ -784,7 +1006,101 @@ export function MarksEntry() {
               : 'No students matched your search filter.'}
           </p>
         </div>
+      ) : isCommentBasedClass ? (
+        /* QUALITATIVE COMMENT-BASED TABLE (PHASE 5) */
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                  <th className="py-3.5 px-4 w-32">Roll / Reg No</th>
+                  <th className="py-3.5 px-4 min-w-[180px]">Pupil Name</th>
+                  <th className="py-3.5 px-4 min-w-[340px]">Developmental Observation & Learning Progress</th>
+                  <th className="py-3.5 px-4 w-52 text-center">Competency Rating (1–5)</th>
+                  <th className="py-3.5 px-4 w-28 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredStudents.map((stu) => {
+                  const assessment = commentAssessments[stu.id] || { comment: '', rating: 3 }
+                  const currentRating = Number(assessment.rating) || 3
+                  const activeScale = RATING_SCALES.find((r) => r.value === currentRating) || RATING_SCALES[2]
+                  const hasComment = (assessment.comment || '').trim().length > 0
+
+                  return (
+                    <tr key={stu.id} className="hover:bg-slate-50/50 transition">
+                      <td className="py-3 px-4 font-mono text-slate-600 font-bold align-top pt-4">
+                        {stu.roll || stu.registerNo || `#${stu.id}`}
+                      </td>
+                      <td className="py-3 px-4 font-extrabold text-slate-900 align-top pt-4">
+                        <div>
+                          <span>{stu.name}</span>
+                          {stu.sectionName && (
+                            <span className="block text-[10px] font-semibold text-slate-400">
+                              Section {stu.sectionName}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <textarea
+                          rows={2}
+                          value={assessment.comment}
+                          onChange={(e) => handleStudentCommentChange(stu.id, e.target.value)}
+                          placeholder="e.g. Demonstrates commendable language expression, social cooperation, and fine motor dexterity..."
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-900 outline-none focus:border-emerald-600 focus:bg-white resize-y font-normal leading-relaxed"
+                        />
+                      </td>
+                      <td className="py-3 px-4 align-top pt-3 text-center">
+                        <div className="space-y-1.5">
+                          <select
+                            value={currentRating}
+                            onChange={(e) => handleStudentRatingChange(stu.id, Number(e.target.value))}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-600 focus:bg-white cursor-pointer"
+                          >
+                            {RATING_SCALES.map((scale) => (
+                              <option key={scale.value} value={scale.value}>
+                                {scale.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${activeScale.badge}`}>
+                            {activeScale.label}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 align-top pt-4 text-center">
+                        {hasComment ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                            <Check size={11} className="text-emerald-600" /> Recorded
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                            Draft
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">
+              Showing {filteredStudents.length} early years pupils. Auto-saved locally to browser buffer.
+            </span>
+            <button
+              onClick={handleSaveCommentsBatch}
+              disabled={isSavingComments}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50"
+            >
+              {isSavingComments ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Developmental Comments
+            </button>
+          </div>
+        </div>
       ) : (
+        /* STANDARD SCORE-BASED MATRIX TABLE */
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
