@@ -17,6 +17,7 @@ import {
   Lock,
   Keyboard,
   Search,
+  Edit3,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 
@@ -242,6 +243,7 @@ export default function AttendanceRegister({
   } | null>(null)
   const [weekDays, setWeekDays] = useState<WeekDay[]>([])
   const [focusedStudentId, setFocusedStudentId] = useState<number | null>(null)
+  const [isEditingSubmitted, setIsEditingSubmitted] = useState(false)
 
   const lastSavedRef = useRef<Record<number, AttendanceRecord>>({})
   const dirtyRef = useRef(false)
@@ -314,8 +316,10 @@ export default function AttendanceRegister({
     }
   }, [page, totalPages])
 
-  const locked = !canEdit
-  const statusLabel = registerMeta?.status || (calendar?.isFuture ? 'FUTURE' : locked ? 'LOCKED' : 'DRAFT')
+  const isSubmitted = registerMeta?.status === 'SUBMITTED'
+  const isTrulyLocked = !canEdit || registerMeta?.status === 'LOCKED'
+  const locked = isTrulyLocked || (isSubmitted && !isEditingSubmitted)
+  const statusLabel = registerMeta?.status || (calendar?.isFuture ? 'FUTURE' : isTrulyLocked ? 'LOCKED' : 'DRAFT')
 
   const collectDirtyEntries = useCallback(() => {
     return students
@@ -329,7 +333,7 @@ export default function AttendanceRegister({
   }, [students, attendanceRecords])
 
   const flushDraft = useCallback(async () => {
-    if (!activeForm || !canEdit) return
+    if (!activeForm || locked || isSubmitted) return
     const entries = collectDirtyEntries()
     if (entries.length === 0) return
     if (inFlightPatchRef.current) await inFlightPatchRef.current
@@ -352,7 +356,7 @@ export default function AttendanceRegister({
           version: res.register.version,
           takenByTeacherName: res.register.takenByTeacherName ?? null,
           submittedAt: null,
-          canEdit: res.register.status === 'DRAFT',
+          canEdit: res.register.status !== 'LOCKED',
         }
         setRegisterMeta((prev) => ({
           ...nextMeta,
@@ -447,6 +451,7 @@ export default function AttendanceRegister({
       setAttendanceRecords(initial)
       setRegisterMeta(registerRes.register)
       setCanEdit(Boolean(registerRes.canEdit))
+      setIsEditingSubmitted(false)
       setCalendar(registerRes.calendar)
       setWeekDays(weekRes.days || [])
       setFocusedStudentId(roster[0]?.id ?? null)
@@ -457,6 +462,7 @@ export default function AttendanceRegister({
       setStudents([])
       setAttendanceRecords({})
       setRegisterMeta(null)
+      setIsEditingSubmitted(false)
     } finally {
       if (gen === loadGenRef.current) setLoading(false)
     }
@@ -467,7 +473,7 @@ export default function AttendanceRegister({
   }, [attendanceDate, selectedFormIdx, loadRegister])
 
   useEffect(() => {
-    if (!canEdit || !dirty) return
+    if (isSubmitted || !canEdit || !dirty) return
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
       flushDraft().catch((err) => {
@@ -477,7 +483,7 @@ export default function AttendanceRegister({
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     }
-  }, [attendanceRecords, canEdit, dirty, flushDraft])
+  }, [attendanceRecords, canEdit, dirty, flushDraft, isSubmitted])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -499,6 +505,7 @@ export default function AttendanceRegister({
         if (!leave) return
       }
     }
+    setIsEditingSubmitted(false)
     setAttendanceDate(nextDate)
   }
 
@@ -512,11 +519,12 @@ export default function AttendanceRegister({
         if (!leave) return
       }
     }
+    setIsEditingSubmitted(false)
     setSelectedFormIdx(nextIdx)
   }
 
   const setStudentStatus = (studentId: number, status: string) => {
-    if (!canEdit) return
+    if (locked) return
     setAttendanceRecords((prev) => ({
       ...prev,
       [studentId]: {
@@ -530,7 +538,7 @@ export default function AttendanceRegister({
   }
 
   const markRemainingPresent = () => {
-    if (!canEdit) return
+    if (locked) return
     setAttendanceRecords((prev) => {
       const next = { ...prev }
       students.forEach((student) => {
@@ -546,7 +554,7 @@ export default function AttendanceRegister({
   }
 
   const markAllPresent = () => {
-    if (!canEdit) return
+    if (locked) return
     setAttendanceRecords((prev) => {
       const next = { ...prev }
       students.forEach((student) => {
@@ -559,7 +567,7 @@ export default function AttendanceRegister({
   }
 
   const handleSubmit = async () => {
-    if (!activeForm || !canEdit) return
+    if (!activeForm || isTrulyLocked) return
     let markRemaining = false
     if (summary.unmarked > 0) {
       const confirmed = window.confirm(
@@ -578,7 +586,9 @@ export default function AttendanceRegister({
     setSuccess(null)
     try {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-      await flushDraft().catch(() => null)
+      if (!isSubmitted) {
+        await flushDraft().catch(() => null)
+      }
 
       const payload = students.map((student) => {
         const data = attendanceRecords[student.id] || { status: '', remark: '' }
@@ -599,16 +609,22 @@ export default function AttendanceRegister({
         markRemainingPresent: markRemaining,
       })
 
-      setSuccess('Register submitted and locked.')
-      setCanEdit(false)
+      const wasSubmitted = isSubmitted
+      setSuccess(
+        wasSubmitted
+          ? (res.message || 'Register changes saved successfully.')
+          : (res.message || 'Register submitted successfully.')
+      )
+      setIsEditingSubmitted(false)
+      setCanEdit(true)
       if (res.register) {
         setRegisterMeta((prev) => ({
           id: res.register!.id,
           status: res.register!.status,
           version: res.register!.version,
           takenByTeacherName: prev?.takenByTeacherName ?? teacherName ?? null,
-          submittedAt: new Date().toISOString(),
-          canEdit: false,
+          submittedAt: prev?.submittedAt ?? new Date().toISOString(),
+          canEdit: true,
         }))
       }
       lastSavedRef.current = {
@@ -697,15 +713,31 @@ export default function AttendanceRegister({
               Daily Class Register
               <span
                 className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                  statusLabel === "LOCKED" || statusLabel === "SUBMITTED"
+                  statusLabel === "LOCKED"
                     ? "bg-slate-800 text-white"
-                    : statusLabel === "FUTURE"
-                      ? "bg-slate-100 text-slate-500"
-                      : "bg-amber-100 text-amber-700"
+                    : statusLabel === "SUBMITTED"
+                      ? "bg-emerald-600 text-white"
+                      : statusLabel === "FUTURE"
+                        ? "bg-slate-100 text-slate-500"
+                        : "bg-amber-100 text-amber-700"
                 }`}
               >
                 {statusLabel === "SUBMITTED" ? "Submitted" : statusLabel}
               </span>
+              {isSubmitted && !isTrulyLocked && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSubmitted((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer shadow-2xs ${
+                    isEditingSubmitted
+                      ? "bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  <Edit3 size={12} />
+                  {isEditingSubmitted ? "Editing Mode (Active)" : "Edit Register"}
+                </button>
+              )}
             </h3>
             <p className="text-xs font-semibold text-slate-400 mt-1">
               {calendar?.weekday || "School day"} · {formatLongDate(attendanceDate)}
@@ -876,16 +908,55 @@ export default function AttendanceRegister({
           </div>
         )}
 
-        {locked && (
+        {isTrulyLocked ? (
           <div className="m-4 p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 text-xs text-amber-900 font-semibold flex items-center gap-2">
             <Lock size={14} className="text-amber-700 shrink-0" />
             {calendar?.isHoliday && !calendar.isSchoolDay
               ? "This date is marked as a holiday or non-school day on the academic calendar."
               : calendar?.isFuture
                 ? "Future school days cannot be marked yet."
-                : "This register is locked. Ask a school admin to unlock it with a reason if a correction is needed."}
+                : "This register is locked by school admin. Ask an admin to unlock if further changes are required."}
           </div>
-        )}
+        ) : isSubmitted && !isEditingSubmitted ? (
+          <div className="m-4 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/80 text-xs text-emerald-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Check size={16} className="text-emerald-600 shrink-0" />
+              <span>
+                Register submitted{registerMeta?.takenByTeacherName ? ` by ${registerMeta.takenByTeacherName}` : ""}.
+                Need to correct an attendance record or student status? Click <strong>Edit Register</strong>.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingSubmitted(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition cursor-pointer shrink-0"
+            >
+              <Edit3 size={13} />
+              Edit Register
+            </button>
+          </div>
+        ) : isSubmitted && isEditingSubmitted ? (
+          <div className="m-4 p-3.5 rounded-xl border border-blue-200 bg-blue-50/80 text-xs text-blue-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-blue-600 shrink-0" />
+              <span>
+                <strong>Editing submitted register:</strong> You can update any student's code (P, A, L, E, S) or remarks.
+                When finished, click <strong>Save Changes</strong> below.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAttendanceRecords({ ...lastSavedRef.current })
+                setIsEditingSubmitted(false)
+                setError(null)
+              }}
+              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs cursor-pointer shrink-0"
+            >
+              Cancel edit
+            </button>
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="py-20 text-center">
@@ -1007,7 +1078,7 @@ export default function AttendanceRegister({
                           value={record.remark}
                           disabled={locked}
                           onChange={(e) => {
-                            if (!canEdit) return
+                            if (locked) return
                             setAttendanceRecords((prev) => ({
                               ...prev,
                               [student.id]: { status: prev[student.id]?.status || "", remark: e.target.value },
@@ -1098,7 +1169,7 @@ export default function AttendanceRegister({
                               value={record.remark}
                               disabled={locked}
                               onChange={(e) => {
-                                if (!canEdit) return
+                                if (locked) return
                                 setAttendanceRecords((prev) => ({
                                   ...prev,
                                   [student.id]: { status: prev[student.id]?.status || "", remark: e.target.value },
@@ -1136,12 +1207,18 @@ export default function AttendanceRegister({
             {/* Bottom Sticky Action Bar */}
             <div className="p-4 sm:p-6 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white sticky bottom-0 z-10">
               <p className="text-[11px] font-semibold text-slate-500">
-                {locked
+                {isTrulyLocked
                   ? "Locked register — print a copy for the office file."
-                  : summary.unmarked > 0
-                    ? `${summary.unmarked} unmarked · ${summary.present} present · ${summary.absent} absent · ${summary.late} late`
-                    : "All students coded. You can submit and lock this register."}
-                {canEdit && (
+                  : isSubmitted && !isEditingSubmitted
+                    ? `Register submitted (${summary.present} present · ${summary.absent} absent · ${summary.late} late). Click Edit Register to make changes.`
+                    : isSubmitted && isEditingSubmitted
+                      ? dirty
+                        ? "You have unsaved changes. Click Save Changes to update the register."
+                        : "Editing mode active. Adjust student codes or remarks, then save changes."
+                      : summary.unmarked > 0
+                        ? `${summary.unmarked} unmarked · ${summary.present} present · ${summary.absent} absent · ${summary.late} late`
+                        : "All students coded. You can submit this register."}
+                {canEdit && (isEditingSubmitted || !isSubmitted) && (
                   <span className="ml-2 font-bold">
                     {autosaveState === "saving" && <span className="text-blue-600">Saving draft…</span>}
                     {autosaveState === "saved" && <span className="text-emerald-600">✓ Draft saved</span>}
@@ -1159,29 +1236,78 @@ export default function AttendanceRegister({
                   <Printer size={14} />
                   Print
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={saving || locked}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl shadow-xs transition cursor-pointer"
-                >
-                  {saving ? (
-                    <>
-                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                      Submitting…
-                    </>
-                  ) : locked ? (
-                    <>
-                      <Lock size={14} />
-                      Locked
-                    </>
-                  ) : (
-                    <>
-                      <Save size={14} />
-                      Submit & lock
-                    </>
-                  )}
-                </button>
+
+                {isTrulyLocked ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-slate-500 bg-slate-200 rounded-xl cursor-not-allowed"
+                  >
+                    <Lock size={14} />
+                    Locked
+                  </button>
+                ) : isSubmitted && !isEditingSubmitted ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingSubmitted(true)}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition cursor-pointer"
+                  >
+                    <Edit3 size={14} />
+                    Edit Register
+                  </button>
+                ) : isSubmitted && isEditingSubmitted ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttendanceRecords({ ...lastSavedRef.current })
+                        setIsEditingSubmitted(false)
+                        setError(null)
+                      }}
+                      disabled={saving}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={saving}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 rounded-xl shadow-xs transition cursor-pointer"
+                    >
+                      {saving ? (
+                        <>
+                          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                          Saving changes…
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} />
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl shadow-xs transition cursor-pointer"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                        Submitting…
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14} />
+                        Submit register
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
