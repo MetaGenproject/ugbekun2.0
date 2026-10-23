@@ -119,18 +119,16 @@ interface AttendanceData {
 type AttendanceLog = AttendanceData['logs'][number]
 type AttendanceRange = 'daily' | 'weekly' | 'monthly'
 
+import { getLagosDateKey } from '@/lib/dateUtils'
+
 function attendanceDateKey(value: string) {
   const parsed = new Date(value)
   if (!Number.isNaN(parsed.getTime())) {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Africa/Lagos',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(parsed)
+    return getLagosDateKey(parsed)
   }
   return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : ''
 }
+
 
 function weekStartKey(dateKey: string) {
   const [year, month, day] = dateKey.split('-').map(Number)

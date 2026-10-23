@@ -100,9 +100,15 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
         if (issuesSession && token) {
           applyAuthCookie(nextRes, token, request)
         }
+        // Cache-Control optimization for slow 2G/3G mobile networks:
+        // Cache read-only structural data (e.g., class arms, teacher profile) briefly with stale-while-revalidate
+        if (request.method === 'GET' && /^(teacher\/(profile|classes)|admin\/classes)/i.test(path)) {
+          nextRes.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300')
+        }
         return nextRes
       }
       return NextResponse.json(jsonOrText ?? { message: 'Empty response.' }, { status: response.status })
+
     }
 
     const buf = await response.arrayBuffer()

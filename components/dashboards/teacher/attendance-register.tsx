@@ -18,8 +18,16 @@ import {
   Keyboard,
   Search,
   Edit3,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import {
+  saveOfflineAttendanceDraft,
+  getOfflineAttendanceDraft,
+  markAttendanceDraftSynced,
+  isDeviceOnline,
+} from '@/lib/attendanceOfflineSync'
 
 const ATTENDANCE_CODES = [
   { code: 'Present', key: 'P', active: 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs', print: 'P' },
@@ -56,14 +64,12 @@ function isMarkedStatus(status: string): status is AttendanceCode {
   return ATTENDANCE_CODES.some((item) => item.code === status)
 }
 
+import { getLagosDateKey, formatLagosLongDate } from '@/lib/dateUtils'
+
 function todaySchoolDateKey(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Lagos',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+  return getLagosDateKey()
 }
+
 
 function addDays(dateKey: string, days: number): string {
   const utc = new Date(`${dateKey}T00:00:00.000Z`)
@@ -72,13 +78,9 @@ function addDays(dateKey: string, days: number): string {
 }
 
 function formatLongDate(dateKey: string): string {
-  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatLagosLongDate(dateKey)
 }
+
 
 function formatShortDate(dateKey: string): string {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-GB', {
@@ -244,8 +246,29 @@ export default function AttendanceRegister({
   const [weekDays, setWeekDays] = useState<WeekDay[]>([])
   const [focusedStudentId, setFocusedStudentId] = useState<number | null>(null)
   const [isEditingSubmitted, setIsEditingSubmitted] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+
+  useEffect(() => {
+    setIsOnline(isDeviceOnline())
+    const handleOnline = () => {
+      setIsOnline(true)
+      // When network returns, attempt autosave flush if dirty
+      if (dirtyRef.current) {
+        flushDraft().catch(() => {})
+      }
+    }
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [flushDraft])
 
   const lastSavedRef = useRef<Record<number, AttendanceRecord>>({})
+
   const dirtyRef = useRef(false)
   const loadGenRef = useRef(0)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -338,6 +361,9 @@ export default function AttendanceRegister({
     if (entries.length === 0) return
     if (inFlightPatchRef.current) await inFlightPatchRef.current
 
+    // Immediately persist to local device storage before network transit
+    saveOfflineAttendanceDraft(activeForm.classId, activeForm.sectionId, attendanceDate, attendanceRecords)
+
     const run = (async () => {
       setAutosaveState('saving')
       const res = await apiSlice.patch<{
@@ -371,6 +397,8 @@ export default function AttendanceRegister({
         ...lastSavedRef.current,
         ...Object.fromEntries(entries.map((entry) => [entry.studentId, { status: entry.status, remark: entry.remark }])),
       }
+      // Successfully saved to server: clear offline pending draft
+      markAttendanceDraftSynced(activeForm.classId, activeForm.sectionId, attendanceDate)
       setAutosaveState('saved')
       setError(null)
     })()
@@ -382,9 +410,11 @@ export default function AttendanceRegister({
       await inFlightPatchRef.current
     } catch (err: any) {
       setAutosaveState('error')
+      // Even if network fails, the local copy is securely preserved on the phone!
       throw err
     }
   }, [activeForm, attendanceDate, attendanceRecords, canEdit, collectDirtyEntries])
+
 
   const loadRegister = useCallback(async (dateKey: string, formIdx: number) => {
     const form = (formAllocations || [])[formIdx]
@@ -446,6 +476,18 @@ export default function AttendanceRegister({
           remark: found?.remark || '',
         }
       })
+
+      // Check if there are local offline drafts that have not been synced yet
+      const offlineDraft = getOfflineAttendanceDraft(form.classId, form.sectionId, dateKey)
+      if (offlineDraft && offlineDraft.records) {
+        Object.entries(offlineDraft.records).forEach(([sIdStr, rec]) => {
+          const sId = Number(sIdStr)
+          if (initial[sId] && rec.status) {
+            initial[sId] = { status: rec.status, remark: rec.remark || '' }
+          }
+        })
+      }
+
       lastSavedRef.current = initial
       setStudents(roster)
       setAttendanceRecords(initial)
@@ -467,6 +509,7 @@ export default function AttendanceRegister({
       if (gen === loadGenRef.current) setLoading(false)
     }
   }, [formAllocations])
+
 
   useEffect(() => {
     loadRegister(attendanceDate, selectedFormIdx)
@@ -724,6 +767,20 @@ export default function AttendanceRegister({
               >
                 {statusLabel === "SUBMITTED" ? "Submitted" : statusLabel}
               </span>
+
+              {/* Online / Offline Network Resilience Indicator Badge */}
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                  isOnline
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-rose-50 text-rose-700 border border-rose-200 animate-pulse"
+                }`}
+                title={isOnline ? "Network Connected" : "Working Offline - Marks saved securely on this device"}
+              >
+                {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
+                {isOnline ? "Online" : "Offline (Saved to Phone)"}
+              </span>
+
               {isSubmitted && !isTrulyLocked && (
                 <button
                   type="button"
@@ -739,6 +796,7 @@ export default function AttendanceRegister({
                 </button>
               )}
             </h3>
+
             <p className="text-xs font-semibold text-slate-400 mt-1">
               {calendar?.weekday || "School day"} · {formatLongDate(attendanceDate)}
               {registerMeta?.takenByTeacherName ? ` · Taken by ${registerMeta.takenByTeacherName}` : ""}

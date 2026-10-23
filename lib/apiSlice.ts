@@ -738,22 +738,37 @@ export const apiSlice = {
   },
 
   /**
-   * PATCH Request
+   * PATCH Request with automatic network resilience / retry
    */
-  async patch<T = any>(url: string, body: any, options?: RequestInit): Promise<T> {
+  async patch<T = any>(url: string, body: any, options?: RequestInit & { retries?: number }): Promise<T> {
     const targetUrl = normalizeUrl(url);
-    const response = await fetch(targetUrl, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...(options?.headers || {}),
-      },
-      body: JSON.stringify(body),
-      credentials: 'include',
-      ...options,
-    });
-    return handleResponse<T>(response);
+    const maxRetries = options?.retries ?? 2;
+    let attempt = 0;
+
+    while (attempt <= maxRetries) {
+      try {
+        const response = await fetch(targetUrl, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+            ...(options?.headers || {}),
+          },
+          body: JSON.stringify(body),
+          credentials: 'include',
+          ...options,
+        });
+        return await handleResponse<T>(response);
+      } catch (err: any) {
+        attempt++;
+        if (attempt > maxRetries || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+          throw err;
+        }
+        // Exponential backoff wait (300ms, 600ms)
+        await new Promise((res) => setTimeout(res, attempt * 300));
+      }
+    }
+    throw new Error('Network request failed after retries.');
   },
 
   /**
@@ -773,6 +788,7 @@ export const apiSlice = {
     });
     return handleResponse<T>(response);
   },
+
 
   /**
    * Download a file (CSV, PDF, etc.) with auth headers.

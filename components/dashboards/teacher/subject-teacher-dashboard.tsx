@@ -128,37 +128,36 @@ type SubjectDashboardData = {
 
 const BAND_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444']
 
+import { getLagosHour, formatLagosLongDate } from '@/lib/dateUtils'
+
 function greetingWord(date: Date) {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Africa/Lagos',
-      hour: 'numeric',
-      hour12: false,
-    }).format(date)
-  )
+  const hour = getLagosHour(date)
   if (hour < 12) return 'Good Morning'
   if (hour < 16) return 'Good Afternoon'
   return 'Good Evening'
 }
 
 function formatLongDate(date: Date) {
-  return date.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Africa/Lagos',
-  })
+  return formatLagosLongDate(date)
 }
 
 function formatClockNow(date: Date) {
-  return date.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Africa/Lagos',
-  })
+  try {
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Africa/Lagos',
+    })
+  } catch (err) {
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  }
 }
+
 
 function formatDueDate(value: string) {
   const parsed = new Date(value)

@@ -46,17 +46,56 @@ import {
   Briefcase
 } from 'lucide-react'
 
-// Import decoupled role-specific dashboards from their own folders
-import { SuperAdminDashboard } from '@/components/dashboards/superadmin/superadmin-dashboard'
-import { AdminDashboard, type BranchStats } from '@/components/dashboards/admin/admin-dashboard'
-import { OSeAiAssistant } from '@/components/ai/ose-ai-assistant'
+import dynamic from 'next/dynamic'
+
+// Lightweight Dashboard Loader Skeleton for fast perceived performance
+const DashboardLoadingSkeleton = () => (
+  <div className="w-full space-y-4 animate-pulse p-4">
+    <div className="h-28 bg-slate-200/70 rounded-2xl w-full" />
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="h-32 bg-slate-200/70 rounded-2xl" />
+      <div className="h-32 bg-slate-200/70 rounded-2xl" />
+      <div className="h-32 bg-slate-200/70 rounded-2xl" />
+    </div>
+    <div className="h-64 bg-slate-200/60 rounded-2xl w-full" />
+  </div>
+)
+
+// Dynamic role-specific dashboards to prevent downloading 3.6MB on first load
+const SuperAdminDashboard = dynamic(
+  () => import('@/components/dashboards/superadmin/superadmin-dashboard').then(mod => mod.SuperAdminDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const AdminDashboard = dynamic(
+  () => import('@/components/dashboards/admin/admin-dashboard').then(mod => mod.AdminDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const TeacherDashboard = dynamic(
+  () => import('@/components/dashboards/teacher/teacher-dashboard').then(mod => mod.TeacherDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const ParentDashboard = dynamic(
+  () => import('@/components/dashboards/parent/parent-dashboard').then(mod => mod.ParentDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const StudentDashboard = dynamic(
+  () => import('@/components/dashboards/student/student-dashboard').then(mod => mod.StudentDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const DefaultDashboard = dynamic(
+  () => import('@/components/dashboards/default/default-dashboard').then(mod => mod.DefaultDashboard),
+  { loading: () => <DashboardLoadingSkeleton /> }
+)
+const OSeAiAssistant = dynamic(
+  () => import('@/components/ai/ose-ai-assistant').then(mod => mod.OSeAiAssistant),
+  { ssr: false }
+)
+
+import { type BranchStats } from '@/components/dashboards/admin/admin-dashboard'
 import { SchoolFooter } from '@/components/shared/school-footer'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { TeacherDashboard } from '@/components/dashboards/teacher/teacher-dashboard'
 import { TeacherContextSwitcher } from '@/components/dashboards/teacher/teacher-context-switcher'
-import { ParentDashboard } from '@/components/dashboards/parent/parent-dashboard'
-import { StudentDashboard } from '@/components/dashboards/student/student-dashboard'
-import { DefaultDashboard } from '@/components/dashboards/default/default-dashboard'
+
 import { endAuthSession, getAuthSession, redirectExpiredSession, setAuthSession, type AuthUser } from '@/lib/authSession'
 import { safeStorage } from '@/lib/safeStorage'
 import { getAvatarUrl } from '@/lib/avatar'

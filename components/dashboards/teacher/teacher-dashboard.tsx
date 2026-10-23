@@ -52,27 +52,40 @@ import {
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
+import dynamic from 'next/dynamic'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
-import GradebookInterface from './gradebook-interface'
-import MontessoriMatrix from './montessori-matrix'
-import AttendanceRegister from './attendance-register'
-import { MediaLibrary } from './media-library'
-import { AiLessonPlanner } from './ai-lesson-planner'
-import { LiveClassroomHub } from './live-classroom-hub'
-import TeacherPointsHub from './points-hub'
-import { TeacherAttritionRadar } from './attrition-radar'
-import { QuestionBankManager } from './question-bank-manager'
-import { HomeworkQuestionStudio, type HomeworkAllocation } from '@/components/dashboards/shared/homework-question-studio'
-import { TeacherSubjectsHub } from './teacher-subjects-hub'
-import { TeacherTimetableView } from './teacher-timetable-view'
-import { SubjectTeacherDashboard, TeacherCommunicationInbox } from './subject-teacher-dashboard'
-import SchoolCalendar from '../admin/school-calendar'
+
+const SectionLoadingSkeleton = () => (
+  <div className="w-full space-y-4 animate-pulse p-4">
+    <div className="h-16 bg-slate-200/70 rounded-2xl w-full" />
+    <div className="h-64 bg-slate-200/60 rounded-2xl w-full" />
+  </div>
+)
+
+const GradebookInterface = dynamic(() => import('./gradebook-interface'), { loading: () => <SectionLoadingSkeleton /> })
+const MontessoriMatrix = dynamic(() => import('./montessori-matrix'), { loading: () => <SectionLoadingSkeleton /> })
+const AttendanceRegister = dynamic(() => import('./attendance-register'), { loading: () => <SectionLoadingSkeleton /> })
+const MediaLibrary = dynamic(() => import('./media-library').then(mod => mod.MediaLibrary), { loading: () => <SectionLoadingSkeleton /> })
+const AiLessonPlanner = dynamic(() => import('./ai-lesson-planner').then(mod => mod.AiLessonPlanner), { loading: () => <SectionLoadingSkeleton /> })
+const LiveClassroomHub = dynamic(() => import('./live-classroom-hub').then(mod => mod.LiveClassroomHub), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherPointsHub = dynamic(() => import('./points-hub'), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherAttritionRadar = dynamic(() => import('./attrition-radar').then(mod => mod.TeacherAttritionRadar), { loading: () => <SectionLoadingSkeleton /> })
+const QuestionBankManager = dynamic(() => import('./question-bank-manager').then(mod => mod.QuestionBankManager), { loading: () => <SectionLoadingSkeleton /> })
+const HomeworkQuestionStudio = dynamic(() => import('@/components/dashboards/shared/homework-question-studio').then(mod => mod.HomeworkQuestionStudio), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherSubjectsHub = dynamic(() => import('./teacher-subjects-hub').then(mod => mod.TeacherSubjectsHub), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherTimetableView = dynamic(() => import('./teacher-timetable-view').then(mod => mod.TeacherTimetableView), { loading: () => <SectionLoadingSkeleton /> })
+const SubjectTeacherDashboard = dynamic(() => import('./subject-teacher-dashboard').then(mod => mod.SubjectTeacherDashboard), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherCommunicationInbox = dynamic(() => import('./subject-teacher-dashboard').then(mod => mod.TeacherCommunicationInbox), { loading: () => <SectionLoadingSkeleton /> })
+const SchoolCalendar = dynamic(() => import('../admin/school-calendar'), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherClassesManager = dynamic(() => import('./teacher-classes-manager').then(mod => mod.TeacherClassesManager), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherMatrixMarksEntry = dynamic(() => import('./teacher-matrix-marks-entry').then(mod => mod.TeacherMatrixMarksEntry), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherAssignmentsManager = dynamic(() => import('./teacher-assignments-manager').then(mod => mod.TeacherAssignmentsManager), { loading: () => <SectionLoadingSkeleton /> })
+const TeacherBroadReports = dynamic(() => import('./teacher-broad-reports').then(mod => mod.TeacherBroadReports), { loading: () => <SectionLoadingSkeleton /> })
+const ReportCardManagement = dynamic(() => import('../admin/report-card-management').then(mod => mod.ReportCardManagement), { loading: () => <SectionLoadingSkeleton /> })
+
 import { getAvatarUrl } from '@/lib/avatar'
-import { TeacherClassesManager } from './teacher-classes-manager'
-import { TeacherMatrixMarksEntry } from './teacher-matrix-marks-entry'
-import { TeacherAssignmentsManager } from './teacher-assignments-manager'
-import { TeacherBroadReports } from './teacher-broad-reports'
-import { ReportCardManagement } from '../admin/report-card-management'
+import type { HomeworkAllocation } from '@/components/dashboards/shared/homework-question-studio'
+
 
 interface DashboardProps {
   user: {
