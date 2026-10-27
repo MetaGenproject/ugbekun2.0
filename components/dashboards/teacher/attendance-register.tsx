@@ -247,6 +247,12 @@ export default function AttendanceRegister({
   const [focusedStudentId, setFocusedStudentId] = useState<number | null>(null)
   const [isEditingSubmitted, setIsEditingSubmitted] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const lastSavedRef = useRef<Record<number, AttendanceRecord>>({})
+  const dirtyRef = useRef(false)
+  const loadGenRef = useRef(0)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inFlightPatchRef = useRef<Promise<void> | null>(null)
+  const flushDraftRef = useRef<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
     setIsOnline(isDeviceOnline())
@@ -254,7 +260,7 @@ export default function AttendanceRegister({
       setIsOnline(true)
       // When network returns, attempt autosave flush if dirty
       if (dirtyRef.current) {
-        flushDraft().catch(() => {})
+        flushDraftRef.current?.().catch(() => {})
       }
     }
     const handleOffline = () => setIsOnline(false)
@@ -265,14 +271,7 @@ export default function AttendanceRegister({
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [flushDraft])
-
-  const lastSavedRef = useRef<Record<number, AttendanceRecord>>({})
-
-  const dirtyRef = useRef(false)
-  const loadGenRef = useRef(0)
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inFlightPatchRef = useRef<Promise<void> | null>(null)
+  }, [])
 
   const activeForm = (formAllocations || [])[selectedFormIdx]
   const todayKey = todaySchoolDateKey()
@@ -414,6 +413,8 @@ export default function AttendanceRegister({
       throw err
     }
   }, [activeForm, attendanceDate, attendanceRecords, canEdit, collectDirtyEntries])
+
+  flushDraftRef.current = flushDraft
 
 
   const loadRegister = useCallback(async (dateKey: string, formIdx: number) => {

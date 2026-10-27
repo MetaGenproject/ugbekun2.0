@@ -16,7 +16,9 @@ import {
   SystemStatusPayload,
   SystemStatusType,
   SYSTEM_STATUS_PRESETS,
-  StatusPresetConfig
+  StatusPresetConfig,
+  SYSTEM_STATUS_EVENT,
+  SYSTEM_STATUS_DISMISS_EVENT
 } from '@/lib/systemStatus'
 
 function StatusIcon({ iconType, className = '' }: { iconType: StatusPresetConfig['iconType']; className?: string }) {
@@ -61,7 +63,13 @@ export function SystemStatusToastContainer() {
           updated[existsIndex] = detail
           return updated
         }
-        return [detail, ...prev].slice(0, 5) // max 5 active toasts
+        
+        // When a non-processing status arrives, remove any lingering processing toasts
+        const filteredPrev = detail.type !== 'PROCESSING'
+          ? prev.filter((t) => t.type !== 'PROCESSING')
+          : prev
+
+        return [detail, ...filteredPrev].slice(0, 5) // max 5 active toasts
       })
 
       // Auto dismiss if durationMs > 0
@@ -69,11 +77,30 @@ export function SystemStatusToastContainer() {
         setTimeout(() => {
           setToasts((prev) => prev.filter((t) => t.id !== detail.id))
         }, detail.durationMs)
+      } else if (detail.type === 'PROCESSING') {
+        // Safety timeout: auto-dismiss lingering processing toasts after 25s
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== detail.id))
+        }, 25000)
       }
     }
 
-    window.addEventListener('ugbekun_system_status', handleStatusEvent)
-    return () => window.removeEventListener('ugbekun_system_status', handleStatusEvent)
+    const handleDismissEvent = (e: Event) => {
+      const detail = (e as CustomEvent<{ id?: string }>).detail
+      setToasts((prev) => {
+        if (detail?.id) {
+          return prev.filter((t) => t.id !== detail.id)
+        }
+        return prev.filter((t) => t.type !== 'PROCESSING')
+      })
+    }
+
+    window.addEventListener(SYSTEM_STATUS_EVENT, handleStatusEvent)
+    window.addEventListener(SYSTEM_STATUS_DISMISS_EVENT, handleDismissEvent)
+    return () => {
+      window.removeEventListener(SYSTEM_STATUS_EVENT, handleStatusEvent)
+      window.removeEventListener(SYSTEM_STATUS_DISMISS_EVENT, handleDismissEvent)
+    }
   }, [])
 
   const removeToast = (id: string) => {

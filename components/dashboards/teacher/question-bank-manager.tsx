@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
 import { HomeworkQuestionStudio, type HomeworkAllocation } from '@/components/dashboards/shared/homework-question-studio'
+import { CbtDistributionModal } from '@/components/dashboards/shared/cbt-distribution-modal'
 import {
   Search,
   Plus,
@@ -419,6 +420,11 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
 
   // Assign to Class Form State
   const [editingOnlineExamId, setEditingOnlineExamId] = useState<number | null>(null)
+  const [editingOnlineExamData, setEditingOnlineExamData] = useState<any | null>(null)
+  const [examMasters, setExamMasters] = useState<any[]>([])
+  const [activeExamSetup, setActiveExamSetup] = useState<any>(null)
+  const [questionGroups, setQuestionGroups] = useState<any[]>([])
+  const [schoolSections, setSchoolSections] = useState<any[]>([])
   const [assignTitle, setAssignTitle] = useState('')
   const [assignSubjectId, setAssignSubjectId] = useState<number>(0)
   const [assignClassId, setAssignClassId] = useState<string>('')
@@ -495,9 +501,12 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
     const loadSubjectsAndClasses = async () => {
       try {
         if (isAdminPortal) {
-          const [subRes, clsRes] = await Promise.all([
+          const [subRes, clsRes, examRes, setupRes, groupRes] = await Promise.all([
             apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
-            apiSlice.get<{ success: boolean; classes: any[] }>(endpoints.admin.classesSections),
+            apiSlice.get<{ success: boolean; classes: any[]; sections?: any[] }>(endpoints.admin.classesSections),
+            apiSlice.get<{ success: boolean; exams: any[] }>(endpoints.admin.exams).catch(() => ({ success: false, exams: [] })),
+            apiSlice.get<{ success: boolean; setup: any }>(endpoints.admin.activeExamSetup).catch(() => ({ success: false, setup: null })),
+            apiSlice.get<{ success: boolean; groups: any[] }>(endpoints.admin.cbtGroups()).catch(() => ({ success: false, groups: [] })),
           ])
           if (subRes.success && subRes.subjects) {
             setSubjects(subRes.subjects)
@@ -510,11 +519,23 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
           }
           if (clsRes.success && clsRes.classes) {
             setClassesList(clsRes.classes)
+            if (clsRes.sections && Array.isArray(clsRes.sections)) {
+              setSchoolSections(clsRes.sections)
+            }
             if (clsRes.classes.length > 0) {
               setAssignClassId(String(clsRes.classes[0].id))
               setFormClassId(String(clsRes.classes[0].id))
               setImportClassId(String(clsRes.classes[0].id))
             }
+          }
+          if (examRes.success && examRes.exams) {
+            setExamMasters(examRes.exams)
+          }
+          if (setupRes.success && setupRes.setup) {
+            setActiveExamSetup(setupRes.setup)
+          }
+          if (groupRes.success && groupRes.groups) {
+            setQuestionGroups(groupRes.groups)
           }
         } else {
           // Strictly fetch teacher's assigned subjects and classes
@@ -962,6 +983,7 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
   // Open Assign Modal with selected questions pre-filled
   const handleOpenAssignModal = () => {
     setEditingOnlineExamId(null)
+    setEditingOnlineExamData(null)
     const approvedSelected = selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED')
     if (approvedSelected.length === 0) {
       alert('Select approved Question Bank items. Review AI/scanned/uploaded drafts and save them first.')
@@ -971,8 +993,10 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
       setSelectedIds(approvedSelected.map((q) => q.id))
     }
     const defaultSubject = currentFolder ? currentFolder.subjectId : (approvedSelected[0]?.subjectId || formSubjectId)
+    const defaultClass = approvedSelected[0]?.classId || (classesList[0]?.id ? String(classesList[0].id) : '')
     const subjectObj = subjects.find(s => s.id === defaultSubject)
     setAssignSubjectId(defaultSubject)
+    setAssignClassId(String(defaultClass || ''))
     setAssignTitle(`${subjectObj?.name || 'Class'} CBT Assessment`)
     setIsAssignTestModalOpen(true)
   }
@@ -1044,6 +1068,7 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
   // Open Edit Modal for an already distributed assessment
   const handleOpenEditOnlineExam = (exam: any) => {
     setEditingOnlineExamId(exam.id)
+    setEditingOnlineExamData(exam)
     setAssignTitle(exam.title || '')
     setAssignSubjectId(exam.subjectId || (subjects[0]?.id ?? 0))
     setAssignClassId(exam.classId ? String(exam.classId) : (classesList[0]?.id ? String(classesList[0].id) : ''))
@@ -1057,89 +1082,7 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
     setIsAssignTestModalOpen(true)
   }
 
-  // Submit and Distribute CBT Assessment to Class
-  const handlePublishCbtAssessment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!assignTitle.trim() || !assignClassId || !assignSubjectId) {
-      alert('Assessment Title, Class, and Subject are required.')
-      return
-    }
 
-    if (!editingOnlineExamId && selectedQuestionsObjects.length === 0) {
-      alert('No questions collected in this assessment.')
-      return
-    }
-
-    setIsPublishingExam(true)
-    try {
-      const formattedQuestions = selectedQuestionsObjects.map((q) => ({
-        id: q.id,
-        questionText: q.questionText,
-        questionType: q.questionType,
-        options: q.options,
-        correctOption: q.correctOption,
-        marks: q.marks,
-      }))
-
-      const payload: any = {
-        title: assignTitle.trim(),
-        classId: Number(assignClassId),
-        subjectId: Number(assignSubjectId),
-        passingMark: Number(assignPassingMark) || 50,
-        duration: Number(assignDuration) || 30,
-        startDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
-        endDate: assignEndDate ? new Date(assignEndDate).toISOString() : null,
-        examDate: assignStartDate ? new Date(assignStartDate).toISOString() : (assignExamDate ? new Date(assignExamDate).toISOString() : new Date().toISOString()),
-        shuffleQuestions: assignShuffle,
-        showResults: assignShowResults,
-        isPublished: true,
-      }
-
-      if (selectedQuestionsObjects.length > 0) {
-        payload.questionBankIds = selectedQuestionsObjects.filter((q) => (q.status || 'APPROVED') === 'APPROVED').map((q) => q.id)
-        payload.questions = formattedQuestions
-      }
-
-      if (payload.endDate && payload.startDate && new Date(payload.endDate) <= new Date(payload.startDate)) {
-        alert('Attempt period must close after it opens.')
-        setIsPublishingExam(false)
-        return
-      }
-
-      let res: { success: boolean; exam?: any; message?: string }
-      if (editingOnlineExamId) {
-        if (isAdminPortal) {
-          res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
-            endpoints.admin.cbtDistributions(),
-            { id: editingOnlineExamId, ...payload }
-          )
-        } else {
-          res = await apiSlice.put<{ success: boolean; exam: any; message?: string }>(
-            `${endpoints.teacher.onlineExams}/${editingOnlineExamId}`,
-            payload
-          )
-        }
-      } else {
-        res = await apiSlice.post<{ success: boolean; exam: any; message?: string }>(
-          isAdminPortal ? endpoints.admin.cbtDistributions() : endpoints.teacher.onlineExams,
-          payload
-        )
-      }
-
-      if (res.success) {
-        showNotification(res.message || (editingOnlineExamId ? 'CBT Assessment successfully updated!' : 'CBT Assessment successfully distributed to classroom!'))
-        setIsAssignTestModalOpen(false)
-        setEditingOnlineExamId(null)
-        setSelectedIds([])
-        fetchOnlineExams()
-        setActiveTab('assigned')
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to publish CBT test.')
-    } finally {
-      setIsPublishingExam(false)
-    }
-  }
 
   // Delete Distributed Exam
   const handleDeleteOnlineExam = async (id: number) => {
@@ -2473,189 +2416,39 @@ ANSWER: A`)
         </div>
       )}
 
-      {/* MODAL 4: ASSIGN CBT TEST TO CLASS */}
-      {isAssignTestModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
-            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
-              <div className="flex items-center gap-2 font-black text-sm">
-                <Send size={18} className="text-amber-400" />
-                {editingOnlineExamId ? 'Edit CBT Assessment & Settings' : 'Distribute CBT Assessment to Classroom'}
-              </div>
-              <button
-                onClick={() => {
-                  setIsAssignTestModalOpen(false)
-                  setEditingOnlineExamId(null)
-                }}
-                className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handlePublishCbtAssessment} className="p-6 space-y-4">
-              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-blue-900 text-xs flex items-center justify-between">
-                <div>
-                  <span className="font-extrabold block">
-                    {editingOnlineExamId ? 'Editing Assessment' : `Collected Pool: ${selectedIds.length} Questions`}
-                  </span>
-                  <span className="text-[11px] text-blue-700">
-                    {editingOnlineExamId ? 'Adjust title, duration, pass mark, dates or settings' : `Total Marks: ${totalSelectedMarks} pts`}
-                  </span>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold">
-                  {editingOnlineExamId ? 'Edit Mode' : 'Ready to Deploy'}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assessment / Test Title *</label>
-                <input
-                  type="text"
-                  required
-                  value={assignTitle}
-                  onChange={(e) => setAssignTitle(e.target.value)}
-                  placeholder="e.g. Basic Science Mid-Term CBT Test"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Subject *</label>
-                  <select
-                    value={assignSubjectId}
-                    onChange={(e) => setAssignSubjectId(Number(e.target.value))}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Class *</label>
-                  <select
-                    value={assignClassId}
-                    onChange={(e) => setAssignClassId(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    {classesList.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Opens (attempt window)</label>
-                  <input
-                    type="datetime-local"
-                    value={assignStartDate}
-                    onChange={(e) => setAssignStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Closes</label>
-                  <input
-                    type="datetime-local"
-                    value={assignEndDate}
-                    onChange={(e) => setAssignEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Mins)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={360}
-                    value={assignDuration}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setAssignDuration(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
-                    }}
-                    onBlur={() => {
-                      if (!assignDuration || Number(assignDuration) < 1) setAssignDuration(30)
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Pass Mark (%)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={assignPassingMark}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setAssignPassingMark(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
-                    }}
-                    onBlur={() => {
-                      if (!assignPassingMark || Number(assignPassingMark) < 1) setAssignPassingMark(50)
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Exam Date</label>
-                  <input
-                    type="date"
-                    value={assignExamDate}
-                    onChange={(e) => setAssignExamDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={assignShuffle} onChange={(e) => setAssignShuffle(e.target.checked)} className="rounded border-slate-300" />
-                Present questions in random order
-              </label>
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={assignShowResults} onChange={(e) => setAssignShowResults(e.target.checked)} className="rounded border-slate-300" />
-                Show answers / results immediately after submission
-              </label>
-
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAssignTestModalOpen(false)
-                    setEditingOnlineExamId(null)
-                  }}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPublishingExam}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isPublishingExam ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  {editingOnlineExamId ? 'Save Changes' : 'Publish & Assign to Class'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* UNIFIED CBT DISTRIBUTION MODAL */}
+      <CbtDistributionModal
+        isOpen={isAssignTestModalOpen}
+        onClose={() => {
+          setIsAssignTestModalOpen(false)
+          setEditingOnlineExamId(null)
+          setEditingOnlineExamData(null)
+        }}
+        sourceMode={editingOnlineExamId ? 'bundle' : 'vault'}
+        mode={editingOnlineExamId ? 'edit' : 'create'}
+        editingDistId={editingOnlineExamId}
+        initialData={
+          editingOnlineExamData || {
+            subjectId: assignSubjectId,
+            classId: assignClassId,
+            title: assignTitle,
+          }
+        }
+        vaultQuestions={selectedQuestionsObjects}
+        classes={classesList}
+        schoolSections={schoolSections}
+        subjects={subjects}
+        examMasters={examMasters}
+        activeExamSetup={activeExamSetup}
+        questionGroups={questionGroups}
+        isAdmin={isAdminPortal}
+        onSuccess={(result, message) => {
+          fetchOnlineExams()
+          setSelectedIds([])
+          showNotification(message || 'CBT Assessment distributed successfully!')
+        }}
+        showToast={showNotification}
+      />
 
       {/* MODAL 1: BULK IMPORT (AIKEN / CSV / JSON) */}
       {isImportModalOpen && (

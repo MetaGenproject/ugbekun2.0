@@ -40,6 +40,7 @@ export interface PromotionModalProps {
   currentClass?: string
   students?: ModalStudentItem[]
   sourceClassId?: number
+  sourceSessionId?: number
   onClose: () => void
   onSuccess: () => void
 }
@@ -50,6 +51,7 @@ export function StudentPromotionModal({
   currentClass,
   students = [],
   sourceClassId,
+  sourceSessionId,
   onClose,
   onSuccess,
 }: PromotionModalProps) {
@@ -208,14 +210,20 @@ export function StudentPromotionModal({
     setSuccessMsg(null)
 
     try {
+      const resolvedTargetSessionId = targetSessionId
+        ? Number(targetSessionId)
+        : (sessions.find((s) => s.isCurrent)?.id || sessions[0]?.id || 5)
+
       const payload = {
         studentIds: studentIdsToPromote,
         studentId: studentIdsToPromote[0],
+        sourceClassId: sourceClassId ? Number(sourceClassId) : undefined,
+        sourceSessionId: sourceSessionId ? Number(sourceSessionId) : undefined,
         targetClassId: Number(targetClassId),
         classId: Number(targetClassId),
         targetSectionId: Number(targetSectionId),
         sectionId: Number(targetSectionId),
-        targetSessionId: targetSessionId ? Number(targetSessionId) : undefined,
+        targetSessionId: resolvedTargetSessionId,
         action: promotionAction,
       }
 

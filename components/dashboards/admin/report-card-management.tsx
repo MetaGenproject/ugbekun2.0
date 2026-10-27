@@ -153,7 +153,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [downloadingStudentId, setDownloadingStudentId] = useState<number | null>(null)
 
   // Assessment Stage Filter & Term Selection
-  const [assessmentStage, setAssessmentStage] = useState<'FULL' | 'CA1' | 'CA2' | 'EXAM'>('FULL')
+  const [assessmentStage, setAssessmentStage] = useState<'FULL' | 'COMBINED_CA' | 'CA1' | 'CA2' | 'EXAM'>('FULL')
   const [selectedTermId, setSelectedTermId] = useState<number>(1)
 
   // Report Card Granular Publication State
@@ -162,6 +162,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     isPublished: boolean
     releaseCa1: boolean
     releaseCa2: boolean
+    releaseCombinedCa?: boolean
     releaseExam: boolean
     releaseFull: boolean
     termId: number
@@ -169,6 +170,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     isPublished: false,
     releaseCa1: false,
     releaseCa2: false,
+    releaseCombinedCa: false,
     releaseExam: false,
     releaseFull: false,
     termId: 1,
@@ -178,6 +180,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [publishScope, setPublishScope] = useState<'class' | 'all'>('class')
   const [modalReleaseCa1, setModalReleaseCa1] = useState<boolean>(false)
   const [modalReleaseCa2, setModalReleaseCa2] = useState<boolean>(false)
+  const [modalReleaseCombinedCa, setModalReleaseCombinedCa] = useState<boolean>(false)
   const [modalReleaseExam, setModalReleaseExam] = useState<boolean>(false)
   const [modalReleaseFull, setModalReleaseFull] = useState<boolean>(false)
 
@@ -185,6 +188,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     setPublishScope('class')
     setModalReleaseCa1(Boolean(pubDetails.releaseCa1))
     setModalReleaseCa2(Boolean(pubDetails.releaseCa2))
+    setModalReleaseCombinedCa(Boolean(pubDetails.releaseCombinedCa))
     setModalReleaseExam(Boolean(pubDetails.releaseExam))
     setModalReleaseFull(Boolean(pubDetails.releaseFull))
     setShowPublishConfirmModal(true)
@@ -327,6 +331,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         isPublished: boolean
         releaseCa1?: boolean
         releaseCa2?: boolean
+        releaseCombinedCa?: boolean
         releaseExam?: boolean
         releaseFull?: boolean
         termId?: number
@@ -337,6 +342,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           isPublished: Boolean(res.isPublished),
           releaseCa1: Boolean(res.releaseCa1),
           releaseCa2: Boolean(res.releaseCa2),
+          releaseCombinedCa: Boolean(res.releaseCombinedCa),
           releaseExam: Boolean(res.releaseExam),
           releaseFull: Boolean(res.releaseFull),
           termId: res.termId || termId,
@@ -351,6 +357,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     publish?: boolean
     releaseCa1?: boolean
     releaseCa2?: boolean
+    releaseCombinedCa?: boolean
     releaseExam?: boolean
     releaseFull?: boolean
     scopeOverride?: 'class' | 'all'
@@ -363,6 +370,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         isPublished: boolean
         releaseCa1: boolean
         releaseCa2: boolean
+        releaseCombinedCa?: boolean
         releaseExam: boolean
         releaseFull: boolean
         termId: number
@@ -378,6 +386,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           publishAllClasses: activeScope === 'all',
           releaseCa1: params.releaseCa1,
           releaseCa2: params.releaseCa2,
+          releaseCombinedCa: params.releaseCombinedCa,
           releaseExam: params.releaseExam,
           releaseFull: params.releaseFull,
         }
@@ -388,6 +397,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           isPublished: res.isPublished,
           releaseCa1: res.releaseCa1,
           releaseCa2: res.releaseCa2,
+          releaseCombinedCa: res.releaseCombinedCa,
           releaseExam: res.releaseExam,
           releaseFull: res.releaseFull,
           termId: res.termId,
@@ -1046,9 +1056,10 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
               onChange={e => setAssessmentStage(e.target.value as any)}
               className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-xs font-bold bg-rose-50/60 text-rose-900"
             >
-              <option value="FULL">Full Terminal Report</option>
-              <option value="CA1">CA1 Progress Slip</option>
-              <option value="CA2">CA2 Progress Slip</option>
+              <option value="FULL">Full Terminal Report (Out of 100)</option>
+              <option value="COMBINED_CA">Combined CA Only (CA1 + CA2 — Out of 40)</option>
+              <option value="CA1">CA1 Progress Slip (Out of 20)</option>
+              <option value="CA2">CA2 Progress Slip (Out of 20)</option>
               <option value="EXAM">Terminal Exam Only</option>
             </select>
           </div>
@@ -1243,16 +1254,18 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
-                              {assessmentStage === 'FULL' ? 'AVERAGE SCORE' : `${assessmentStage} STAGE AVG`}
+                              {assessmentStage === 'COMBINED_CA' ? 'COMBINED CA (/40)' : (assessmentStage === 'FULL' ? 'AVERAGE SCORE' : `${assessmentStage} STAGE AVG`)}
                             </span>
-                            <span className="font-mono font-black text-slate-900 text-sm">{st.average}%</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {assessmentStage === 'COMBINED_CA' ? `${st.totalMarks !== null && st.totalMarks !== undefined ? st.totalMarks : '-'} / 40` : `${st.average}%`}
+                            </span>
                           </div>
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
                               {assessmentStage === 'FULL' ? 'CLASS RANK' : 'STAGE STATUS'}
                             </span>
                             <span className="font-bold text-indigo-700 text-sm">
-                              {assessmentStage === 'FULL' ? st.position : 'Progress Recorded'}
+                              {assessmentStage === 'FULL' ? st.position : (assessmentStage === 'COMBINED_CA' ? 'CA Progress Graded' : 'Progress Recorded')}
                             </span>
                           </div>
                         </div>
@@ -1868,6 +1881,29 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                   />
                 </label>
 
+                {/* Stage: Combined CA */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                  modalReleaseCombinedCa ? 'bg-purple-50/60 border-purple-300' : 'bg-slate-50/50 border-slate-200'
+                }`}>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900">Combined CA (CA1 + CA2) Progress Report</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-purple-100 text-purple-800">
+                        Mid-Term Out of 40
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Releases Combined Continuous Assessment (CA1 + CA2 out of 40). Exam columns and class ranking are strictly hidden.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={modalReleaseCombinedCa}
+                    onChange={e => setModalReleaseCombinedCa(e.target.checked)}
+                    className="w-5 h-5 text-purple-600 rounded-md border-slate-300 focus:ring-purple-500 cursor-pointer"
+                  />
+                </label>
+
                 {/* Stage 3: Exam */}
                 <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
                   modalReleaseExam ? 'bg-indigo-50/60 border-indigo-300' : 'bg-slate-50/50 border-slate-200'
@@ -1935,12 +1971,14 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                     onClick={() => {
                       setModalReleaseCa1(false)
                       setModalReleaseCa2(false)
+                      setModalReleaseCombinedCa(false)
                       setModalReleaseExam(false)
                       setModalReleaseFull(false)
                       handleTogglePublish({
                         publish: false,
                         releaseCa1: false,
                         releaseCa2: false,
+                        releaseCombinedCa: false,
                         releaseExam: false,
                         releaseFull: false,
                       })
@@ -1955,12 +1993,14 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                     onClick={() => {
                       setModalReleaseCa1(true)
                       setModalReleaseCa2(true)
+                      setModalReleaseCombinedCa(true)
                       setModalReleaseExam(true)
                       setModalReleaseFull(true)
                       handleTogglePublish({
                         publish: true,
                         releaseCa1: true,
                         releaseCa2: true,
+                        releaseCombinedCa: true,
                         releaseExam: true,
                         releaseFull: true,
                       })
@@ -1987,6 +2027,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                       handleTogglePublish({
                         releaseCa1: modalReleaseCa1,
                         releaseCa2: modalReleaseCa2,
+                        releaseCombinedCa: modalReleaseCombinedCa,
                         releaseExam: modalReleaseExam,
                         releaseFull: modalReleaseFull,
                       })

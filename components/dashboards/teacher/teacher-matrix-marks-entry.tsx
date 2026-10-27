@@ -131,6 +131,21 @@ export function TeacherMatrixMarksEntry() {
   const [aiTotalTarget, setAiTotalTarget] = useState<string>('75')
   const [isGeneratingAi, setIsGeneratingAi] = useState(false)
 
+  // Auto-Fill CBT Marks Modal State (Workflow 3)
+  const [isAutoFillModalOpen, setIsAutoFillModalOpen] = useState(false)
+  const [loadingAutoFillScores, setLoadingAutoFillScores] = useState(false)
+  const [selectedAutoFillSlot, setSelectedAutoFillSlot] = useState<'CBT1' | 'CBT2' | 'CBT_EXAM'>('CBT1')
+  const [slotAttemptsData, setSlotAttemptsData] = useState<Record<'CBT1' | 'CBT2' | 'CBT_EXAM', {
+    title: string
+    count: number
+    maxMarks: number
+    scores: Array<{ studentId: number; rawScore: number | null; isAbsent: boolean }>
+  }>>({
+    CBT1: { title: 'CBT 1 (Continuous Assessment 1)', count: 0, maxMarks: 10, scores: [] },
+    CBT2: { title: 'CBT 2 (Continuous Assessment 2)', count: 0, maxMarks: 10, scores: [] },
+    CBT_EXAM: { title: 'Terminal CBT (Examination)', count: 0, maxMarks: 30, scores: [] },
+  })
+
   // Search & Filter States
   const [studentSearch, setStudentSearch] = useState('')
   const [scoreFilterMode, setScoreFilterMode] = useState<'all' | 'scored' | 'cbt'>('all')
@@ -532,6 +547,132 @@ export function TeacherMatrixMarksEntry() {
     setHasUnsavedChanges(true)
   }
 
+  // Auto-Fill CBT Marks Handler (Workflow 3)
+  const handleOpenAutoFillModal = async () => {
+    if (!selectedClassId || !selectedSubjectId) {
+      toast.error('Please select both a Classroom and Subject first.')
+      return
+    }
+
+    setIsAutoFillModalOpen(true)
+    setLoadingAutoFillScores(true)
+
+    try {
+      const baseQs = `classId=${selectedClassId}&subjectId=${selectedSubjectId}${selectedSectionId ? `&sectionId=${selectedSectionId}` : ''}`
+      const [resCbt1, resCbt2, resExam] = await Promise.all([
+        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
+          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT1`)
+        ).catch(() => ({ success: false, slot: 'CBT1', examTitle: 'CBT 1', maxMarks: 10, attemptsFound: 0, scores: [] })),
+        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
+          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT2`)
+        ).catch(() => ({ success: false, slot: 'CBT2', examTitle: 'CBT 2', maxMarks: 10, attemptsFound: 0, scores: [] })),
+        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
+          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT_EXAM`)
+        ).catch(() => ({ success: false, slot: 'CBT_EXAM', examTitle: 'Terminal CBT', maxMarks: 30, attemptsFound: 0, scores: [] })),
+      ])
+
+      setSlotAttemptsData({
+        CBT1: {
+          title: resCbt1.examTitle || 'CBT 1 (Continuous Assessment 1)',
+          count: resCbt1.attemptsFound || (resCbt1.scores ? resCbt1.scores.length : 0),
+          maxMarks: resCbt1.maxMarks || 10,
+          scores: resCbt1.scores || [],
+        },
+        CBT2: {
+          title: resCbt2.examTitle || 'CBT 2 (Continuous Assessment 2)',
+          count: resCbt2.attemptsFound || (resCbt2.scores ? resCbt2.scores.length : 0),
+          maxMarks: resCbt2.maxMarks || 10,
+          scores: resCbt2.scores || [],
+        },
+        CBT_EXAM: {
+          title: resExam.examTitle || 'Terminal CBT (Examination)',
+          count: resExam.attemptsFound || (resExam.scores ? resExam.scores.length : 0),
+          maxMarks: resExam.maxMarks || 30,
+          scores: resExam.scores || [],
+        },
+      })
+
+      if ((resCbt1.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT1')
+      else if ((resCbt2.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT2')
+      else if ((resExam.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT_EXAM')
+    } catch (err) {
+      console.error('Failed to load CBT attempts for auto-fill:', err)
+      toast.error('Failed to query online exam attempts.')
+    } finally {
+      setLoadingAutoFillScores(false)
+    }
+  }
+
+  const handleConfirmAutoFill = () => {
+    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) {
+      toast.error('No evaluation matrix active for this classroom.')
+      return
+    }
+
+    const slotData = slotAttemptsData[selectedAutoFillSlot]
+    if (!slotData || !Array.isArray(slotData.scores) || slotData.scores.length === 0) {
+      toast.error(`No student scores recorded for ${selectedAutoFillSlot}.`)
+      return
+    }
+
+    let targetComp: MatrixComponent | undefined
+    if (selectedAutoFillSlot === 'CBT1') {
+      targetComp = matrix.components.find((c) => /ca1|continuous.*1|first.*ca|first.*assessment/i.test(c.name || c.code)) || matrix.components[0]
+    } else if (selectedAutoFillSlot === 'CBT2') {
+      targetComp = matrix.components.find((c) => /ca2|continuous.*2|second.*ca|second.*assessment/i.test(c.name || c.code)) || (matrix.components.length > 1 ? matrix.components[1] : matrix.components[0])
+    } else {
+      targetComp = matrix.components.find((c) => /exam|terminal|theory|cbt/i.test(c.name || c.code)) || matrix.components[matrix.components.length - 1]
+    }
+
+    if (!targetComp) {
+      toast.error('Could not find corresponding assessment component in evaluation matrix.')
+      return
+    }
+
+    const targetKey = targetComp.code || targetComp.name
+    const scoresByStudentId = new Map<number, { rawScore: number | null; isAbsent: boolean }>()
+    slotData.scores.forEach((s) => {
+      scoresByStudentId.set(s.studentId, s)
+    })
+
+    let populatedCount = 0
+    setStudentRows((prev) => {
+      const next = prev.map((row) => {
+        const rowId = Number(row.studentId || row.id)
+        const scoreInfo = scoresByStudentId.get(rowId)
+        if (scoreInfo) {
+          const scoreVal = scoreInfo.isAbsent ? 0 : (scoreInfo.rawScore !== null ? Number(scoreInfo.rawScore) : 0)
+          const updated = {
+            ...(row.componentMarks || {}),
+            [targetKey]: scoreVal,
+          }
+          const total = Object.values(updated).reduce<number>((a, b) => a + (Number(b) || 0), 0)
+          populatedCount++
+          return {
+            ...row,
+            componentMarks: updated,
+            totalScore: total,
+            isAbsent: scoreInfo.isAbsent,
+            cbtMark: String(scoreVal),
+            cbtExamTitle: slotData.title,
+          }
+        }
+        return row
+      })
+
+      try {
+        localStorage.setItem(bufferKey, JSON.stringify(next))
+        setOfflineBufferCount(next.length)
+      } catch (e) {}
+
+      return next
+    })
+
+    setHasUnsavedChanges(true)
+    setIsAutoFillModalOpen(false)
+    toast.success(`Auto-filled CBT marks for ${populatedCount} student(s) into "${targetComp.name}".`)
+  }
+
   // Sync a single student's CBT Score to matrix Exam component
   const handleSyncSingleCbt = (targetStudentId: number) => {
     if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
@@ -824,16 +965,15 @@ export function TeacherMatrixMarksEntry() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {cbtCount > 0 && (
-              <button
-                type="button"
-                onClick={handleSyncAllCbtToExam}
-                className="px-3.5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
-                title="Auto-fill CBT marks into Examination column"
-              >
-                <ArrowRightLeft size={14} /> Sync All CBT to Exam
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleOpenAutoFillModal}
+              disabled={!selectedClassId || !selectedSubjectId}
+              className="px-3.5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              title="Auto-fill CBT online test scores into gradebook"
+            >
+              <Wand2 size={14} className="text-cyan-200" /> Auto-Fill CBT Scores
+            </button>
 
             <button
               type="button"
@@ -1466,6 +1606,119 @@ export function TeacherMatrixMarksEntry() {
               >
                 {isGeneratingAi ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 <span>Apply Distribution</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* AUTO-FILL CBT SCORES MODAL (Workflow 3) */}
+      {isAutoFillModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100">
+                  <Wand2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">Auto-Fill CBT Marks</h3>
+                  <p className="text-[11px] text-slate-500">Populate online test scores directly into gradebook</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAutoFillModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-50 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {loadingAutoFillScores ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
+                <Loader2 className="animate-spin text-cyan-600" size={28} />
+                <p className="text-xs font-semibold">Querying student test attempts...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Select which assessment slot to auto-fill for this subject. Student attempts will be mapped directly to the matrix component:
+                </p>
+
+                <div className="space-y-2.5">
+                  {(['CBT1', 'CBT2', 'CBT_EXAM'] as const).map((slotKey) => {
+                    const slot = slotAttemptsData[slotKey]
+                    const isSelected = selectedAutoFillSlot === slotKey
+                    const hasScores = slot.count > 0
+
+                    return (
+                      <div
+                        key={slotKey}
+                        onClick={() => setSelectedAutoFillSlot(slotKey)}
+                        className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-cyan-50/70 border-cyan-400 ring-2 ring-cyan-200'
+                            : 'bg-slate-50/60 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-xs text-slate-900">
+                              {slotKey === 'CBT1' ? 'CBT 1' : slotKey === 'CBT2' ? 'CBT 2' : 'Terminal CBT'}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              (Max: {slot.maxMarks} Marks)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 font-medium truncate max-w-[260px]">
+                            {slot.title}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0">
+                          {hasScores ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              {slot.count} score{slot.count > 1 ? 's' : ''} found
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-600">
+                              0 scores logged
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 text-xs font-medium space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Info size={14} className="text-amber-700 shrink-0" />
+                    <span>Real-time Calculation Rule</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-snug">
+                    Imported CBT scores will immediately lock in the test column and combine with manual Theory scores in real-time.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAutoFillModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAutoFill}
+                disabled={loadingAutoFillScores || slotAttemptsData[selectedAutoFillSlot]?.count === 0}
+                className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-40"
+              >
+                <Check size={14} />
+                <span>Confirm & Populate</span>
               </button>
             </div>
           </div>

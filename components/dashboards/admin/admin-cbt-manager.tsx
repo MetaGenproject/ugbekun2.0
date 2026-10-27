@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { QuestionBankManager } from '../teacher/question-bank-manager'
+import { CbtDistributionModal } from '../shared/cbt-distribution-modal'
 import {
   Calendar,
   Clock,
@@ -87,12 +88,15 @@ interface CbtDistributionItem {
   classId: number
   sectionId?: number | null
   subjectId: number
+  targetSlot?: string | null
+  assessmentComponentId?: number | null
   startDate?: string | null
   endDate?: string | null
   class?: { id: number; name: string }
   section?: { id: number; name: string }
   subject?: { id: number; name: string; subjectCode?: string }
   group?: { id: number; title: string; groupCode: string; questionIds?: number[] }
+  assessmentComponent?: { id: number; code: string; displayName: string } | null
 }
 
 interface ExamMasterItem {
@@ -173,6 +177,7 @@ export function AdminCbtManager() {
   // Distribution Modal State
   const [isDistModalOpen, setIsDistModalOpen] = useState(false)
   const [editingDistId, setEditingDistId] = useState<number | null>(null)
+  const [editingDistData, setEditingDistData] = useState<any | null>(null)
   const [distTitle, setDistTitle] = useState('')
   const [distClassId, setDistClassId] = useState('')
   const [distSectionId, setDistSectionId] = useState('')
@@ -187,9 +192,45 @@ export function AdminCbtManager() {
   const [distStartDate, setDistStartDate] = useState('')
   const [distEndDate, setDistEndDate] = useState('')
   const [distModalMode, setDistModalMode] = useState<'create' | 'edit' | 'reschedule'>('create')
+  const [distTargetSlot, setDistTargetSlot] = useState<'CBT1' | 'CBT2' | 'CBT_EXAM' | ''>('')
+  const [distAssessmentComponentId, setDistAssessmentComponentId] = useState<string>('')
+  const [activeExamSetup, setActiveExamSetup] = useState<any>(null)
   const [isSavingDist, setIsSavingDist] = useState(false)
   const [examMasters, setExamMasters] = useState<ExamMasterItem[]>([])
   const [selectedExamMasterId, setSelectedExamMasterId] = useState<string>('')
+
+  // Subject Question Bank Availability State
+  const [subjectApprovedCount, setSubjectApprovedCount] = useState<number | null>(null)
+  const [loadingSubjectApprovedCount, setLoadingSubjectApprovedCount] = useState(false)
+
+  const checkSubjectQuestions = useCallback(async (subId: string) => {
+    if (!subId) {
+      setSubjectApprovedCount(null)
+      return
+    }
+    setLoadingSubjectApprovedCount(true)
+    try {
+      const res = await apiSlice.get<{ success: boolean; total: number }>(
+        endpoints.admin.cbtQuestionBank(`?subjectId=${subId}&status=APPROVED&limit=1`)
+      )
+      if (res && typeof res.total === 'number') {
+        setSubjectApprovedCount(res.total)
+      } else {
+        setSubjectApprovedCount(0)
+      }
+    } catch (err) {
+      console.error('Failed to check subject question count:', err)
+      setSubjectApprovedCount(null)
+    } finally {
+      setLoadingSubjectApprovedCount(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (distSubjectId) {
+      checkSubjectQuestions(distSubjectId)
+    }
+  }, [distSubjectId, checkSubjectQuestions])
 
   // Selected Exam Master & Question Group Cap Enforcement
   const activeExam = useMemo(() => {
@@ -205,6 +246,15 @@ export function AdminCbtManager() {
   const bundleCount = selectedBundle && Array.isArray(selectedBundle.questionIds) ? selectedBundle.questionIds.length : 0
   const activeCap = activeExam?.totalQuestionCount || null
   const isExceedingCap = Boolean(activeCap && bundleCount > activeCap)
+
+  const hasNoQuestionsAvailable = useMemo(() => {
+    if (distModalMode === 'reschedule') return false
+    if (distGroupId) {
+      return !selectedBundle || !Array.isArray(selectedBundle.questionIds) || selectedBundle.questionIds.length === 0
+    }
+    // "Use Subject Question Bank"
+    return subjectApprovedCount === 0
+  }, [distModalMode, distGroupId, selectedBundle, subjectApprovedCount])
 
   // Analytics & Marksheet Sync Modal State
   const [analyticsDistId, setAnalyticsDistId] = useState<number | null>(null)
@@ -252,6 +302,8 @@ export function AdminCbtManager() {
   const resetDistForm = () => {
     setEditingDistId(null)
     setDistTitle('')
+    setDistTargetSlot('')
+    setDistAssessmentComponentId('')
     setSelectedExamMasterId('')
     setDistInstructions('')
     setDistStartDate('')
@@ -261,12 +313,15 @@ export function AdminCbtManager() {
 
   const openCreateDistribution = () => {
     resetDistForm()
+    setEditingDistId(null)
+    setEditingDistData(null)
     setIsDistModalOpen(true)
   }
 
   const openEditDistribution = (dist: CbtDistributionItem) => {
     setDistModalMode('edit')
     setEditingDistId(dist.id)
+    setEditingDistData(dist)
     setDistTitle(dist.title)
     const match = examMasters.find(
       (em) => em.name.trim().toLowerCase() === dist.title.trim().toLowerCase()
@@ -276,6 +331,8 @@ export function AdminCbtManager() {
     setDistSectionId(dist.sectionId ? String(dist.sectionId) : '')
     setDistSubjectId(String(dist.subjectId))
     setDistGroupId(dist.groupId ? String(dist.groupId) : '')
+    setDistTargetSlot((dist.targetSlot as 'CBT1' | 'CBT2' | 'CBT_EXAM') || '')
+    setDistAssessmentComponentId(dist.assessmentComponentId ? String(dist.assessmentComponentId) : '')
     setDistDuration(dist.duration || 30)
     setDistPassingMark(dist.passingMark || 50)
     setDistShuffle(dist.shuffleQuestions)
@@ -290,6 +347,7 @@ export function AdminCbtManager() {
   const openRescheduleDistribution = (dist: CbtDistributionItem) => {
     setDistModalMode('reschedule')
     setEditingDistId(dist.id)
+    setEditingDistData(dist)
     setDistTitle(dist.title)
     setDistStartDate(toLocalInput(dist.startDate) || toLocalInput(new Date().toISOString()))
     setDistEndDate(toLocalInput(dist.endDate))
@@ -313,10 +371,12 @@ export function AdminCbtManager() {
   const loadConfig = async () => {
     setLoadingConfig(true)
     try {
-      const [classRes, subjectRes, examRes] = await Promise.all([
+      const [classRes, subjectRes, examRes, setupRes, groupRes] = await Promise.all([
         apiSlice.get<{ success: boolean; classes: any[]; sections?: any[] }>(endpoints.admin.classesSections),
         apiSlice.get<{ success: boolean; subjects: any[] }>(endpoints.admin.subjects),
         apiSlice.get<{ success: boolean; exams: ExamMasterItem[] }>(endpoints.admin.exams).catch(() => ({ success: false, exams: [] })),
+        apiSlice.get<{ success: boolean; setup: any }>(endpoints.admin.activeExamSetup).catch(() => ({ success: false, setup: null })),
+        apiSlice.get<{ success: boolean; groups: QuestionGroupItem[] }>(endpoints.admin.cbtGroups()).catch(() => ({ success: false, groups: [] })),
       ])
 
       if (classRes.success && classRes.classes) {
@@ -337,6 +397,12 @@ export function AdminCbtManager() {
       }
       if (examRes.success && examRes.exams) {
         setExamMasters(examRes.exams)
+      }
+      if (setupRes.success && setupRes.setup) {
+        setActiveExamSetup(setupRes.setup)
+      }
+      if (groupRes.success && groupRes.groups) {
+        setQuestionGroups(groupRes.groups)
       }
     } catch (err) {
       console.error('Error loading config:', err)
@@ -482,80 +548,7 @@ export function AdminCbtManager() {
     }
   }
 
-  // Handle Save Distribution
-  const handleSaveDistribution = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (distModalMode !== 'reschedule' && (!distTitle.trim() || !distClassId || !distSubjectId)) {
-      alert('Title, Class, and Subject are required.')
-      return
-    }
 
-    if (distStartDate && distEndDate && new Date(distEndDate) <= new Date(distStartDate)) {
-      alert('Closes must be after Opens.')
-      return
-    }
-
-    if (isExceedingCap && activeCap) {
-      alert(`Maximum of ${activeCap} questions approved for this exam.`)
-      return
-    }
-
-    setIsSavingDist(true)
-    try {
-      if (distModalMode === 'reschedule' && editingDistId) {
-        if (!distStartDate || !distEndDate) {
-          alert('Choose a new start and end date/time.')
-          setIsSavingDist(false)
-          return
-        }
-        const res = await apiSlice.post<{ success: boolean; distribution: CbtDistributionItem; message: string }>(
-          endpoints.admin.rescheduleCbtDistribution(editingDistId),
-          { startDate: new Date(distStartDate).toISOString(), endDate: new Date(distEndDate).toISOString() }
-        )
-        if (res.success) {
-          fetchDistributions()
-          setIsDistModalOpen(false)
-          resetDistForm()
-          showToast(res.message || 'Sitting rescheduled.')
-        }
-        return
-      }
-
-      const payload = {
-        id: editingDistId || undefined,
-        title: distTitle.trim(),
-        examMasterId: selectedExamMasterId ? Number(selectedExamMasterId) : (activeExam ? activeExam.id : undefined),
-        classId: Number(distClassId),
-        sectionId: distSectionId ? Number(distSectionId) : null,
-        subjectId: Number(distSubjectId),
-        groupId: distGroupId ? Number(distGroupId) : null,
-        duration: Number(distDuration) || 30,
-        passingMark: Number(distPassingMark) || 50,
-        shuffleQuestions: distShuffle,
-        showResults: distShowResults,
-        isPublished: distPublished,
-        instructions: distInstructions.trim() || null,
-        startDate: distStartDate ? new Date(distStartDate).toISOString() : null,
-        endDate: distEndDate ? new Date(distEndDate).toISOString() : null,
-      }
-
-      const res = await apiSlice.post<{ success: boolean; message?: string; distribution: CbtDistributionItem }>(
-        endpoints.admin.cbtDistributions(),
-        payload
-      )
-
-      if (res.success) {
-        fetchDistributions()
-        setIsDistModalOpen(false)
-        resetDistForm()
-        showToast(res.message || (editingDistId ? 'CBT schedule updated.' : 'CBT Assessment distributed to class successfully!'))
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to distribute CBT test.')
-    } finally {
-      setIsSavingDist(false)
-    }
-  }
 
   // Open Analytics Modal
   const openAnalyticsModal = async (distId: number) => {
@@ -796,9 +789,16 @@ export function AdminCbtManager() {
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[11px] font-black rounded-md">
-                        {dist.subject?.name || 'Subject'}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[11px] font-black rounded-md">
+                          {dist.subject?.name || 'Subject'}
+                        </span>
+                        {dist.targetSlot && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-black rounded-md uppercase tracking-wider">
+                            {dist.targetSlot === 'CBT1' ? 'Slot: CBT 1' : dist.targetSlot === 'CBT2' ? 'Slot: CBT 2' : 'Slot: Terminal CBT'}
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
                           dist.isPublished ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
@@ -836,6 +836,12 @@ export function AdminCbtManager() {
                       <div className="flex items-center justify-between text-slate-600">
                         <span className="flex items-center gap-1"><Shuffle size={12} /> Shuffled:</span>
                         <strong className="text-slate-900">{dist.shuffleQuestions ? 'Enabled' : 'No'}</strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1"><Layers size={12} /> Question Bundle:</span>
+                        <strong className="text-slate-900 text-right truncate max-w-[160px]" title={dist.group ? `${dist.group.title} (${dist.group.questionIds?.length || 0} Qs)` : 'Subject Question Bank'}>
+                          {dist.group ? `${dist.group.title} (${dist.group.questionIds?.length || 0} Qs)` : 'Subject Question Bank'}
+                        </strong>
                       </div>
                     </div>
                   </div>
@@ -1011,287 +1017,33 @@ export function AdminCbtManager() {
         </div>
       )}
 
-      {/* MODAL 1: DISTRIBUTE CBT TEST */}
-      {isDistModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
-            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
-              <div className="flex items-center gap-2 font-black text-sm">
-                {distModalMode === 'reschedule' ? <Calendar size={18} className="text-amber-400" /> : <Send size={18} className="text-amber-400" />}
-                {distModalMode === 'reschedule'
-                  ? 'Reschedule sitting'
-                  : distModalMode === 'edit'
-                    ? 'Edit CBT schedule'
-                    : 'Distribute CBT Assessment to Classroom'}
-              </div>
-              <button
-                onClick={() => setIsDistModalOpen(false)}
-                className="p-1 hover:bg-white/10 rounded-lg text-white/70 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveDistribution} className="p-6 space-y-4">
-              {distModalMode === 'reschedule' ? (
-                <>
-                  <p className="text-sm text-slate-600 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
-                    Students who missed <span className="font-semibold text-slate-900">{distTitle}</span> can sit this same examination. A new test is not created.
-                  </p>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Opens *</label>
-                    <input type="datetime-local" required value={distStartDate} onChange={(e) => setDistStartDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Closes *</label>
-                    <input type="datetime-local" required value={distEndDate} onChange={(e) => setDistEndDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800" />
-                  </div>
-                </>
-              ) : (
-                <>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">Assessment Title / Exam Master *</label>
-                  {activeCap && (
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
-                      Cap: {activeCap} Qs · Total Marks: {activeExam?.cbtTotalMarks ?? 'N/A'}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <select
-                    value={selectedExamMasterId}
-                    onChange={(e) => {
-                      const exId = e.target.value
-                      setSelectedExamMasterId(exId)
-                      const found = examMasters.find((em) => String(em.id) === exId)
-                      if (found) {
-                        setDistTitle(found.name)
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    <option value="">-- Bind to Exam Master --</option>
-                    {examMasters
-                      .filter((em) => !em.examCategory || em.examCategory === 'CBT')
-                      .map((em) => (
-                        <option key={em.id} value={em.id}>
-                          {em.name} (Cap: {em.totalQuestionCount || 'None'} Qs)
-                        </option>
-                      ))}
-                  </select>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. CBT 1, Midterm CBT Test"
-                    value={distTitle}
-                    onChange={(e) => {
-                      setDistTitle(e.target.value)
-                      const match = examMasters.find(
-                        (em) => em.name.trim().toLowerCase() === e.target.value.trim().toLowerCase()
-                      )
-                      if (match) setSelectedExamMasterId(String(match.id))
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Classroom *</label>
-                  <select
-                    value={distClassId}
-                    onChange={(e) => {
-                      setDistClassId(e.target.value)
-                      setDistSectionId('')
-                    }}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Section / Stream</label>
-                  <select
-                    value={distSectionId}
-                    onChange={(e) => setDistSectionId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    <option value="">All Sections</option>
-                    {activeSectionsForClass.map((sec: any) => (
-                      <option key={sec.id} value={sec.id}>
-                        {sec.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Subject *</label>
-                  <select
-                    value={distSubjectId}
-                    onChange={(e) => setDistSubjectId(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Question Bundle</label>
-                  <select
-                    value={distGroupId}
-                    onChange={(e) => setDistGroupId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  >
-                    <option value="">Use Subject Question Bank</option>
-                    {questionGroups
-                      .filter((g) => !distSubjectId || g.subjectId === Number(distSubjectId))
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.title} ({g.groupCode}) — {Array.isArray(g.questionIds) ? g.questionIds.length : 0} Qs
-                        </option>
-                      ))}
-                  </select>
-                  {isExceedingCap && activeCap && (
-                    <div className="mt-1.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
-                      <AlertCircle size={14} className="shrink-0 text-rose-600" />
-                      <span>Maximum of {activeCap} questions approved for this exam. (Bundle contains {bundleCount} questions)</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Duration (Minutes)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={360}
-                    value={distDuration}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setDistDuration(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
-                    }}
-                    onBlur={() => {
-                      if (!distDuration || Number(distDuration) < 1) setDistDuration(30)
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Passing Mark (%)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={distPassingMark}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setDistPassingMark(val === '' ? '' : Math.max(1, parseInt(val, 10) || 0))
-                    }}
-                    onBlur={() => {
-                      if (!distPassingMark || Number(distPassingMark) < 1) setDistPassingMark(50)
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Opens</label>
-                  <input
-                    type="datetime-local"
-                    value={distStartDate}
-                    onChange={(e) => setDistStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Closes</label>
-                  <input
-                    type="datetime-local"
-                    value={distEndDate}
-                    onChange={(e) => setDistEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-500 -mt-2">If a student misses this sitting, change these times on the existing exam. Do not create a new test.</p>
-
-              <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-100">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distShuffle}
-                    onChange={(e) => setDistShuffle(e.target.checked)}
-                    className="rounded-md text-amber-500"
-                  />
-                  Shuffle Questions (Anti-Cheat)
-                </label>
-
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distShowResults}
-                    onChange={(e) => setDistShowResults(e.target.checked)}
-                    className="rounded-md text-amber-500"
-                  />
-                  Show Instant Results on Submit
-                </label>
-
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={distPublished}
-                    onChange={(e) => setDistPublished(e.target.checked)}
-                    className="rounded-md text-emerald-500"
-                  />
-                  Publish Live Immediately
-                </label>
-              </div>
-                </>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDistModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingDist || isExceedingCap}
-                  title={isExceedingCap && activeCap ? `Maximum of ${activeCap} questions approved for this exam.` : undefined}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isSavingDist ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  {distModalMode === 'reschedule' ? 'Save new sitting' : distModalMode === 'edit' ? 'Save schedule' : 'Distribute Test'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* UNIFIED CBT DISTRIBUTION MODAL */}
+      <CbtDistributionModal
+        isOpen={isDistModalOpen}
+        onClose={() => {
+          setIsDistModalOpen(false)
+          setEditingDistId(null)
+          setEditingDistData(null)
+        }}
+        sourceMode="bundle"
+        mode={distModalMode}
+        editingDistId={editingDistId}
+        initialData={editingDistData}
+        classes={classes}
+        schoolSections={sections}
+        subjects={subjects}
+        examMasters={examMasters}
+        activeExamSetup={activeExamSetup}
+        questionGroups={questionGroups}
+        subjectApprovedCount={subjectApprovedCount}
+        isAdmin={true}
+        onSuccess={(result, message) => {
+          fetchDistributions()
+          fetchExams()
+          showToast(message || (editingDistId ? 'CBT schedule updated.' : 'CBT Assessment distributed to class successfully!'))
+        }}
+        showToast={showToast}
+      />
 
       {/* MODAL 2: ANALYTICS & MARKSHEET SCORE SYNC */}
       {analyticsDistId && (

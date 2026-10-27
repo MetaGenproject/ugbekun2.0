@@ -107,13 +107,15 @@ export const SYSTEM_STATUS_PRESETS: Record<SystemStatusType, StatusPresetConfig>
 }
 
 // Event bus dispatch target
-const SYSTEM_STATUS_EVENT = 'ugbekun_system_status'
+export const SYSTEM_STATUS_EVENT = 'ugbekun_system_status'
+export const SYSTEM_STATUS_DISMISS_EVENT = 'ugbekun_system_status_dismiss'
 
-export function showSystemStatus(payload: SystemStatusPayload) {
-  if (typeof window === 'undefined') return
-  const preset = SYSTEM_STATUS_PRESETS[payload.type]
+export function showSystemStatus(payload: SystemStatusPayload): string {
+  const generatedId = payload.id || Math.random().toString(36).substring(2, 9)
+  if (typeof window === 'undefined') return generatedId
+  const preset = SYSTEM_STATUS_PRESETS[payload.type] || SYSTEM_STATUS_PRESETS.UNABLE
   const finalPayload: SystemStatusPayload = {
-    id: payload.id || Math.random().toString(36).substring(2, 9),
+    id: generatedId,
     type: payload.type,
     title: payload.title || preset.title,
     message: payload.message,
@@ -122,6 +124,15 @@ export function showSystemStatus(payload: SystemStatusPayload) {
 
   window.dispatchEvent(
     new CustomEvent(SYSTEM_STATUS_EVENT, { detail: finalPayload })
+  )
+
+  return generatedId
+}
+
+export function dismissSystemStatus(id?: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(
+    new CustomEvent(SYSTEM_STATUS_DISMISS_EVENT, { detail: { id } })
   )
 }
 

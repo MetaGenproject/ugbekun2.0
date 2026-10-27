@@ -24,7 +24,7 @@ import { apiSlice, endpoints } from '@/lib/apiSlice'
 export interface ClassItem {
   id: number
   name: string
-  sections?: { id: number; name: string }[]
+  sections?: { id?: number; section?: { id: number; name: string }; sectionId?: number; name?: string }[]
 }
 
 export interface SectionItem {
@@ -48,6 +48,10 @@ export interface EnrolledStudent {
   currentClassName: string
   currentSectionId: number
   currentSectionName: string
+  isAlreadyPromoted?: boolean
+  latestClassId?: number
+  latestClassName?: string
+  latestSessionId?: number
 }
 
 export interface PromotionLog {
@@ -134,9 +138,6 @@ export function StudentPromotions() {
             setTargetClassId(String(clsList[0].id))
           }
         }
-        if (secList.length > 0) {
-          setTargetSectionId(String(secList[0].id))
-        }
       }
     } catch (e) {
       console.error('Failed to load classes or sections:', e)
@@ -172,6 +173,34 @@ export function StudentPromotions() {
     }
   }
 
+  // Dynamically compute available sections for the selected target class
+  const availableTargetSections: SectionItem[] = (() => {
+    if (!targetClassId) return sections
+    const selectedClass = classes.find((c) => c.id === Number(targetClassId))
+    if (!selectedClass || !selectedClass.sections || selectedClass.sections.length === 0) {
+      return sections
+    }
+    const extracted: SectionItem[] = selectedClass.sections
+      .map((s: any) => {
+        if (s.section) return { id: s.section.id, name: s.section.name }
+        return { id: s.id || s.sectionId || 0, name: s.name || 'Section' }
+      })
+      .filter((s: SectionItem) => s.id > 0)
+    return extracted.length > 0 ? extracted : sections
+  })()
+
+  // Ensure targetSectionId is valid for the selected target class
+  useEffect(() => {
+    if (availableTargetSections.length > 0) {
+      const match = availableTargetSections.find((s) => String(s.id) === targetSectionId)
+      if (!match) {
+        setTargetSectionId(String(availableTargetSections[0].id))
+      }
+    } else {
+      setTargetSectionId('')
+    }
+  }, [targetClassId, classes])
+
   const fetchClassStudents = async () => {
     if (!sourceClassId) return
     setIsLoadingStudents(true)
@@ -180,8 +209,9 @@ export function StudentPromotions() {
       const res = await apiSlice.get<{ success: boolean; data: EnrolledStudent[] }>(url)
       if (res.success) {
         setStudents(res.data)
-        // Select all by default for convenience
-        setSelectedStudentIds(res.data.map((s) => s.studentId))
+        // Select unpromoted students by default for convenience
+        const unpromoted = res.data.filter((s) => !s.isAlreadyPromoted)
+        setSelectedStudentIds(unpromoted.length > 0 ? unpromoted.map((s) => s.studentId) : res.data.map((s) => s.studentId))
       }
     } catch (err: any) {
       console.error('Failed to fetch class students:', err)
@@ -506,7 +536,16 @@ export function StudentPromotions() {
                               />
                             </td>
                             <td className="p-3 font-mono text-[11px] text-slate-500">{s.registerNo}</td>
-                            <td className="p-3 font-bold text-slate-900">{s.fullName}</td>
+                            <td className="p-3 font-bold text-slate-900">
+                              <div className="flex items-center gap-2">
+                                <span>{s.fullName}</span>
+                                {s.isAlreadyPromoted && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    In {s.latestClassName}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="p-3 text-slate-500">{s.gender}</td>
                             <td className="p-3 text-slate-600 font-semibold">{s.currentSectionName}</td>
                           </tr>
@@ -600,7 +639,7 @@ export function StudentPromotions() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">Select Target Section</option>
-                  {sections.map((s) => (
+                  {availableTargetSections.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>

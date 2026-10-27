@@ -42,7 +42,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
-import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
+import { showSystemStatus, resolveHttpStatus, dismissSystemStatus } from '@/lib/systemStatus'
 import { AdminCbtManager } from './admin-cbt-manager'
 import { MarksEntry } from './marks-entry'
 import { ExamScheduleManager } from './exam-schedule-manager'
@@ -265,9 +265,10 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       }
     }
 
+    let statusId: string | undefined
     try {
       setIsSubmittingExam(true)
-      showSystemStatus({
+      statusId = showSystemStatus({
         type: 'PROCESSING',
         title: 'Processing...',
         message: 'Registering Exam Master definition in database...',
@@ -290,13 +291,17 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
         setPublishedExams(prev => [res.exam, ...prev])
         setExamName('')
         showSystemStatus({
+          id: statusId,
           type: 'ACTION_SUCCESS',
           title: 'Exam Master Initialized',
           message: `Exam Master "${res.exam.name}" successfully created.`
         })
       }
     } catch (err: any) {
-      showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to complete exam setup.'))
+      showSystemStatus({
+        ...resolveHttpStatus(500, err.message || 'Failed to complete exam setup.'),
+        id: statusId
+      })
     } finally {
       setIsSubmittingExam(false)
     }
@@ -305,7 +310,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
   const handleAiGenerate = (e: React.FormEvent) => {
     e.preventDefault()
     setIsGenerating(true)
-    showSystemStatus({
+    const statusId = showSystemStatus({
       type: 'PROCESSING',
       title: 'Processing...',
       message: `Generating AI questions for ${aiSubject}...`,
@@ -319,6 +324,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       ])
       setIsGenerating(false)
       showSystemStatus({
+        id: statusId,
         type: 'ACTION_SUCCESS',
         title: 'Successfully completed.',
         message: 'AI questions generated successfully!'
@@ -328,7 +334,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
 
   const handlePublishResults = () => {
     setIsPublishing(true)
-    showSystemStatus({
+    const statusId = showSystemStatus({
       type: 'PROCESSING',
       title: 'Processing...',
       message: 'Publishing examination results to student/parent portal...',
@@ -338,6 +344,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       setIsPublished(true)
       setIsPublishing(false)
       showSystemStatus({
+        id: statusId,
         type: 'SUCCESS',
         title: 'Successfully completed.',
         message: 'Examination results published to Ugbekun Portal! SMS and EduChat notifications dispatched.'
