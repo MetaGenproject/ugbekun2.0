@@ -61,30 +61,30 @@ const DashboardLoadingSkeleton = () => (
   </div>
 )
 
-// Dynamic role-specific dashboards to prevent downloading 3.6MB on first load
+// Dynamic role-specific dashboards to prevent downloading 3.6MB on first load and eliminate server-side compilation stall
 const SuperAdminDashboard = dynamic(
   () => import('@/components/dashboards/superadmin/superadmin-dashboard').then(mod => mod.SuperAdminDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const AdminDashboard = dynamic(
   () => import('@/components/dashboards/admin/admin-dashboard').then(mod => mod.AdminDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const TeacherDashboard = dynamic(
   () => import('@/components/dashboards/teacher/teacher-dashboard').then(mod => mod.TeacherDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const ParentDashboard = dynamic(
   () => import('@/components/dashboards/parent/parent-dashboard').then(mod => mod.ParentDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const StudentDashboard = dynamic(
   () => import('@/components/dashboards/student/student-dashboard').then(mod => mod.StudentDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const DefaultDashboard = dynamic(
   () => import('@/components/dashboards/default/default-dashboard').then(mod => mod.DefaultDashboard),
-  { loading: () => <DashboardLoadingSkeleton /> }
+  { loading: () => <DashboardLoadingSkeleton />, ssr: false }
 )
 const OSeAiAssistant = dynamic(
   () => import('@/components/ai/ose-ai-assistant').then(mod => mod.OSeAiAssistant),
