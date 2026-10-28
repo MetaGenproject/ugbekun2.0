@@ -1,15 +1,23 @@
 'use client'
 
 import { Menu, X, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname, useRouter } from 'next/navigation'
 
 import { UgbekunLogo } from '@/components/logo'
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const pathname = usePathname()
+  const router = useRouter()
+
+  // Cleanly close mobile menu when navigation completes without tearing down the DOM mid-click
+  useEffect(() => {
+    setIsOpen(false)
+  }, [pathname])
 
   const toggleDropdown = (name: string) => {
     setActiveDropdown(activeDropdown === name ? null : name)
@@ -130,18 +138,14 @@ export function Navigation() {
             <Link 
               href="/login" 
               prefetch={false}
-              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition inline-block whitespace-nowrap"
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 active:scale-95 transition inline-block whitespace-nowrap touch-manipulation"
             >
               Sign In
             </Link>
             <button 
               type="button"
-              className="p-2 text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 cursor-pointer flex items-center justify-center min-w-[44px] min-h-[44px] touch-manipulation"
+              className="p-2 text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 active:scale-95 cursor-pointer flex items-center justify-center min-w-[44px] min-h-[44px] touch-manipulation transition"
               onClick={() => setIsOpen((prev) => !prev)}
-              onTouchEnd={(e) => {
-                e.preventDefault()
-                setIsOpen((prev) => !prev)}
-              }
               aria-label="Toggle navigation menu"
               aria-expanded={isOpen}
             >
@@ -159,22 +163,24 @@ export function Navigation() {
               <Link href="#pricing" onClick={() => setIsOpen(false)} className="block px-3 py-2 text-sm text-gray-300 rounded-lg hover:bg-white/5">Pricing</Link>
               <Link href="#about" onClick={() => setIsOpen(false)} className="block px-3 py-2 text-sm text-gray-300 rounded-lg hover:bg-white/5">About Us</Link>
               <div className="pt-3 flex flex-col space-y-2">
-                <Link
-                  href="/login"
-                  prefetch={false}
-                  onClick={() => setIsOpen(false)}
-                  className="block text-center px-4 py-3 text-sm font-semibold text-white bg-white/10 border border-white/15 rounded-lg hover:bg-white/20"
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push('/login')
+                  }}
+                  className="w-full text-center px-4 py-3 text-sm font-semibold text-white bg-white/10 border border-white/15 rounded-lg hover:bg-white/20 active:bg-white/25 transition cursor-pointer touch-manipulation"
                 >
                   Sign In
-                </Link>
-                <Link
-                  href="/subscribe?plan=starter"
-                  prefetch={false}
-                  onClick={() => setIsOpen(false)}
-                  className="block text-center px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-rose-600 rounded-lg hover:from-red-600 hover:to-rose-700"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push('/subscribe?plan=starter')
+                  }}
+                  className="w-full text-center px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-rose-600 rounded-lg hover:from-red-600 hover:to-rose-700 active:scale-[0.99] transition cursor-pointer touch-manipulation"
                 >
                   Get Started Free
-                </Link>
+                </button>
               </div>
             </div>
           </div>

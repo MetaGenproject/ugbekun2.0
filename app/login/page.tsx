@@ -23,6 +23,8 @@ export default function LoginPage() {
           src="/login-bg.png"
           alt="School Campus Background"
           fill
+          priority
+          sizes="100vw"
           className="object-cover object-center opacity-100 filter brightness-105"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#081026]/35 via-[#0B1536]/25 to-[#081026]/45" />
