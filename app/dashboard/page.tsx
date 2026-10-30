@@ -806,8 +806,17 @@ export default function DashboardPage() {
             <div className="w-px h-6 bg-slate-200 mx-0.5 hidden xs:block" />
 
             {/* User Profile Container */}
-            <div className="flex items-center gap-2">
-              <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border-2 border-slate-200 bg-blue-100 shrink-0 shadow-xs">
+            <div 
+              onClick={() => {
+                if (user.role === 3) setSelectedSection('settings')
+                else if (user.role === 7) setSelectedSection('profile')
+                else if (user.role === 6) setSelectedSection('settings')
+                else setSelectedSection('settings')
+              }}
+              className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition group"
+              title="View Profile & Settings"
+            >
+              <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border-2 border-slate-200 group-hover:border-blue-500 bg-blue-100 shrink-0 shadow-xs transition">
                 <img 
                   src={getAvatarUrl(headerIdentity?.photo, headerIdentity?.name || user?.username || 'User')}
                   alt={headerIdentity?.name || user?.username || 'User'}
@@ -815,7 +824,7 @@ export default function DashboardPage() {
                 />
               </div>
               <div className="hidden sm:block text-left">
-                <h4 className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[110px]">{headerIdentity?.name || user?.username || 'User'}</h4>
+                <h4 className="text-xs font-bold text-slate-800 group-hover:text-blue-600 transition leading-tight truncate max-w-[110px]">{headerIdentity?.name || user?.username || 'User'}</h4>
                 <p className="text-[10px] font-medium text-slate-500 leading-tight mt-0.5 truncate max-w-[110px]">
                   {headerIdentity?.title || user?.roleName || 'Portal User'}
                 </p>

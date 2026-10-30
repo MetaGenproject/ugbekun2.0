@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import { 
   BookOpen, 
@@ -48,7 +48,17 @@ import {
   Check,
   Camera,
   ImageIcon,
+  Lock,
+  EyeOff,
+  Shield,
+  AtSign,
+  History,
+  Briefcase,
+  Building,
+  CreditCard,
+  RefreshCw,
 } from 'lucide-react'
+import { StudentPhotoCaptureModal } from '../admin/student-photo-capture-modal'
 import { SchoolHeader } from '../school-header'
 import { safeStorage } from '@/lib/safeStorage'
 import { apiSlice, endpoints } from '../../../lib/apiSlice'
@@ -125,11 +135,16 @@ interface SubjectAssignment {
 interface TeacherProfile {
   teacherId: number
   name?: string
+  username?: string | null
   email?: string | null
   phone?: string | null
   photo?: string | null
   department?: string | null
   qualifications?: string | null
+  houseAddress?: string | null
+  bankName?: string | null
+  accountNumber?: string | null
+  accountName?: string | null
   isFormTeacher: boolean
   isSubjectTeacher: boolean
   formAllocations: FormAllocation[]
@@ -381,30 +396,218 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
     [profile]
   )
 
-  // Self-Service Photograph Upload Modal State
-  const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false)
-  const [selfPhotoFile, setSelfPhotoFile] = useState<string | null>(null)
-  const [uploadingSelfPhoto, setUploadingSelfPhoto] = useState<boolean>(false)
-  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null)
+  // Teacher Profile & Settings State
+  const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'allocations' | 'security'>('bio')
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false)
+  const [photoSuccess, setPhotoSuccess] = useState<string | null>(null)
 
-  const handleUploadSelfPhoto = async () => {
-    if (!selfPhotoFile) return
-    setUploadingSelfPhoto(true)
-    setPhotoUploadError(null)
+  // Profile Form state
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    department: '',
+    qualifications: '',
+    houseAddress: '',
+    bankName: '',
+    accountNumber: '',
+    accountName: '',
+  })
+  const [savingProfile, setSavingProfile] = useState<boolean>(false)
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null)
+  const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null)
+
+  // Security Credentials state
+  const [newUsername, setNewUsername] = useState<string>('')
+  const [updatingUsername, setUpdatingUsername] = useState<boolean>(false)
+  const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
+
+  const [currentPassword, setCurrentPassword] = useState<string>('')
+  const [newPassword, setNewPassword] = useState<string>('')
+  const [confirmPassword, setConfirmPassword] = useState<string>('')
+  const [showCurrentPass, setShowCurrentPass] = useState<boolean>(false)
+  const [showNewPass, setShowNewPass] = useState<boolean>(false)
+  const [showConfirmPass, setShowConfirmPass] = useState<boolean>(false)
+  const [updatingPassword, setUpdatingPassword] = useState<boolean>(false)
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  // Sync profile form when profile changes
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        name: profile.name || '',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        department: profile.department || '',
+        qualifications: profile.qualifications || '',
+        houseAddress: profile.houseAddress || '',
+        bankName: profile.bankName || '',
+        accountNumber: profile.accountNumber || '',
+        accountName: profile.accountName || '',
+      })
+    }
+  }, [profile])
+
+  // Save captured photo via modal or file picker
+  const handleSaveCapturedPhoto = async (photoBase64: string | null) => {
+    if (!photoBase64) return
+    setUploadingPhoto(true)
+    setPhotoSuccess(null)
     try {
-      const res = await apiSlice.post<{ success: boolean; photo: string }>(
+      const res = await apiSlice.post<{ success: boolean; photo: string; message?: string }>(
         endpoints.teacher.uploadPhoto,
-        { photo: selfPhotoFile }
+        { photo: photoBase64 }
       )
       if (res.success && res.photo) {
         setProfile(prev => prev ? { ...prev, photo: res.photo } : null)
-        setShowPhotoModal(false)
-        setSelfPhotoFile(null)
+        onIdentityChange?.({
+          name: profile?.name || user.username,
+          photo: res.photo,
+          title: profile?.department || 'Teacher',
+        })
+        setIsPhotoModalOpen(false)
+        setPhotoSuccess('Profile photograph updated successfully!')
+        setTimeout(() => setPhotoSuccess(null), 4000)
+      } else {
+        throw new Error(res.message || 'Failed to update photograph.')
       }
     } catch (err: any) {
-      setPhotoUploadError(err?.message || 'Failed to update photograph.')
+      showSystemStatus(err?.message || 'Failed to update profile photo.', 'error')
     } finally {
-      setUploadingSelfPhoto(false)
+      setUploadingPhoto(false)
+    }
+  }
+
+  // Quick native file upload handler
+  const handleDirectPhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      const base64 = evt.target?.result as string
+      if (base64) {
+        await handleSaveCapturedPhoto(base64)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Save profile information handler
+  const handleSaveProfileInfo = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingProfile(true)
+    setProfileSuccessMsg(null)
+    setProfileErrorMsg(null)
+    try {
+      const res = await apiSlice.put<{ success: boolean; message?: string; profile: any }>(
+        endpoints.teacher.updateProfile,
+        profileForm
+      )
+      if (res.success) {
+        setProfile(prev => prev ? {
+          ...prev,
+          name: profileForm.name || prev.name,
+          email: profileForm.email || prev.email,
+          phone: profileForm.phone || prev.phone,
+          department: profileForm.department || prev.department,
+          qualifications: profileForm.qualifications || prev.qualifications,
+          houseAddress: profileForm.houseAddress || prev.houseAddress,
+          bankName: profileForm.bankName || prev.bankName,
+          accountNumber: profileForm.accountNumber || prev.accountNumber,
+          accountName: profileForm.accountName || prev.accountName,
+        } : null)
+        onIdentityChange?.({
+          name: profileForm.name || profile?.name || user.username,
+          photo: profile?.photo || null,
+          title: profileForm.department || profile?.department || 'Teacher',
+        })
+        setProfileSuccessMsg('Profile information updated successfully!')
+        setTimeout(() => setProfileSuccessMsg(null), 5000)
+      } else {
+        throw new Error(res.message || 'Failed to update profile information.')
+      }
+    } catch (err: any) {
+      setProfileErrorMsg(err?.message || 'Failed to update profile information.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  // Change username handler
+  const handleChangeUsername = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setUsernameSuccess(null)
+    setUsernameError(null)
+    const clean = newUsername.trim()
+    if (!clean || clean.length < 3) {
+      setUsernameError('Username must be at least 3 characters long.')
+      return
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(clean)) {
+      setUsernameError('Only letters, numbers, dots, hyphens, and underscores are allowed.')
+      return
+    }
+    setUpdatingUsername(true)
+    try {
+      const res = await apiSlice.put<{ success: boolean; message?: string; username: string }>(
+        endpoints.teacher.changeUsername,
+        { newUsername: clean }
+      )
+      if (res.success) {
+        setProfile(prev => prev ? { ...prev, username: res.username } : null)
+        setUsernameSuccess(`Username successfully changed to @${res.username}! Use this next time you log in.`)
+        setNewUsername('')
+        setTimeout(() => setUsernameSuccess(null), 6000)
+      } else {
+        throw new Error(res.message || 'Failed to change username.')
+      }
+    } catch (err: any) {
+      setUsernameError(err?.message || 'Failed to change username.')
+    } finally {
+      setUpdatingUsername(false)
+    }
+  }
+
+  // Change password handler
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordSuccess(null)
+    setPasswordError(null)
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.')
+      return
+    }
+    setUpdatingPassword(true)
+    try {
+      const res = await apiSlice.put<{ success: boolean; message?: string }>(
+        endpoints.teacher.changePassword,
+        { currentPassword, newPassword }
+      )
+      if (res.success) {
+        setPasswordSuccess('Password successfully updated! Your account is secure.')
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setTimeout(() => setPasswordSuccess(null), 6000)
+      } else {
+        throw new Error(res.message || 'Failed to update password.')
+      }
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Failed to update password. Please check your current password.')
+    } finally {
+      setUpdatingPassword(false)
     }
   }
 
@@ -798,15 +1001,575 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
   if (activeSection === 'communication') {
     return <TeacherCommunicationInbox />
   }
+
+  // Derived values grounded strictly in real DB data
+  const teacherName = profile?.name || user.username
+  const primaryForm = profile?.primaryForm || (profile?.formAllocations?.[0] ? `${profile.formAllocations[0].className} ${profile.formAllocations[0].sectionName}` : 'Unassigned Class')
+
+  // 14. TEACHER PROFILE & SETTINGS SUB-VIEW
+  if (activeSection === 'settings' || activeSection === 'profile') {
+    return (
+      <div className="space-y-6 pb-12 font-sans max-w-5xl mx-auto animate-in fade-in duration-200">
+        {/* Profile Hero Header */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
+            {/* Avatar with Camera Trigger Overlay */}
+            <div className="relative group shrink-0">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl overflow-hidden border-4 border-white/20 bg-white/10 shadow-xl">
+                <img
+                  src={getAvatarUrl(profile?.photo, teacherName)}
+                  alt={teacherName}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={profilePhotoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleDirectPhotoFile}
+                className="hidden"
+              />
+
+              {/* Camera Trigger Button */}
+              <button
+                type="button"
+                onClick={() => setIsPhotoModalOpen(true)}
+                disabled={uploadingPhoto}
+                className="absolute -bottom-1 -right-1 p-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition cursor-pointer border-2 border-slate-900 flex items-center justify-center disabled:opacity-50"
+                title="Change Passport Photo"
+              >
+                {uploadingPhoto ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+              </button>
+            </div>
+
+            {/* Profile Meta Info */}
+            <div className="text-center sm:text-left space-y-2 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
+                  Teacher & Staff Portal
+                </span>
+                {profile?.isFormTeacher && (
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-xs font-bold">
+                    Class Form Teacher
+                  </span>
+                )}
+                {profile?.isSubjectTeacher && (
+                  <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 text-xs font-bold">
+                    Subject Specialist
+                  </span>
+                )}
+                {(profile?.username || user.username) && (
+                  <span className="px-3 py-1 rounded-full bg-white/10 text-slate-200 border border-white/15 text-xs font-mono">
+                    @{profile?.username || user.username}
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight truncate">
+                {teacherName}
+              </h2>
+
+              <p className="text-xs text-slate-300 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1">
+                <span>Department: <strong className="text-white">{profile?.department || 'Academics'}</strong></span>
+                <span>Primary Class: <strong className="text-blue-300">{primaryForm}</strong></span>
+                <span>Campus: <strong className="text-white">{profile?.branchName || 'Main Campus'}</strong></span>
+              </p>
+
+              {/* Upload trigger buttons & live feedback */}
+              <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  disabled={uploadingPhoto}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-blue-400/40 shadow-sm"
+                >
+                  <Camera size={13} />
+                  <span>Snap with Camera</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => profilePhotoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-white/15"
+                >
+                  <Upload size={13} />
+                  <span>{uploadingPhoto ? 'Uploading...' : 'Choose File from Device'}</span>
+                </button>
+                {photoSuccess && (
+                  <span className="text-xs text-emerald-300 font-semibold flex items-center gap-1 bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-500/30">
+                    <CheckCircle2 size={14} />
+                    {photoSuccess}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs">
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('bio')}
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'bio'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <User size={15} />
+            <span>Staff Bio & Profile Info</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('allocations')}
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'allocations'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Briefcase size={15} />
+            <span>Classes & Subject Allocations</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('security')}
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+              activeProfileTab === 'security'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Lock size={15} />
+            <span>Security & Login Credentials</span>
+          </button>
+        </div>
+
+        {/* TAB 1: STAFF BIO & PROFILE INFO */}
+        {activeProfileTab === 'bio' && (
+          <form onSubmit={handleSaveProfileInfo} className="space-y-6">
+            {profileSuccessMsg && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2.5 shadow-xs">
+                <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                <span>{profileSuccessMsg}</span>
+              </div>
+            )}
+            {profileErrorMsg && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2.5 shadow-xs">
+                <AlertCircle size={18} className="text-rose-600 shrink-0" />
+                <span>{profileErrorMsg}</span>
+              </div>
+            )}
+
+            {/* Personal & Staff Details Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                <div className="p-2.5 rounded-2xl bg-blue-50 text-blue-600">
+                  <User size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Personal & Employment Information</h3>
+                  <p className="text-xs text-slate-500">Official contact records, academic qualifications, and teaching bio.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Full Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. John Doe"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={profileForm.email}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="e.g. teacher@school.edu"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="e.g. 08012345678"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Department / Faculty</label>
+                  <input
+                    type="text"
+                    value={profileForm.department}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, department: e.target.value }))}
+                    placeholder="e.g. Science, Languages, Humanities"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Academic Qualifications & Certifications</label>
+                  <textarea
+                    rows={2}
+                    value={profileForm.qualifications}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, qualifications: e.target.value }))}
+                    placeholder="e.g. B.Sc Mathematics, PGDE, TRCN Certified, Cambridge IGCSE Certified"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Residential Address</label>
+                  <input
+                    type="text"
+                    value={profileForm.houseAddress}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, houseAddress: e.target.value }))}
+                    placeholder="e.g. 15 Campus Road, Benin City"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Payroll & Banking Information Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600">
+                  <CreditCard size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Payroll & Banking Details</h3>
+                  <p className="text-xs text-slate-500">Official bank details used for salary dispatches and school remunerations.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.bankName}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, bankName: e.target.value }))}
+                    placeholder="e.g. Zenith Bank, GTBank"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Account Number</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={profileForm.accountNumber}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="e.g. 10-digit Account No"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Account Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.accountName}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, accountName: e.target.value }))}
+                    placeholder="e.g. John K. Doe"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-60"
+              >
+                {savingProfile ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>{savingProfile ? 'Saving Information...' : 'Save Profile Information'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* TAB 2: CLASSES & SUBJECT ALLOCATIONS */}
+        {activeProfileTab === 'allocations' && (
+          <div className="space-y-6">
+            {/* Form Teacher Allocations */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Form Teacher Class Allocations</h3>
+                  <p className="text-xs text-slate-500">Classes where you serve as the designated Form / Class Master.</p>
+                </div>
+              </div>
+
+              {(profile?.formAllocations || []).length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {profile?.formAllocations.map((item, idx) => (
+                    <div key={idx} className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200/60 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Class Responsibility</span>
+                        <h4 className="text-sm font-extrabold text-slate-900 mt-0.5">{item.className} &bull; {item.sectionName}</h4>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white font-bold text-[10px]">
+                        Form Master
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-500">
+                  No active Form Class assignment recorded for the current session.
+                </div>
+              )}
+            </div>
+
+            {/* Subject Teaching Allocations */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Assigned Teaching Subjects</h3>
+                  <p className="text-xs text-slate-500">Curriculum subjects and classes you are assigned to teach and grade.</p>
+                </div>
+              </div>
+
+              {(profile?.subjectAssignments || []).length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {profile?.subjectAssignments.map((sub, idx) => (
+                    <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 hover:border-blue-300 transition space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800 text-[10px] font-bold">
+                          {sub.className}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-500">Section {sub.sectionName}</span>
+                      </div>
+                      <h4 className="text-sm font-extrabold text-slate-900">{sub.subjectName}</h4>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-500">
+                  No subject allocations found for the active term.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: SECURITY & LOGIN CREDENTIALS */}
+        {activeProfileTab === 'security' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Change Username Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-5 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                  <div className="p-2.5 rounded-2xl bg-blue-50 text-blue-600">
+                    <AtSign size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900">Change Portal Username</h3>
+                    <p className="text-xs text-slate-500">Update your teacher portal username used for logging in.</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Username</span>
+                  <p className="font-mono font-extrabold text-slate-900 text-sm">@{profile?.username || user.username}</p>
+                </div>
+
+                {usernameSuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <span>{usernameSuccess}</span>
+                  </div>
+                )}
+                {usernameError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>{usernameError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangeUsername} className="space-y-4 pt-1 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">New Username *</label>
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="e.g. mr_john_doe"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Letters, numbers, underscores, dots only. Minimum 3 characters.</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={updatingUsername}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {updatingUsername ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>{updatingUsername ? 'Saving Username...' : 'Save New Username'}</span>
+                  </button>
+                </form>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-800 mt-4">
+                <strong>Important:</strong> Once your username is changed, please use this new username to log into the portal.
+              </div>
+            </div>
+
+            {/* Change Password Card */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600">
+                  <Lock size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Security & Account Password</h3>
+                  <p className="text-xs text-slate-500">Update your teacher portal password securely.</p>
+                </div>
+              </div>
+
+              {passwordSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+              {passwordError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Current Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPass ? 'text' : 'password'}
+                      required
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPass(!showCurrentPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showCurrentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">New Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Confirm New Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPass ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={updatingPassword}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {updatingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                  <span>{updatingPassword ? 'Updating Password...' : 'Save New Password'}</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* STAFF PASSPORT PHOTOGRAPH MODAL */}
+        <StudentPhotoCaptureModal
+          isOpen={isPhotoModalOpen}
+          onClose={() => setIsPhotoModalOpen(false)}
+          onSavePhoto={handleSaveCapturedPhoto}
+          studentName={teacherName}
+          studentRegNo={profile?.department || 'Staff'}
+          currentPhoto={profile?.photo}
+          title="Teacher Profile Photograph"
+        />
+      </div>
+    )
+  }
+
   if (!activeSection || activeSection === 'overview') {
     if (profile.isSubjectTeacher && !profile.isFormTeacher) {
       return <SubjectTeacherDashboard onNavigate={onNavigate} />
     }
   }
-
-  // Derived values grounded strictly in real DB data
-  const teacherName = profile.name || user.username
-  const primaryForm = profile.primaryForm || (profile.formAllocations[0] ? `${profile.formAllocations[0].className} ${profile.formAllocations[0].sectionName}` : 'Unassigned Class')
   
   const studentsCount = dashboardOverview?.kpi?.studentsCount ?? 0
   const presentTodayCount = dashboardOverview?.kpi?.presentTodayCount ?? 0
@@ -886,9 +1649,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
                 )}
                 <button
                   onClick={() => {
-                    setSelfPhotoFile(null)
-                    setPhotoUploadError(null)
-                    setShowPhotoModal(true)
+                    setIsPhotoModalOpen(true)
                   }}
                   className="absolute -bottom-1 -right-1 p-1 sm:p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition cursor-pointer border border-white/40"
                   title="Upload profile photograph"
@@ -1427,99 +2188,16 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
 
       </div>
 
-      {/* SELF-SERVICE PHOTOGRAPH UPLOAD MODAL */}
-      {showPhotoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-sm w-full p-6 animate-in fade-in zoom-in duration-150 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                <Camera size={16} className="text-blue-600" /> Update Profile Photograph
-              </h3>
-              <button
-                onClick={() => {
-                  setShowPhotoModal(false)
-                  setSelfPhotoFile(null)
-                }}
-                className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded-lg transition"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {photoUploadError && (
-              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold">
-                {photoUploadError}
-              </div>
-            )}
-
-            <div className="text-center space-y-3">
-              <p className="text-xs text-slate-600 font-medium">
-                Upload a clear portrait photo. This will be displayed on your staff profile and school records.
-              </p>
-
-              <div className="flex justify-center">
-                {selfPhotoFile || profile?.photo ? (
-                  <div className="relative w-28 h-28 rounded-2xl border-4 border-blue-500/20 overflow-hidden shadow-md">
-                    <img
-                      src={selfPhotoFile || profile?.photo!}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-28 h-28 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400">
-                    <ImageIcon size={28} />
-                    <span className="text-[10px] mt-1 font-semibold">No Photograph</span>
-                  </div>
-                )}
-              </div>
-
-              <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs shadow-2xs cursor-pointer transition">
-                <Upload size={14} className="text-slate-500" />
-                <span>{selfPhotoFile || profile?.photo ? 'Choose Different Image' : 'Select Photograph'}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      const reader = new FileReader()
-                      reader.onload = (evt) => {
-                        setSelfPhotoFile(evt.target?.result as string)
-                      }
-                      reader.readAsDataURL(file)
-                    }
-                  }}
-                />
-              </label>
-              <p className="text-[10px] text-slate-400">Supported: PNG, JPG, WEBP up to 5MB</p>
-            </div>
-
-            <div className="flex gap-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPhotoModal(false)
-                  setSelfPhotoFile(null)
-                }}
-                disabled={uploadingSelfPhoto}
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleUploadSelfPhoto}
-                disabled={!selfPhotoFile || uploadingSelfPhoto}
-                className="flex-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {uploadingSelfPhoto ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Save Photo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* SELF-SERVICE / PASSPORT PHOTOGRAPH MODAL */}
+      <StudentPhotoCaptureModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        onSavePhoto={handleSaveCapturedPhoto}
+        studentName={teacherName}
+        studentRegNo={profile?.department || 'Staff'}
+        currentPhoto={profile?.photo}
+        title="Teacher Profile Photograph"
+      />
 
     </div>
   )

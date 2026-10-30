@@ -31,7 +31,8 @@ import {
   AlertCircle,
   Layers,
   GraduationCap,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react'
 import {
   Table,
@@ -70,7 +71,8 @@ interface ClassData {
 
 interface ManualBreakdownItem {
   componentName: string
-  marks: number
+  marks: number | string
+  averageMark?: number | string
 }
 
 interface ExamRecord {
@@ -123,11 +125,26 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
   const [cbtTotalMarks, setCbtTotalMarks] = useState('10')
   const [totalQuestions, setTotalQuestions] = useState('20')
   const [manualBreakdown, setManualBreakdown] = useState<ManualBreakdownItem[]>([
-    { componentName: 'Theory / CA', marks: 10 },
-    { componentName: 'Practical / Project', marks: 10 },
+    { componentName: 'Theory / CA', marks: 10, averageMark: 5 },
+    { componentName: 'Practical / Project', marks: 10, averageMark: 5 },
   ])
+  const [manualAverageMark, setManualAverageMark] = useState('10')
   const [isSubmittingExam, setIsSubmittingExam] = useState(false)
   const [deletingExamId, setDeletingExamId] = useState<number | null>(null)
+
+  // Exam Edit Modal State
+  const [editingExam, setEditingExam] = useState<ExamRecord | null>(null)
+  const [editFormName, setEditFormName] = useState('')
+  const [editFormTermId, setEditFormTermId] = useState('1')
+  const [editFormCategory, setEditFormCategory] = useState<'cbt' | 'manual'>('cbt')
+  const [editFormCbtMarks, setEditFormCbtMarks] = useState('10')
+  const [editFormQuestions, setEditFormQuestions] = useState('20')
+  const [editFormManualBreakdown, setEditFormManualBreakdown] = useState<ManualBreakdownItem[]>([
+    { componentName: 'Theory / CA', marks: 10, averageMark: 5 },
+    { componentName: 'Practical / Project', marks: 10, averageMark: 5 },
+  ])
+  const [editFormManualAverageMark, setEditFormManualAverageMark] = useState('10')
+  const [isUpdatingExam, setIsUpdatingExam] = useState(false)
 
   // CBT Exam Simulator State
   const [cbtSimulatorQuestions, setCbtSimulatorQuestions] = useState<Array<{ id: number; q: string; options: string[]; correct: string }>>([
@@ -191,7 +208,10 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
   }, [])
 
   const addManualRow = () => {
-    setManualBreakdown((prev) => [...prev, { componentName: `Theory Component ${prev.length + 1}`, marks: 10 }])
+    setManualBreakdown((prev) => [
+      ...prev,
+      { componentName: `Theory Component ${prev.length + 1}`, marks: 10, averageMark: 5 }
+    ])
   }
 
   const removeManualRow = (index: number) => {
@@ -199,9 +219,23 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
     setManualBreakdown((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const updateManualRow = (index: number, field: 'componentName' | 'marks', value: any) => {
+  const updateManualRow = (index: number, field: 'componentName' | 'marks' | 'averageMark', value: any) => {
     setManualBreakdown((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: field === 'marks' ? Math.max(1, Number(value) || 0) : value } : item))
+      prev.map((item, i) => {
+        if (i !== index) return item
+        if (field === 'marks') {
+          const newMarks = value === '' ? '' : Math.max(1, Number(value) || 0)
+          return {
+            ...item,
+            marks: newMarks,
+            averageMark: item.averageMark !== undefined ? (typeof item.averageMark === 'number' && typeof newMarks === 'number' ? Math.min(item.averageMark, newMarks) : item.averageMark) : (typeof newMarks === 'number' ? Math.round(newMarks / 2) : 5)
+          }
+        }
+        if (field === 'averageMark') {
+          return { ...item, averageMark: value === '' ? '' : Math.max(0, Number(value) || 0) }
+        }
+        return { ...item, [field]: value }
+      })
     )
   }
 
@@ -222,6 +256,163 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
       showSystemStatus(resolveHttpStatus(500, err.message || 'Failed to delete exam.'))
     } finally {
       setDeletingExamId(null)
+    }
+  }
+
+  const handleOpenEditModal = (ex: ExamRecord) => {
+    setEditingExam(ex)
+    setEditFormName(ex.name)
+    setEditFormTermId(String(ex.termId || 1))
+    const isCbt = ex.examCategory === 'CBT' || ex.typeId === 3
+    setEditFormCategory(isCbt ? 'cbt' : 'manual')
+    setEditFormCbtMarks(String(ex.cbtTotalMarks || 10))
+    setEditFormQuestions(String(ex.totalQuestionCount || 20))
+    const parsedAvgFromRemark = ex.remark?.match(/Average:\s*([0-9.]+)/i)?.[1]
+    if (Array.isArray(ex.manualMarksBreakdown) && ex.manualMarksBreakdown.length > 0) {
+      setEditFormManualBreakdown(
+        ex.manualMarksBreakdown.map((m: any) => ({
+          componentName: m.componentName || 'Component',
+          marks: Number(m.marks) || 10,
+          averageMark: m.averageMark !== undefined ? Number(m.averageMark) : Math.round((Number(m.marks) || 10) / 2)
+        }))
+      )
+      const sumOfComponentAvgs = ex.manualMarksBreakdown.reduce((sum: number, it: any) => sum + (Number(it.averageMark) || 0), 0)
+      setEditFormManualAverageMark(parsedAvgFromRemark || (sumOfComponentAvgs > 0 ? String(sumOfComponentAvgs) : '10'))
+    } else {
+      setEditFormManualBreakdown([
+        { componentName: 'Theory / CA', marks: 10, averageMark: 5 },
+        { componentName: 'Practical / Project', marks: 10, averageMark: 5 }
+      ])
+      setEditFormManualAverageMark(parsedAvgFromRemark || '10')
+    }
+  }
+
+  const addEditManualRow = () => {
+    setEditFormManualBreakdown((prev) => [
+      ...prev,
+      { componentName: `Theory Component ${prev.length + 1}`, marks: 10, averageMark: 5 }
+    ])
+  }
+
+  const removeEditManualRow = (index: number) => {
+    if (editFormManualBreakdown.length <= 1) return
+    setEditFormManualBreakdown((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const updateEditManualRow = (index: number, field: 'componentName' | 'marks' | 'averageMark', value: any) => {
+    setEditFormManualBreakdown((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item
+        if (field === 'marks') {
+          const newMarks = value === '' ? '' : Math.max(1, Number(value) || 0)
+          return {
+            ...item,
+            marks: newMarks,
+            averageMark: item.averageMark !== undefined ? (typeof item.averageMark === 'number' && typeof newMarks === 'number' ? Math.min(item.averageMark, newMarks) : item.averageMark) : (typeof newMarks === 'number' ? Math.round(newMarks / 2) : 5)
+          }
+        }
+        if (field === 'averageMark') {
+          return { ...item, averageMark: value === '' ? '' : Math.max(0, Number(value) || 0) }
+        }
+        return { ...item, [field]: value }
+      })
+    )
+  }
+
+  const handleUpdateExam = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingExam) return
+
+    if (!editFormName.trim()) {
+      showSystemStatus({
+        type: 'MISSING_INFO',
+        title: 'Required information missing.',
+        message: 'Exam Title is required. Please enter an exam title before submitting.'
+      })
+      return
+    }
+
+    const isCbt = editFormCategory === 'cbt'
+    if (isCbt) {
+      if (!editFormCbtMarks || Number(editFormCbtMarks) <= 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Valid CBT Total Marks required.',
+          message: 'Please specify total CBT marks (must be greater than 0).'
+        })
+        return
+      }
+      if (!editFormQuestions || Number(editFormQuestions) <= 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Total Question Count required.',
+          message: 'Please set the approved question count cap for this exam.'
+        })
+        return
+      }
+    } else {
+      if (editFormManualBreakdown.length === 0) {
+        showSystemStatus({
+          type: 'MISSING_INFO',
+          title: 'Marks distribution required.',
+          message: 'Add at least one mark allocation component for this manual paper exam.'
+        })
+        return
+      }
+    }
+
+    let statusId: string | undefined
+    try {
+      setIsUpdatingExam(true)
+      statusId = showSystemStatus({
+        type: 'PROCESSING',
+        title: 'Updating...',
+        message: `Saving changes to Exam Master "${editFormName}"...`,
+        durationMs: 0
+      })
+
+      const sanitizedEditManualBreakdown = editFormManualBreakdown.map((item) => ({
+        componentName: item.componentName.trim() || 'Component',
+        marks: Number(item.marks) || 10,
+        averageMark: item.averageMark !== undefined && item.averageMark !== '' ? Number(item.averageMark) : Math.round((Number(item.marks) || 10) / 2)
+      }))
+
+      const payload = {
+        name: editFormName.trim(),
+        termId: Number(editFormTermId || 1),
+        examCategory: isCbt ? 'CBT' : 'MANUAL',
+        cbtTotalMarks: isCbt ? Number(editFormCbtMarks) : null,
+        totalQuestionCount: isCbt ? Number(editFormQuestions) : null,
+        manualMarksBreakdown: !isCbt ? sanitizedEditManualBreakdown : null,
+        remark: isCbt
+          ? `CBT Exam (${editFormCbtMarks} Marks - Cap: ${editFormQuestions} Qs)`
+          : `Manual Paper Exam (Average: ${editFormManualAverageMark || 10} Marks)`
+      }
+
+      const res = await apiSlice.put<{ success: boolean; exam: ExamRecord; message?: string }>(
+        `${endpoints.admin.exams}/${editingExam.id}`,
+        payload
+      )
+
+      if (res.success && res.exam) {
+        setPublishedExams((prev) =>
+          prev.map((e) => (e.id === editingExam.id ? { ...e, ...res.exam } : e))
+        )
+        setEditingExam(null)
+        showSystemStatus({
+          id: statusId,
+          type: 'ACTION_SUCCESS',
+          title: 'Exam Master Updated',
+          message: `Exam Master "${res.exam.name}" was successfully updated.`
+        })
+      }
+    } catch (err: any) {
+      showSystemStatus({
+        ...resolveHttpStatus(500, err?.message || 'Failed to update exam definition.'),
+        id: statusId
+      })
+    } finally {
+      setIsUpdatingExam(false)
     }
   }
 
@@ -275,14 +466,22 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
         durationMs: 0
       })
 
+      const sanitizedManualBreakdown = manualBreakdown.map((item) => ({
+        componentName: item.componentName.trim() || 'Component',
+        marks: Number(item.marks) || 10,
+        averageMark: item.averageMark !== undefined && item.averageMark !== '' ? Number(item.averageMark) : Math.round((Number(item.marks) || 10) / 2)
+      }))
+
       const payload = {
         name: examName.trim(),
         termId: Number(termId || 1),
         examCategory: isCbt ? 'CBT' : 'MANUAL',
         cbtTotalMarks: isCbt ? Number(cbtTotalMarks) : null,
         totalQuestionCount: isCbt ? Number(totalQuestions) : null,
-        manualMarksBreakdown: !isCbt ? manualBreakdown : null,
-        remark: isCbt ? `CBT Exam (${cbtTotalMarks} Marks - Cap: ${totalQuestions} Qs)` : 'Manual Paper Exam'
+        manualMarksBreakdown: !isCbt ? sanitizedManualBreakdown : null,
+        remark: isCbt
+          ? `CBT Exam (${cbtTotalMarks} Marks - Cap: ${totalQuestions} Qs)`
+          : `Manual Paper Exam (Average: ${manualAverageMark || 10} Marks)`
       }
 
       const res = await apiSlice.post<{ success: boolean; exam: ExamRecord }>(endpoints.admin.exams, payload)
@@ -604,13 +803,39 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                   </div>
                 ) : (
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Total Manual Marks</label>
-                    <div className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-100 text-slate-700 font-bold flex items-center justify-between">
-                      <span>Configured Breakdown Sum:</span>
-                      <span className="text-cyan-700 font-mono text-sm">
-                        {manualBreakdown.reduce((sum, item) => sum + (Number(item.marks) || 0), 0)} Marks
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-slate-700">Manual Exam Average Mark *</label>
+                      <span className="text-[10px] text-slate-400">
+                        Total Sum: <strong className="text-cyan-700 font-mono">{manualBreakdown.reduce((sum, item) => sum + (Number(item.marks) || 0), 0)} Marks</strong>
                       </span>
                     </div>
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        max={200}
+                        step="any"
+                        value={manualAverageMark}
+                        onChange={(e) => setManualAverageMark(e.target.value)}
+                        placeholder="e.g. 10 or 12.5"
+                        className="w-full px-3 py-2 pr-28 border border-emerald-300 rounded-xl text-xs bg-emerald-50/40 font-bold text-emerald-900 focus:outline-emerald-500 focus:bg-white transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sumAvg = manualBreakdown.reduce((sum, item) => sum + (Number(item.averageMark !== undefined && item.averageMark !== '' ? item.averageMark : (Number(item.marks) || 0) / 2) || 0), 0)
+                          setManualAverageMark(String(Number(sumAvg.toFixed(1))))
+                        }}
+                        className="absolute right-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        title="Auto-calculate average benchmark from component rows below"
+                      >
+                        <span>⚡ Auto (Sum)</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Benchmark average mark for this paper. Enter manually or click ⚡ Auto (Sum).
+                    </p>
                   </div>
                 )}
               </div>
@@ -635,47 +860,81 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
               ) : (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800">Marks Distribution Builder</label>
-                    <button
-                      type="button"
-                      onClick={addManualRow}
-                      className="px-2.5 py-1 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-[11px] flex items-center gap-1 transition"
-                    >
-                      <Plus size={12} /> Add Component
-                    </button>
+                    <div>
+                      <label className="font-bold text-slate-800">Marks Distribution Builder</label>
+                      <p className="text-[10px] text-slate-400">Define component names, max allocable marks, and average benchmark marks.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-mono font-bold text-[11px] border border-emerald-200">
+                        Avg: {manualBreakdown.length > 0 ? (manualBreakdown.reduce((sum, item) => sum + (Number(item.averageMark !== undefined && item.averageMark !== '' ? item.averageMark : (Number(item.marks) || 0) / 2) || 0), 0)).toFixed(1) : 0} Marks
+                      </span>
+                      <button
+                        type="button"
+                        onClick={addManualRow}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-[11px] flex items-center gap-1 transition"
+                      >
+                        <Plus size={12} /> Add Component
+                      </button>
+                    </div>
                   </div>
+
                   <div className="space-y-2">
+                    <div className="hidden sm:flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400 uppercase">
+                      <span className="flex-1">Component Name</span>
+                      <span className="w-28 text-right pr-2">Max Marks</span>
+                      <span className="w-28 text-right pr-2">Average Mark</span>
+                      {manualBreakdown.length > 1 && <span className="w-7"></span>}
+                    </div>
+
                     {manualBreakdown.map((row, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-0 bg-slate-50 sm:bg-transparent rounded-xl border sm:border-0 border-slate-100">
                         <input
                           type="text"
                           required
                           value={row.componentName}
                           onChange={(e) => updateManualRow(idx, 'componentName', e.target.value)}
                           placeholder="e.g. Theory/CA or Practical"
-                          className="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                          className="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
                         />
-                        <div className="flex items-center gap-1 w-28">
-                          <input
-                            type="number"
-                            required
-                            min={1}
-                            max={100}
-                            value={row.marks}
-                            onChange={(e) => updateManualRow(idx, 'marks', e.target.value)}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-right"
-                          />
-                          <span className="text-slate-400 font-bold text-[10px]">Marks</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 w-28">
+                            <input
+                              type="number"
+                              required
+                              min={1}
+                              max={100}
+                              value={row.marks}
+                              onChange={(e) => updateManualRow(idx, 'marks', e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-right"
+                            />
+                            <span className="text-slate-400 font-bold text-[10px]">Max</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 w-28">
+                            <input
+                              type="number"
+                              required
+                              min={0}
+                              max={Number(row.marks) || 100}
+                              step="any"
+                              value={row.averageMark !== undefined && row.averageMark !== '' ? row.averageMark : Math.round((Number(row.marks) || 10) / 2)}
+                              onChange={(e) => updateManualRow(idx, 'averageMark', e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-emerald-200 bg-emerald-50/50 rounded-xl text-xs font-semibold text-right text-emerald-800"
+                            />
+                            <span className="text-emerald-600 font-bold text-[10px]">Avg</span>
+                          </div>
+
+                          {manualBreakdown.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeManualRow(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                              title="Remove Component"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
-                        {manualBreakdown.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeManualRow(idx)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -756,11 +1015,18 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                             {isCbt ? (
                               <span>{ex.cbtTotalMarks ? `${ex.cbtTotalMarks} Marks` : 'N/A'}</span>
                             ) : (
-                              <span className="text-[11px] text-slate-600">
-                                {Array.isArray(ex.manualMarksBreakdown) && ex.manualMarksBreakdown.length > 0
-                                  ? ex.manualMarksBreakdown.map((m: any) => `${m.componentName} (${m.marks})`).join(' + ')
-                                  : 'Manual Scheme'}
-                              </span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] text-slate-700">
+                                  {Array.isArray(ex.manualMarksBreakdown) && ex.manualMarksBreakdown.length > 0
+                                    ? ex.manualMarksBreakdown.map((m: any) => `${m.componentName} (${m.marks}m${m.averageMark !== undefined ? `, avg:${m.averageMark}m` : ''})`).join(' + ')
+                                    : 'Manual Scheme'}
+                                </span>
+                                {ex.remark?.match(/Average:\s*([0-9.]+)/i)?.[1] && (
+                                  <span className="text-[10px] text-emerald-700 font-bold font-mono">
+                                    Benchmark Avg: {ex.remark.match(/Average:\s*([0-9.]+)/i)?.[1]} Marks
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="p-3">
@@ -773,15 +1039,25 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                             )}
                           </td>
                           <td className="p-3">
-                            <button
-                              type="button"
-                              disabled={deletingExamId === ex.id}
-                              onClick={() => handleDeleteExam(ex.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-                              title="Delete Exam Master"
-                            >
-                              {deletingExamId === ex.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(ex)}
+                                className="p-1.5 text-slate-400 hover:text-cyan-600 rounded-lg hover:bg-cyan-50 transition cursor-pointer"
+                                title="Edit Exam Master Definition"
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingExamId === ex.id}
+                                onClick={() => handleDeleteExam(ex.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                title="Delete Exam Master"
+                              >
+                                {deletingExamId === ex.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -795,6 +1071,256 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
               </div>
             )}
           </div>
+
+          {/* EDIT EXAM MASTER MODAL */}
+          {editingExam && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col my-8">
+                {/* Modal Header */}
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-cyan-600 text-white flex items-center justify-center shadow-xs">
+                      <Edit3 size={18} />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-900 text-sm">Edit Exam Master Definition</h3>
+                      <p className="text-[11px] text-slate-500 font-medium font-mono">
+                        Exam ID #{editingExam.id}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingExam(null)}
+                    className="w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Modal Form */}
+                <form onSubmit={handleUpdateExam} className="p-5 space-y-4 text-xs">
+                  <div className="flex items-center justify-between gap-2 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setEditFormCategory('cbt')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        editFormCategory === 'cbt' ? 'bg-white text-cyan-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      💻 CBT Online
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditFormCategory('manual')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        editFormCategory === 'manual' ? 'bg-white text-cyan-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      📝 Manual Paper
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Exam Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFormName}
+                      onChange={(e) => setEditFormName(e.target.value)}
+                      placeholder="e.g. CBT 1, CBT Mid-Term, Terminal CBT Exam"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold focus:outline-cyan-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Academic Term *</label>
+                      <select
+                        value={editFormTermId}
+                        onChange={(e) => setEditFormTermId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                      >
+                        <option value="1">1st Term</option>
+                        <option value="2">2nd Term</option>
+                        <option value="3">3rd Term</option>
+                      </select>
+                    </div>
+
+                    {editFormCategory === 'cbt' ? (
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">CBT Total Marks *</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          max={100}
+                          value={editFormCbtMarks}
+                          onChange={(e) => setEditFormCbtMarks(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-bold text-slate-700">Manual Exam Average Mark *</label>
+                          <span className="text-[10px] text-slate-400">
+                            Total Sum: <strong className="text-cyan-700 font-mono">{editFormManualBreakdown.reduce((sum, item) => sum + (Number(item.marks) || 0), 0)} Marks</strong>
+                          </span>
+                        </div>
+                        <div className="relative flex items-center">
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            max={200}
+                            step="any"
+                            value={editFormManualAverageMark}
+                            onChange={(e) => setEditFormManualAverageMark(e.target.value)}
+                            placeholder="e.g. 10 or 12.5"
+                            className="w-full px-3 py-2 pr-28 border border-emerald-300 rounded-xl text-xs bg-emerald-50/40 font-bold text-emerald-900 focus:outline-emerald-500 focus:bg-white transition"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const sumAvg = editFormManualBreakdown.reduce((sum, item) => sum + (Number(item.averageMark !== undefined && item.averageMark !== '' ? item.averageMark : (Number(item.marks) || 0) / 2) || 0), 0)
+                              setEditFormManualAverageMark(String(Number(sumAvg.toFixed(1))))
+                            }}
+                            className="absolute right-1.5 px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                            title="Auto-calculate average benchmark from component rows below"
+                          >
+                            <span>⚡ Auto (Sum)</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Benchmark average mark for this paper. Enter manually or click ⚡ Auto (Sum).
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {editFormCategory === 'cbt' ? (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Approved Question Count * (Hard Cap)</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={200}
+                        value={editFormQuestions}
+                        onChange={(e) => setEditFormQuestions(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
+                      />
+                      <p className="text-[10px] text-amber-600 font-medium mt-1">
+                        ⚠️ Validation Rule: Question uploads or distribution bundles exceeding this count will be blocked automatically.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="font-bold text-slate-800">Marks Distribution Builder</label>
+                          <p className="text-[10px] text-slate-400">Define component names, max allocable marks, and average benchmark marks.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-mono font-bold text-[11px] border border-emerald-200">
+                            Avg: {editFormManualBreakdown.length > 0 ? (editFormManualBreakdown.reduce((sum, item) => sum + (Number(item.averageMark !== undefined && item.averageMark !== '' ? item.averageMark : (Number(item.marks) || 0) / 2) || 0), 0)).toFixed(1) : 0} Marks
+                          </span>
+                          <button
+                            type="button"
+                            onClick={addEditManualRow}
+                            className="px-2.5 py-1 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-[11px] flex items-center gap-1 transition"
+                          >
+                            <Plus size={12} /> Add Component
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <div className="hidden sm:flex items-center gap-2 px-1 text-[10px] font-bold text-slate-400 uppercase">
+                          <span className="flex-1">Component Name</span>
+                          <span className="w-28 text-right pr-2">Max Marks</span>
+                          <span className="w-28 text-right pr-2">Average Mark</span>
+                          {editFormManualBreakdown.length > 1 && <span className="w-7"></span>}
+                        </div>
+
+                        {editFormManualBreakdown.map((row, idx) => (
+                          <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-0 bg-slate-50 sm:bg-transparent rounded-xl border sm:border-0 border-slate-100">
+                            <input
+                              type="text"
+                              required
+                              value={row.componentName}
+                              onChange={(e) => updateEditManualRow(idx, 'componentName', e.target.value)}
+                              placeholder="e.g. Theory/CA or Practical"
+                              className="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                            />
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 w-28">
+                                <input
+                                  type="number"
+                                  required
+                                  min={1}
+                                  max={100}
+                                  value={row.marks}
+                                  onChange={(e) => updateEditManualRow(idx, 'marks', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-right"
+                                />
+                                <span className="text-slate-400 font-bold text-[10px]">Max</span>
+                              </div>
+
+                              <div className="flex items-center gap-1 w-28">
+                                <input
+                                  type="number"
+                                  required
+                                  min={0}
+                                  max={Number(row.marks) || 100}
+                                  step="any"
+                                  value={row.averageMark !== undefined && row.averageMark !== '' ? row.averageMark : Math.round((Number(row.marks) || 10) / 2)}
+                                  onChange={(e) => updateEditManualRow(idx, 'averageMark', e.target.value)}
+                                  className="w-full px-2.5 py-1.5 border border-emerald-200 bg-emerald-50/50 rounded-xl text-xs font-semibold text-right text-emerald-800"
+                                />
+                                <span className="text-emerald-600 font-bold text-[10px]">Avg</span>
+                              </div>
+
+                              {editFormManualBreakdown.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeEditManualRow(idx)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                                  title="Remove Component"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modal Actions */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingExam(null)}
+                      className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isUpdatingExam}
+                      className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isUpdatingExam ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      <span>{isUpdatingExam ? 'Saving Changes...' : 'Save Changes'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

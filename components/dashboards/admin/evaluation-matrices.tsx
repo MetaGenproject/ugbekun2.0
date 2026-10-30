@@ -45,6 +45,8 @@ export interface MatrixFeedItem {
     examCategory?: string
     cbtTotalMarks?: number | null
     totalQuestionCount?: number | null
+    manualMarksBreakdown?: any[] | null
+    remark?: string
   } | null
 }
 
@@ -85,6 +87,19 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   // Hard Dependency Gate state (HTTP 412)
   const [isGateLocked, setIsGateLocked] = useState(false)
   const [examMasters, setExamMasters] = useState<any[]>([])
+
+  const cbtExamMasters = useMemo(() => {
+    return examMasters.filter((em) => !em.examCategory || em.examCategory === 'CBT' || em.typeId === 3)
+  }, [examMasters])
+
+  const theoryExamMasters = useMemo(() => {
+    return examMasters.filter(
+      (em) =>
+        em.examCategory === 'MANUAL' ||
+        (Array.isArray(em.manualMarksBreakdown) && em.manualMarksBreakdown.length > 0) ||
+        (em.examCategory !== 'CBT' && em.typeId !== 3)
+    )
+  }, [examMasters])
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -363,7 +378,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
     updated[colIdx].feedItems.push({
       componentName: 'Sub-Component',
       componentType: isCbtMode ? 'CBT' : 'MANUAL',
-      weightMarks: 5,
+      weightMarks: 0,
       examMasterId: null,
     })
     setBuilderColumns(updated)
@@ -382,19 +397,56 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   const handleUpdateFeedItem = (colIdx: number, itemIdx: number, field: string, val: any) => {
     const updated = [...builderColumns]
     const curItem: any = updated[colIdx].feedItems[itemIdx]
-    curItem[field] = val
-    if (field === 'examMasterId' && val) {
-      const match = examMasters.find((ex) => ex.id === Number(val))
-      if (match) {
-        curItem.componentName = match.name
+
+    if (field === 'theorySetup') {
+      if (!val) {
+        curItem.examMasterId = null
+        curItem.weightMarks = 0
+      } else if (val.includes('::')) {
+        const [emId, compName, marks] = val.split('::')
+        curItem.examMasterId = Number(emId)
+        if (compName) curItem.componentName = compName
+        curItem.weightMarks = Number(marks) || 0
+      } else {
+        const emId = Number(val)
+        curItem.examMasterId = emId
+        const match = examMasters.find((ex) => ex.id === emId)
+        if (match) {
+          curItem.componentName = match.name
+          const total = Array.isArray(match.manualMarksBreakdown)
+            ? match.manualMarksBreakdown.reduce((sum: number, it: any) => sum + (Number(it.marks) || 0), 0)
+            : 0
+          curItem.weightMarks = total
+        }
       }
+    } else if (field === 'examMasterId') {
+      curItem.examMasterId = val ? Number(val) : null
+      if (val) {
+        const match = examMasters.find((ex) => ex.id === Number(val))
+        if (match) {
+          curItem.componentName = match.name
+          curItem.weightMarks = Number(match.cbtTotalMarks) || 0
+        }
+      } else {
+        curItem.weightMarks = 0
+      }
+    } else if (field === 'componentType') {
+      curItem.componentType = val
+      curItem.examMasterId = null
+      curItem.weightMarks = 0
+    } else {
+      curItem[field] = val
     }
+
     setBuilderColumns(updated)
   }
 
   const currentTotalCalculated = useMemo(() => {
     if (activeTabMode === 'multiRollup') {
-      return builderColumns.reduce((sum, col) => sum + (Number(col.maxMarks) || 0), 0)
+      return builderColumns.reduce(
+        (sum, col) => sum + col.feedItems.reduce((s, it) => s + (Number(it.weightMarks) || 0), 0),
+        0
+      )
     }
     return components.reduce((sum, c) => sum + (Number(c.maxMarks) || 0), 0)
   }, [activeTabMode, builderColumns, components])
@@ -433,20 +485,43 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
       }
 
       if (activeTabMode === 'multiRollup') {
-        payload.columns = builderColumns.map((col, idx) => ({
-          columnKey: col.columnKey.trim().toUpperCase(),
-          columnLabel: col.columnLabel.trim(),
-          maxMarks: Number(col.maxMarks) || 0,
-          passMarks: Number(col.passMarks) || 0,
-          displayOrder: idx + 1,
-          feedItems: col.feedItems.map((item) => ({
-            componentName: item.componentName.trim(),
-            componentType: isCbtMode ? item.componentType : 'MANUAL',
-            weightMarks: Number(item.weightMarks) || 0,
-            examMasterId: isCbtMode && item.componentType === 'CBT' && item.examMasterId ? Number(item.examMasterId) : null,
-          })),
-        }))
-        payload.totalMarks = builderColumns.reduce((sum, c) => sum + (Number(c.maxMarks) || 0), 0)
+        payload.columns = builderColumns.map((col, idx) => {
+          const colFeedItems = col.feedItems.map((item) => {
+            let weight = Number(item.weightMarks) || 0
+            if (item.examMasterId && examMasters.length > 0) {
+              const match = examMasters.find((em) => em.id === item.examMasterId)
+              if (match) {
+                if (match.examCategory === 'CBT' || match.typeId === 3) {
+                  weight = Number(match.cbtTotalMarks) || weight
+                } else if (Array.isArray(match.manualMarksBreakdown)) {
+                  const comp = match.manualMarksBreakdown.find((c: any) => c.componentName === item.componentName)
+                  if (comp && comp.marks) {
+                    weight = Number(comp.marks)
+                  } else {
+                    const total = match.manualMarksBreakdown.reduce((s: number, m: any) => s + (Number(m.marks) || 0), 0)
+                    if (total > 0) weight = total
+                  }
+                }
+              }
+            }
+            return {
+              componentName: item.componentName.trim(),
+              componentType: isCbtMode ? item.componentType : 'MANUAL',
+              weightMarks: weight,
+              examMasterId: item.examMasterId ? Number(item.examMasterId) : null,
+            }
+          })
+          const colSum = colFeedItems.reduce((s, it) => s + it.weightMarks, 0)
+          return {
+            columnKey: col.columnKey.trim().toUpperCase(),
+            columnLabel: col.columnLabel.trim(),
+            maxMarks: colSum,
+            passMarks: Number(col.passMarks) || Math.round(colSum * 0.4),
+            displayOrder: idx + 1,
+            feedItems: colFeedItems,
+          }
+        })
+        payload.totalMarks = payload.columns.reduce((sum: number, c: any) => sum + (Number(c.maxMarks) || 0), 0)
       } else {
         payload.components = components
       }
@@ -734,6 +809,9 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                                           {fi.componentType}
                                         </span>
                                         <span>{fi.componentName}</span>
+                                        {fi.examMaster?.name && fi.examMaster.name !== fi.componentName && (
+                                          <span className="text-[10px] text-slate-400 font-mono">({fi.examMaster.name})</span>
+                                        )}
                                       </span>
                                       <span className="font-semibold">{fi.weightMarks} pts</span>
                                     </div>
@@ -985,18 +1063,16 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="text-slate-500 text-[11px] font-bold">Max Marks:</span>
-                            <input
-                              type="number"
-                              min={1}
-                              value={col.maxMarks}
-                              onChange={(e) => handleUpdateRollupColumn(colIdx, 'maxMarks', Number(e.target.value))}
-                              className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-black text-indigo-700 text-center"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400 text-[11px] font-bold">Column Marks:</span>
+                              <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-black text-indigo-700 font-mono text-center">
+                                {col.feedItems.reduce((sum, it) => sum + (Number(it.weightMarks) || 0), 0)} Marks
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveRollupColumn(colIdx)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
                               title="Remove Column"
                             >
                               <Trash2 size={14} />
@@ -1034,36 +1110,86 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                                 </span>
                               )}
 
-                              {isCbtMode && item.componentType === 'CBT' && (
+                              {isCbtMode && item.componentType === 'CBT' ? (
                                 <select
                                   value={item.examMasterId || ''}
                                   onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'examMasterId', e.target.value)}
-                                  className="flex-1 px-2 py-1 bg-cyan-50/60 border border-cyan-200 rounded-lg text-xs font-semibold text-cyan-900"
+                                  className="flex-1 px-2 py-1 bg-cyan-50/60 border border-cyan-200 rounded-lg text-xs font-semibold text-cyan-900 focus:outline-cyan-500"
                                 >
                                   <option value="">-- Link to CBT Exam Master --</option>
-                                  {examMasters
-                                    .filter((em) => !em.examCategory || em.examCategory === 'CBT')
-                                    .map((em) => (
-                                      <option key={em.id} value={em.id}>
-                                        {em.name} ({em.cbtTotalMarks || 'Auto'} Marks)
+                                  {cbtExamMasters.map((em) => (
+                                    <option key={em.id} value={em.id}>
+                                      {em.name} ({em.cbtTotalMarks || 'Auto'} Marks)
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <select
+                                  value={
+                                    (() => {
+                                      if (!item.examMasterId) return ''
+                                      const match = theoryExamMasters.find((em) => em.id === item.examMasterId)
+                                      if (!match) return String(item.examMasterId)
+                                      const breakdown = Array.isArray(match.manualMarksBreakdown) ? match.manualMarksBreakdown : []
+                                      const matchedComp = breakdown.find((c: any) => c.componentName === item.componentName)
+                                      if (matchedComp) {
+                                        return `${match.id}::${matchedComp.componentName}::${matchedComp.marks}`
+                                      }
+                                      const total = breakdown.reduce((s: number, m: any) => s + (Number(m.marks) || 0), 0)
+                                      return `${match.id}::${match.name}::${total || 10}`
+                                    })()
+                                  }
+                                  onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'theorySetup', e.target.value)}
+                                  className="flex-1 px-2 py-1 bg-amber-50/70 border border-amber-200 rounded-lg text-xs font-semibold text-amber-900 focus:outline-amber-500"
+                                >
+                                  <option value="">
+                                    {theoryExamMasters.length > 0 ? '-- Link to Theory Setup (Master Exam) --' : '-- No Theory Setups Found --'}
+                                  </option>
+                                  {theoryExamMasters.map((em) => {
+                                    const breakdown = Array.isArray(em.manualMarksBreakdown) ? em.manualMarksBreakdown : []
+                                    const breakdownTotal = breakdown.reduce((sum: number, m: any) => sum + (Number(m.marks) || 0), 0)
+                                    const parsedAvg = em.remark?.match(/Average:\s*([0-9.]+)/i)?.[1]
+                                    const avgInfo = parsedAvg ? ` - Avg: ${parsedAvg}m` : ''
+
+                                    if (breakdown.length > 1) {
+                                      return (
+                                        <optgroup key={em.id} label={`${em.name} (${breakdownTotal}m Total${avgInfo})`}>
+                                          <option value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
+                                            {em.name} (Combined: {breakdownTotal} Marks)
+                                          </option>
+                                          {breakdown.map((comp: any, cIdx: number) => (
+                                            <option
+                                              key={`${em.id}-comp-${cIdx}`}
+                                              value={`${em.id}::${comp.componentName}::${comp.marks}`}
+                                            >
+                                              ↳ {comp.componentName} ({comp.marks} Marks{comp.averageMark !== undefined ? `, Avg: ${comp.averageMark}m` : ''})
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )
+                                    }
+
+                                    return (
+                                      <option key={em.id} value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
+                                        {em.name} ({breakdownTotal > 0 ? `${breakdownTotal} Marks` : 'Theory Paper'}{avgInfo})
                                       </option>
-                                    ))}
+                                    )
+                                  })}
                                 </select>
                               )}
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="text-[10px] font-bold text-slate-400">Weight:</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={item.weightMarks}
-                                  onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'weightMarks', Number(e.target.value))}
-                                  className="w-14 px-1.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-black text-indigo-700 text-center"
-                                />
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span
+                                  className="px-2.5 py-1 rounded-lg bg-indigo-50/70 border border-indigo-200 text-indigo-700 font-mono font-bold text-xs"
+                                  title="Mark auto-derived from Master Exam Setup"
+                                >
+                                  {item.weightMarks || 0} Marks
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveFeedItem(colIdx, itemIdx)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                                  className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                                  title="Remove Sub-Component"
                                 >
                                   <Trash2 size={12} />
                                 </button>
