@@ -23,7 +23,11 @@ import {
   Calculator,
   Sparkles,
   ChevronRight,
-  Info
+  ChevronDown,
+  ChevronUp,
+  Info,
+  GraduationCap,
+  Search,
 } from 'lucide-react'
 
 export interface AssessmentComponent {
@@ -70,7 +74,7 @@ export interface EvaluationMatrixData {
   isDefault: boolean
   components: AssessmentComponent[]
   columns?: MatrixColumnConfig[]
-  classes?: Array<{ id: number; name: string }>
+  classes?: Array<{ id: number; name: string; usesScores?: boolean; isEcd?: boolean }>
   createdAt?: string
 }
 
@@ -80,7 +84,7 @@ interface EvaluationMatricesProps {
 
 export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps = {}) {
   const [matrices, setMatrices] = useState<EvaluationMatrixData[]>([])
-  const [classes, setClasses] = useState<Array<{ id: number; name: string; usesScores?: boolean; isEcd?: boolean }>>([])
+  const [classes, setClasses] = useState<Array<{ id: number; name: string; usesScores?: boolean; isEcd?: boolean; evaluationMatrixId?: number | null }>>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -88,6 +92,19 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   // Hard Dependency Gate state (HTTP 412)
   const [isGateLocked, setIsGateLocked] = useState(false)
   const [examMasters, setExamMasters] = useState<any[]>([])
+
+  // Lookup map: classId -> { matrixId, name, code } for conflict / current assignment badge
+  const classToMatrixMap = useMemo(() => {
+    const map: Record<number, { matrixId: number; name: string; code: string }> = {}
+    matrices.forEach((m) => {
+      if (Array.isArray(m.classes)) {
+        m.classes.forEach((c) => {
+          map[c.id] = { matrixId: m.id, name: m.name, code: m.code }
+        })
+      }
+    })
+    return map
+  }, [matrices])
 
   const cbtExamMasters = useMemo(() => {
     return examMasters.filter((em) => !em.examCategory || em.examCategory === 'CBT' || em.typeId === 3)
@@ -111,6 +128,11 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   const [description, setDescription] = useState('')
   const [totalMarks, setTotalMarks] = useState<number>(100)
   const [isDefault, setIsDefault] = useState(false)
+
+  // Classroom Allocation state in Matrix Setup
+  const [selectedClassIds, setSelectedClassIds] = useState<number[]>([])
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false)
+  const [classSearchQuery, setClassSearchQuery] = useState('')
 
   // Builder Mode: 'multiRollup' (Hybrid CBT + Manual) vs 'standard'
   const [activeTabMode, setActiveTabMode] = useState<'multiRollup' | 'standard'>('multiRollup')
@@ -298,6 +320,9 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
     setTotalMarks(100)
     setIsDefault(false)
     setActiveTabMode('multiRollup')
+    setSelectedClassIds([])
+    setIsClassDropdownOpen(false)
+    setClassSearchQuery('')
     setModalError(null)
     setIsModalOpen(true)
   }
@@ -310,6 +335,9 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
     setDescription(matrix.description || '')
     setTotalMarks(Number(matrix.totalMarks) || 100)
     setIsDefault(matrix.isDefault)
+    setSelectedClassIds(Array.isArray(matrix.classes) ? matrix.classes.map((c) => c.id) : [])
+    setIsClassDropdownOpen(false)
+    setClassSearchQuery('')
 
     if (Array.isArray(matrix.columns) && matrix.columns.length > 0) {
       setActiveTabMode('multiRollup')
@@ -487,6 +515,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
         description: description.trim() || undefined,
         totalMarks: Number(totalMarks) > 0 ? Number(totalMarks) : currentTotalCalculated,
         isDefault,
+        classIds: selectedClassIds,
       }
 
       if (activeTabMode === 'multiRollup') {
@@ -858,6 +887,38 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                       )}
                     </div>
 
+                    {/* Assigned Classrooms */}
+                    <div className="px-5 pb-3">
+                      <div className="pt-2.5 border-t border-slate-100 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          <span className="flex items-center gap-1.5">
+                            <GraduationCap size={13} className="text-indigo-600" />
+                            <span>Assigned Classrooms</span>
+                          </span>
+                          <span className="font-mono text-slate-600 font-bold">{matrix.classes?.length || 0} Classes</span>
+                        </div>
+                        {matrix.classes && matrix.classes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+                            {matrix.classes.map((cls) => (
+                              <span
+                                key={`card-cls-${cls.id}`}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50/90 text-indigo-700 border border-indigo-200/80 inline-flex items-center gap-1"
+                              >
+                                {cls.name}
+                                {cls.isEcd && (
+                                  <span className="text-[9px] px-1 py-0.2 bg-amber-100 text-amber-800 rounded font-semibold">ECD</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-amber-600/90 font-medium italic">
+                            No classrooms attached yet.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Actions Footer */}
                     <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
                       {!matrix.isDefault ? (
@@ -1068,6 +1129,203 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                   />
                   Set as default evaluation matrix for this branch
                 </label>
+
+                {/* TARGET CLASSROOMS ALLOCATION (Dropdown & Quick Buttons) */}
+                <div className="p-3.5 bg-gradient-to-r from-slate-50 via-indigo-50/30 to-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <GraduationCap size={16} className="text-indigo-600 shrink-0" />
+                        <label className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                          Target Classrooms Allocation *
+                        </label>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            selectedClassIds.length > 0
+                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                              : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          }`}
+                        >
+                          {selectedClassIds.length} {selectedClassIds.length === 1 ? 'Class' : 'Classes'} Selected
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        Click on classes that will use this matrix. Differentiate classes offering CBT vs. non-CBT classes.
+                      </p>
+                    </div>
+
+                    {/* Toggle Dropdown Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300/80 text-xs font-bold text-slate-700 flex items-center justify-between sm:justify-center gap-2 cursor-pointer transition shadow-2xs shrink-0"
+                    >
+                      <span>{isClassDropdownOpen ? 'Close Class Selector' : 'Choose Classes...'}</span>
+                      {isClassDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  </div>
+
+                  {/* Selected Classes Preview Chips (Always visible) */}
+                  {selectedClassIds.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {classes
+                        .filter((c) => selectedClassIds.includes(c.id))
+                        .map((cls) => (
+                          <span
+                            key={`sel-pill-${cls.id}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-900 shadow-2xs"
+                          >
+                            <span>{cls.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClassIds(selectedClassIds.filter((id) => id !== cls.id))}
+                              className="text-indigo-400 hover:text-rose-600 ml-0.5 cursor-pointer"
+                              title="Remove Class"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50/70 border border-amber-200/80 rounded-xl px-3 py-2 flex items-center gap-2">
+                      <AlertCircle size={14} className="text-amber-600 shrink-0" />
+                      <span>No classes selected yet. Click &quot;Choose Classes...&quot; to pick classrooms that will use this matrix.</span>
+                    </div>
+                  )}
+
+                  {/* Expandable Class Picker Drawer */}
+                  {isClassDropdownOpen && (
+                    <div className="p-3 sm:p-3.5 bg-white border border-slate-200 rounded-xl space-y-3 mt-2 shadow-xs animate-in fade-in-50 duration-150">
+                      {/* Quick Action Buttons for 1-Click Filtering & Selection */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-0.5">
+                            Quick Select:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Select all CBT-eligible classes (not ECD, usesScores !== false)
+                              const cbtIds = classes.filter((c) => !c.isEcd && c.usesScores !== false).map((c) => c.id)
+                              setSelectedClassIds(Array.from(new Set([...selectedClassIds, ...cbtIds])))
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-200 flex items-center gap-1 transition cursor-pointer"
+                            title="Select classes offering Computer Based Testing"
+                          >
+                            <Monitor size={12} />
+                            <span>Select CBT Classes</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Select non-CBT / paper-only classes (e.g. classes not selected or non-scoring / lower classes)
+                              const nonCbtIds = classes.filter((c) => c.usesScores !== false).map((c) => c.id)
+                              setSelectedClassIds(nonCbtIds)
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 transition cursor-pointer"
+                            title="Select classes for Paper & Theory only"
+                          >
+                            <FileText size={12} />
+                            <span>Select All Paper Classes</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedClassIds(classes.map((c) => c.id))}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                          >
+                            Select All
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedClassIds([])}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition cursor-pointer"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+
+                        {/* Search Input */}
+                        <div className="relative w-full sm:w-48">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                          <input
+                            type="text"
+                            placeholder="Search classroom..."
+                            value={classSearchQuery}
+                            onChange={(e) => setClassSearchQuery(e.target.value)}
+                            className="w-full pl-8 pr-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Grid of Clickable Class Buttons */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-56 overflow-y-auto p-1">
+                        {classes
+                          .filter((c) =>
+                            classSearchQuery.trim() ? c.name.toLowerCase().includes(classSearchQuery.toLowerCase()) : true
+                          )
+                          .map((cls) => {
+                            const isSelected = selectedClassIds.includes(cls.id)
+                            const currentAssignment = classToMatrixMap[cls.id]
+                            const isAssignedElsewhere = currentAssignment && currentAssignment.matrixId !== editingMatrixId
+
+                            return (
+                              <button
+                                type="button"
+                                key={`btn-cls-${cls.id}`}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedClassIds(selectedClassIds.filter((id) => id !== cls.id))
+                                  } else {
+                                    setSelectedClassIds([...selectedClassIds, cls.id])
+                                  }
+                                }}
+                                className={`p-2 rounded-xl text-left border transition flex flex-col justify-between gap-1 cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-slate-50 hover:bg-white text-slate-800 border-slate-200/90 hover:border-indigo-300'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 w-full">
+                                  <span className="font-bold text-xs truncate">{cls.name}</span>
+                                  <div
+                                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                                      isSelected ? 'bg-white text-indigo-600' : 'border border-slate-300 bg-white'
+                                    }`}
+                                  >
+                                    {isSelected && <Check size={11} strokeWidth={3} />}
+                                  </div>
+                                </div>
+
+                                {/* Subtext info */}
+                                <div className="text-[10px] leading-tight flex items-center gap-1 flex-wrap">
+                                  {cls.isEcd || cls.usesScores === false ? (
+                                    <span className={isSelected ? 'text-indigo-200' : 'text-emerald-700 font-semibold'}>
+                                      (ECD / Qual)
+                                    </span>
+                                  ) : null}
+
+                                  {isAssignedElsewhere ? (
+                                    <span
+                                      className={`truncate ${
+                                        isSelected ? 'text-indigo-100' : 'text-amber-700 bg-amber-50 px-1 rounded'
+                                      }`}
+                                      title={`Currently assigned to: ${currentAssignment.name}`}
+                                    >
+                                      In: {currentAssignment.code}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </button>
+                            )
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* MULTI-COMPONENT ROLLUP BUILDER (Scenario B) */}
                 {activeTabMode === 'multiRollup' && (
