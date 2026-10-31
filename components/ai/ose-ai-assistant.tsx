@@ -22,7 +22,8 @@ import {
   Minimize2,
   RefreshCw,
   Zap,
-  Award
+  Award,
+  GripVertical
 } from 'lucide-react'
 
 interface Message {
@@ -42,6 +43,122 @@ export function OSeAiAssistant({ isOpen: externalIsOpen, onClose }: { isOpen?: b
   const [inputQuery, setInputQuery] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Floating Draggable Position
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef<{ clientX: number; clientY: number; btnLeft: number; btnTop: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Restore saved position on mount (if available)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ose_ai_launcher_pos')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          const clampedX = Math.min(Math.max(8, parsed.x), Math.max(8, window.innerWidth - 150))
+          const clampedY = Math.min(Math.max(8, parsed.y), Math.max(8, window.innerHeight - 60))
+          setPosition({ x: clampedX, y: clampedY })
+        }
+      }
+    } catch {
+      // ignore localStorage errors
+    }
+  }, [])
+
+  // Keep within viewport on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((prev) => {
+        if (!prev) return null
+        const btnWidth = buttonRef.current?.offsetWidth || 140
+        const btnHeight = buttonRef.current?.offsetHeight || 50
+        const clampedX = Math.min(Math.max(8, prev.x), Math.max(8, window.innerWidth - btnWidth - 8))
+        const clampedY = Math.min(Math.max(8, prev.y), Math.max(8, window.innerHeight - btnHeight - 8))
+        return { x: clampedX, y: clampedY }
+      })
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    const btn = buttonRef.current
+    if (!btn) return
+
+    const rect = btn.getBoundingClientRect()
+    dragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      btnLeft: rect.left,
+      btnTop: rect.top,
+    }
+    isDraggingRef.current = false
+    try {
+      btn.setPointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragStartRef.current) return
+    const deltaX = e.clientX - dragStartRef.current.clientX
+    const deltaY = e.clientY - dragStartRef.current.clientY
+
+    if (Math.hypot(deltaX, deltaY) > 5) {
+      isDraggingRef.current = true
+      const btn = buttonRef.current
+      const btnWidth = btn?.offsetWidth || 140
+      const btnHeight = btn?.offsetHeight || 50
+
+      const rawX = dragStartRef.current.btnLeft + deltaX
+      const rawY = dragStartRef.current.btnTop + deltaY
+
+      const clampedX = Math.min(Math.max(8, rawX), Math.max(8, window.innerWidth - btnWidth - 8))
+      const clampedY = Math.min(Math.max(8, rawY), Math.max(8, window.innerHeight - btnHeight - 8))
+
+      setPosition({ x: clampedX, y: clampedY })
+    }
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragStartRef.current) return
+    const wasDragging = isDraggingRef.current
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+    dragStartRef.current = null
+
+    if (wasDragging) {
+      setPosition((current) => {
+        if (current) {
+          try {
+            localStorage.setItem('ose_ai_launcher_pos', JSON.stringify(current))
+          } catch {
+            // ignore
+          }
+        }
+        return current
+      })
+      setTimeout(() => {
+        isDraggingRef.current = false
+      }, 80)
+    }
+  }
+
+  const handleLauncherClick = (e: React.MouseEvent) => {
+    if (isDraggingRef.current) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    setIsOpen(true)
+  }
 
   useEffect(() => {
     if (externalIsOpen !== undefined) {
@@ -187,17 +304,40 @@ export function OSeAiAssistant({ isOpen: externalIsOpen, onClose }: { isOpen?: b
 
   return (
     <>
-      {/* Floating Trigger Launcher Button */}
+      {/* Floating Draggable Trigger Launcher Button */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-[9999] p-4 rounded-full bg-slate-900 text-white font-bold shadow-2xl hover:scale-105 transition-all flex items-center gap-2 border-2 border-amber-400/80 cursor-pointer group"
+          ref={buttonRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onClick={handleLauncherClick}
+          style={
+            position
+              ? {
+                  position: 'fixed',
+                  left: `${position.x}px`,
+                  top: `${position.y}px`,
+                  touchAction: 'none',
+                }
+              : {
+                  touchAction: 'none',
+                }
+          }
+          className={`fixed z-[9999] py-2 px-3 sm:py-2.5 sm:px-3.5 rounded-full bg-slate-900/95 backdrop-blur-md text-white font-bold shadow-2xl border-2 border-amber-400/80 cursor-grab active:cursor-grabbing select-none group flex items-center gap-1.5 hover:border-amber-300 transition-colors ${
+            !position ? 'bottom-20 right-4 sm:bottom-6 sm:right-6' : ''
+          }`}
+          title="Ask OSe AI (Click to open, drag anywhere to move)"
         >
-          <div className="relative">
-            <Bot size={24} className="text-amber-400 group-hover:rotate-12 transition-transform" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+          <GripVertical size={13} className="text-slate-400 group-hover:text-amber-400 -ml-0.5 shrink-0 cursor-grab active:cursor-grabbing" />
+          <div className="relative shrink-0 pointer-events-none">
+            <Bot size={20} className="text-amber-400 group-hover:rotate-12 transition-transform" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
           </div>
-          <span className="text-xs font-black tracking-wide pr-1">Ask OSe AI</span>
+          <span className="text-xs font-black tracking-wide pr-0.5 pointer-events-none whitespace-nowrap">
+            Ask OSe AI
+          </span>
         </button>
       )}
 

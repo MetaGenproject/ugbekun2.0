@@ -23,6 +23,8 @@ import {
   Award,
   Monitor,
   Search,
+  ChevronDown,
+  ChevronUp,
   ArrowRightLeft,
   Laptop
 } from 'lucide-react'
@@ -46,6 +48,7 @@ interface EvaluationMatrixData {
   id: number
   name: string
   code: string
+  generalHeading?: string
   totalMarks: number
   components: { name: string; code: string; maxMarks: number; passMarks?: number }[]
 }
@@ -85,6 +88,7 @@ export function MarksEntry() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('')
 
   const [currentMatrix, setCurrentMatrix] = useState<EvaluationMatrixData | null>(null)
+  const [isReportGroupExpanded, setIsReportGroupExpanded] = useState<boolean>(true)
   const [students, setStudents] = useState<StudentItem[]>([])
   const [marksState, setMarksState] = useState<Record<number, StudentMarkState>>({})
 
@@ -1102,51 +1106,139 @@ export function MarksEntry() {
       ) : (
         /* STANDARD SCORE-BASED MATRIX TABLE */
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          {currentMatrix && (
+            <div className="p-3.5 bg-gradient-to-r from-indigo-50/90 via-blue-50/70 to-slate-50 border-b border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Layers size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">
+                      Evaluation Matrix
+                    </span>
+                    <h4 className="font-extrabold text-slate-900 text-xs">
+                      {currentMatrix.name} ({currentMatrix.code})
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    General Assessment Section: <strong className="text-indigo-900 font-bold">{currentMatrix.generalHeading || 'Termly Report'}</strong>
+                    <span className="text-slate-400 mx-1">•</span>
+                    <span>Wraps ({currentMatrix.components?.map((c) => c.name || c.code).join(', ')})</span>
+                  </p>
+                </div>
+              </div>
+
+              {scoreViewMode !== 'cbt' && (
+                <button
+                  type="button"
+                  onClick={() => setIsReportGroupExpanded((prev) => !prev)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs border bg-white hover:bg-indigo-50 text-indigo-950 border-indigo-200"
+                >
+                  <Layers size={13} className="text-indigo-600" />
+                  <span>{currentMatrix.generalHeading || 'Termly Report'}:</span>
+                  <span className="text-[11px] font-semibold text-indigo-600">
+                    {isReportGroupExpanded ? 'Click to Collapse' : 'Click to View CA1, CA2 & Exam'}
+                  </span>
+                  {isReportGroupExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
-                  <th className="py-3.5 px-4">Roll / Reg No</th>
-                  <th className="py-3.5 px-4 min-w-[180px]">Student Name</th>
-
-                  {/* CBT Online Exam Score Column (Shown in 'all' and 'cbt' modes) */}
-                  {scoreViewMode !== 'marks' && (
+                {scoreViewMode === 'cbt' ? (
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                    <th className="py-3.5 px-4">Roll / Reg No</th>
+                    <th className="py-3.5 px-4 min-w-[180px]">Student Name</th>
                     <th className="py-3.5 px-4 text-center bg-cyan-50/60 text-cyan-900 border-x border-cyan-100/70 font-black">
                       <span className="flex items-center justify-center gap-1.5">
                         <Monitor size={13} className="text-cyan-600" />
                         CBT Online Score
                       </span>
                     </th>
-                  )}
+                    <th className="py-3.5 px-4 text-center">CBT Online Exam Title</th>
+                    <th className="py-3.5 px-4 text-center">Source & Status</th>
+                    <th className="py-3.5 px-4 text-center">Quick Action</th>
+                  </tr>
+                ) : (
+                  <>
+                    {/* Tier 1 Header */}
+                    <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                      <th rowSpan={2} className="py-3.5 px-4 border-r border-slate-100">Roll / Reg No</th>
+                      <th rowSpan={2} className="py-3.5 px-4 min-w-[180px] border-r border-slate-100">Student Name</th>
 
-                  {/* CBT Specific Columns */}
-                  {scoreViewMode === 'cbt' && (
-                    <>
-                      <th className="py-3.5 px-4 text-center">CBT Online Exam Title</th>
-                      <th className="py-3.5 px-4 text-center">Source & Status</th>
-                      <th className="py-3.5 px-4 text-center">Quick Action</th>
-                    </>
-                  )}
+                      {scoreViewMode !== 'marks' && (
+                        <th rowSpan={2} className="py-3.5 px-4 text-center bg-cyan-50/60 text-cyan-900 border-r border-cyan-100 font-black">
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Monitor size={13} className="text-cyan-600" />
+                            CBT Online Score
+                          </span>
+                        </th>
+                      )}
 
-                  {/* Matrix Component Headers (Shown in 'all' and 'marks' modes) */}
-                  {scoreViewMode !== 'cbt' &&
-                    currentMatrix?.components.map((comp) => (
-                      <th key={comp.code || comp.name} className="py-3.5 px-4 text-center">
-                        {comp.name} ({comp.maxMarks} Max)
+                      {/* General Heading Umbrella Header */}
+                      <th
+                        colSpan={isReportGroupExpanded ? (currentMatrix?.components.length || 1) : 1}
+                        onClick={() => setIsReportGroupExpanded((prev) => !prev)}
+                        className="py-2.5 px-4 text-center bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-200/80 cursor-pointer hover:bg-indigo-100 transition select-none group border-r border-slate-100"
+                        title="Click to toggle breakdown columns (CA 1, CA 2, Examination)"
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <Layers size={13} className="text-indigo-600 group-hover:scale-110 transition-transform" />
+                          <span className="font-black text-indigo-950 text-xs normal-case tracking-normal">
+                            {currentMatrix?.generalHeading || 'Termly Report'}
+                          </span>
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-600 text-white shadow-2xs">
+                            {isReportGroupExpanded ? (
+                              <>
+                                <ChevronUp size={11} /> Collapse Breakdown
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown size={11} /> Click to View All
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-indigo-600/80 font-medium normal-case mt-0.5">
+                          {isReportGroupExpanded
+                            ? `(Showing ${currentMatrix?.components?.length || 0} columns: ${currentMatrix?.components?.map((c) => c.name || c.code).join(', ')})`
+                            : `(Click to show CA1, CA2 & Examination — ${matrixTotalMarks} Marks)`}
+                        </div>
                       </th>
-                    ))}
 
-                  {/* Total & Grade Status (Shown in 'all' and 'marks' modes) */}
-                  {scoreViewMode !== 'cbt' && (
-                    <>
-                      <th className="py-3.5 px-4 text-center font-black text-slate-900">
+                      <th rowSpan={2} className="py-3.5 px-4 text-center font-black text-slate-900 border-r border-slate-100">
                         Total Score ({matrixTotalMarks})
                       </th>
-                      <th className="py-3.5 px-4 text-center">Grade Status</th>
-                      <th className="py-3.5 px-4 text-center">Absent</th>
-                    </>
-                  )}
-                </tr>
+                      <th rowSpan={2} className="py-3.5 px-4 text-center border-r border-slate-100">Grade Status</th>
+                      <th rowSpan={2} className="py-3.5 px-4 text-center">Absent</th>
+                    </tr>
+
+                    {/* Tier 2 Header */}
+                    <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                      {isReportGroupExpanded ? (
+                        currentMatrix?.components.map((comp) => (
+                          <th key={comp.code || comp.name} className="py-2.5 px-4 text-center bg-white border-r border-slate-100 last:border-r-0">
+                            <div className="font-black text-slate-900">{comp.name}</div>
+                            <div className="text-[10px] text-emerald-700 font-mono">Max: {comp.maxMarks}</div>
+                          </th>
+                        ))
+                      ) : (
+                        <th
+                          onClick={() => setIsReportGroupExpanded(true)}
+                          className="py-2.5 px-4 text-center bg-indigo-50/40 cursor-pointer hover:bg-indigo-100/60 transition"
+                          title="Click to expand individual assessment components"
+                        >
+                          <div className="font-black text-indigo-900 text-[11px]">Consolidated Assessment Score</div>
+                          <div className="text-[10px] text-indigo-600 font-mono">Combined Max: {matrixTotalMarks}</div>
+                        </th>
+                      )}
+                    </tr>
+                  </>
+                )}
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredStudents.map((stu) => {
@@ -1250,27 +1342,41 @@ export function MarksEntry() {
                         </>
                       )}
 
-                      {/* Component Inputs (Shown in 'all' and 'marks' modes) */}
-                      {scoreViewMode !== 'cbt' &&
-                        currentMatrix?.components.map((comp) => {
-                          const compKey = comp.code || comp.name
-                          const scoreVal = markState.components?.[compKey] ?? ''
+                      {/* Component Inputs (when expanded) vs Consolidated (when collapsed) */}
+                      {scoreViewMode !== 'cbt' && (
+                        isReportGroupExpanded ? (
+                          currentMatrix?.components.map((comp) => {
+                            const compKey = comp.code || comp.name
+                            const scoreVal = markState.components?.[compKey] ?? ''
 
-                          return (
-                            <td key={compKey} className="py-3 px-4 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max={comp.maxMarks}
-                                disabled={markState.absent}
-                                placeholder="0"
-                                value={scoreVal}
-                                onChange={(e) => handleComponentScoreChange(stu.id, compKey, e.target.value)}
-                                className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200/80 rounded-lg text-center font-bold text-slate-900 outline-none focus:border-[#0063a6] focus:bg-white disabled:opacity-40"
-                              />
-                            </td>
-                          )
-                        })}
+                            return (
+                              <td key={compKey} className="py-3 px-4 text-center border-r border-slate-100">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={comp.maxMarks}
+                                  disabled={markState.absent}
+                                  placeholder="0"
+                                  value={scoreVal}
+                                  onChange={(e) => handleComponentScoreChange(stu.id, compKey, e.target.value)}
+                                  className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200/80 rounded-lg text-center font-bold text-slate-900 outline-none focus:border-[#0063a6] focus:bg-white disabled:opacity-40"
+                                />
+                              </td>
+                            )
+                          })
+                        ) : (
+                          <td
+                            onClick={() => setIsReportGroupExpanded(true)}
+                            className="py-3 px-4 text-center bg-indigo-50/20 cursor-pointer hover:bg-indigo-50/50 transition border-r border-slate-100"
+                            title="Click to expand and edit CA 1, CA 2, Examination"
+                          >
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-xs font-bold font-mono text-indigo-950">
+                              <span>{markState.absent ? 'ABS' : `${totalScore} / ${matrixTotalMarks}`}</span>
+                              <span className="text-[10px] text-indigo-600 underline">Edit</span>
+                            </div>
+                          </td>
+                        )
+                      )}
 
                       {/* Total (Shown in 'all' and 'marks' modes) */}
                       {scoreViewMode !== 'cbt' && (

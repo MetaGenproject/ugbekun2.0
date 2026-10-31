@@ -25,6 +25,9 @@ import {
   Copy,
   EyeOff,
   Eye,
+  Clock,
+  Calculator,
+  Lock,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
@@ -46,6 +49,7 @@ interface MatrixComponent {
   key: string
   name: string
   maxMarks: number
+  code?: string
 }
 
 interface EvaluationMatrixInfo {
@@ -73,7 +77,9 @@ interface GradingScaleInfo {
 interface ExamItem {
   id: number
   name: string
-  termId?: number
+  displayName?: string
+  termId?: number | null
+  sessionId?: number
 }
 
 interface TabulationRow {
@@ -89,6 +95,8 @@ interface TabulationRow {
   subjectBreakdowns?: Record<number, Record<string, number>>
   subjectGrades?: Record<number, { grade: string; remark: string; color: string }>
   totalScore: number
+  totalCA?: number
+  totalExam?: number
   averageScore: number
   grade?: string
   gradeRemark?: string
@@ -107,12 +115,29 @@ interface TabulationRow {
   parentPassword?: string | null
 }
 
+interface AssessmentComponentItem {
+  key: string
+  code: string
+  name: string
+  maxMarks: number
+  category: 'CA' | 'EXAM'
+}
+
+interface SessionItem {
+  id: number
+  name: string
+  isCurrent?: boolean
+}
+
 interface ClassReportsData {
   classSummary: {
     classId: number
     className: string
     sectionId?: number
     sectionName: string
+    sessionId?: number
+    sessionName?: string
+    termId?: number
     totalStudents: number
     classAverage: number
     highestScore: number
@@ -120,8 +145,13 @@ interface ClassReportsData {
     passRate?: number
     passCount?: number
   }
+  sessionId?: number
+  termId?: number
+  activeSession?: { id: number; name: string }
+  sessions?: SessionItem[]
   selectedExamId?: number | null
   exams?: ExamItem[]
+  assessmentComponents?: AssessmentComponentItem[]
   evaluationMatrix?: EvaluationMatrixInfo | null
   gradingScale?: GradingScaleInfo | null
   offeredSubjects: SubjectItem[]
@@ -163,8 +193,13 @@ export function TeacherBroadReports() {
   const [classes, setClasses] = useState<AssignedClass[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('')
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [selectedTermId, setSelectedTermId] = useState<string>('1')
   const [selectedExamId, setSelectedExamId] = useState<string>('')
-  const [activeTab, setActiveTab] = useState<'tabulation' | 'performance' | 'credentials' | 'attendance'>('tabulation')
+  const [availableSessions, setAvailableSessions] = useState<SessionItem[]>([])
+  const [activeTab, setActiveTab] = useState<'tabulation' | 'performance' | 'credentials' | 'attendance' | 'totalSummary'>('tabulation')
+  const [summarySubjectFilter, setSummarySubjectFilter] = useState<string>('')
+  const [summaryViewMode, setSummaryViewMode] = useState<'breakdown' | 'compact'>('breakdown')
 
   const [reportsData, setReportsData] = useState<ClassReportsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -198,6 +233,12 @@ export function TeacherBroadReports() {
                 initialClassId = String(ctx.classId)
                 initialSectionId = ctx.sectionId ? String(ctx.sectionId) : ''
               }
+              if (ctx.sessionId) {
+                setSelectedSessionId(String(ctx.sessionId))
+              }
+              if (ctx.termId) {
+                setSelectedTermId(String(ctx.termId))
+              }
             }
           } catch {
             // ignore
@@ -219,23 +260,40 @@ export function TeacherBroadReports() {
   useEffect(() => {
     const handleContextSwitch = (e: any) => {
       const ctx = e.detail
-      if (!ctx || !ctx.classId) return
-      setSelectedClassId(String(ctx.classId))
-      setSelectedSectionId(ctx.sectionId ? String(ctx.sectionId) : '')
+      if (!ctx) return
+      if (ctx.classId) setSelectedClassId(String(ctx.classId))
+      if (ctx.sectionId !== undefined) setSelectedSectionId(ctx.sectionId ? String(ctx.sectionId) : '')
+      if (ctx.sessionId) setSelectedSessionId(String(ctx.sessionId))
+      if (ctx.termId) setSelectedTermId(String(ctx.termId))
     }
 
     window.addEventListener('ugbekun-context-changed', handleContextSwitch)
     return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
   }, [])
 
-  // 2. Fetch Class Reports when selected class, section, or exam changes
-  const fetchReports = async (overrideExamId?: string) => {
-    if (!selectedClassId) return
+  // 2. Fetch Class Reports when selected class, section, session, term, or exam changes
+  const fetchReports = async (
+    overrideClassId?: string,
+    overrideSectionId?: string,
+    overrideSessionId?: string,
+    overrideTermId?: string,
+    overrideExamId?: string
+  ) => {
+    const classToFetch = overrideClassId !== undefined ? overrideClassId : selectedClassId
+    if (!classToFetch) return
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      params.append('classId', selectedClassId)
-      if (selectedSectionId) params.append('sectionId', selectedSectionId)
+      params.append('classId', classToFetch)
+
+      const sectionToFetch = overrideSectionId !== undefined ? overrideSectionId : selectedSectionId
+      if (sectionToFetch) params.append('sectionId', sectionToFetch)
+
+      const sessionToFetch = overrideSessionId !== undefined ? overrideSessionId : selectedSessionId
+      if (sessionToFetch) params.append('sessionId', sessionToFetch)
+
+      const termToFetch = overrideTermId !== undefined ? overrideTermId : selectedTermId
+      if (termToFetch) params.append('termId', termToFetch)
 
       const examToFetch = overrideExamId !== undefined ? overrideExamId : selectedExamId
       if (examToFetch) params.append('examId', examToFetch)
@@ -246,8 +304,19 @@ export function TeacherBroadReports() {
 
       if (res.success) {
         setReportsData(res)
-        // Auto-sync selectedExamId from backend response if none selected
-        if (!examToFetch && res.selectedExamId) {
+        if (res.sessions && res.sessions.length > 0) {
+          setAvailableSessions(res.sessions)
+        }
+        if (!sessionToFetch && res.sessionId) {
+          setSelectedSessionId(String(res.sessionId))
+        }
+        if (!termToFetch && res.termId) {
+          setSelectedTermId(String(res.termId))
+        }
+        // Auto-sync selectedExamId from backend response if none selected or if explicit override provided
+        if (overrideExamId !== undefined && overrideExamId) {
+          setSelectedExamId(String(overrideExamId))
+        } else if (!selectedExamId && res.selectedExamId) {
           setSelectedExamId(String(res.selectedExamId))
         }
       }
@@ -263,7 +332,7 @@ export function TeacherBroadReports() {
     if (selectedClassId) {
       fetchReports()
     }
-  }, [selectedClassId, selectedSectionId, selectedExamId])
+  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId])
 
   // Print Tabulation Sheet
   const handlePrint = () => {
@@ -278,6 +347,8 @@ export function TeacherBroadReports() {
       const params = new URLSearchParams()
       params.append('classId', selectedClassId)
       if (selectedSectionId) params.append('sectionId', selectedSectionId)
+      if (selectedSessionId) params.append('sessionId', selectedSessionId)
+      if (selectedTermId) params.append('termId', selectedTermId)
 
       const classNameSafe = classSummary.className?.replace(/\s+/g, '_') || 'Class'
       await apiSlice.download(
@@ -342,6 +413,50 @@ export function TeacherBroadReports() {
   const matrixComponents = reportsData?.evaluationMatrix?.components || []
   const availableExams = reportsData?.exams || []
 
+  // Assessment components configured by school admin for Total Score Summary
+  const totalSummaryComponents: AssessmentComponentItem[] =
+    reportsData?.assessmentComponents && reportsData.assessmentComponents.length > 0
+      ? reportsData.assessmentComponents
+      : reportsData?.evaluationMatrix?.components && reportsData.evaluationMatrix.components.length > 0
+      ? reportsData.evaluationMatrix.components.map((c, idx) => ({
+          key: String(c.key || c.code || idx + 1),
+          code: String(c.code || c.key || `CA${idx + 1}`).toUpperCase(),
+          name: c.name || `Component ${idx + 1}`,
+          maxMarks: c.maxMarks || 20,
+          category: ((c.code || c.name || '').toLowerCase().includes('exam') ? 'EXAM' : 'CA') as 'CA' | 'EXAM',
+        }))
+      : [
+          { key: 'CA1', code: 'CA1', name: 'Continuous Assessment 1', maxMarks: 20, category: 'CA' },
+          { key: 'CA2', code: 'CA2', name: 'Continuous Assessment 2', maxMarks: 20, category: 'CA' },
+          { key: 'EXAM', code: 'EXAM', name: 'Terminal Examination', maxMarks: 60, category: 'EXAM' },
+        ]
+
+  const totalSummaryMaxMarks = totalSummaryComponents.reduce((acc, c) => acc + (c.maxMarks || 0), 0) || 100
+
+  // Selected subject for subject-specific continuous assessment view
+  const selectedSummarySubject = summarySubjectFilter
+    ? reportsData?.offeredSubjects.find((s) => String(s.id) === String(summarySubjectFilter))
+    : null
+
+  // Class KPI calculations for Total Score Summary
+  const classAvgCA =
+    reportsData?.tabulation && reportsData.tabulation.length > 0
+      ? Math.round(
+          (reportsData.tabulation.reduce((sum, r) => sum + (r.totalCA || 0), 0) /
+            reportsData.tabulation.length) *
+            10
+        ) / 10
+      : 0
+
+  const classAvgExam =
+    reportsData?.tabulation && reportsData.tabulation.length > 0
+      ? Math.round(
+          (reportsData.tabulation.reduce((sum, r) => sum + (r.totalExam || 0), 0) /
+            reportsData.tabulation.length) *
+            10
+        ) / 10
+      : 0
+
   return (
     <div className="space-y-6 pb-12 font-sans">
       {/* Header Banner */}
@@ -377,19 +492,81 @@ export function TeacherBroadReports() {
         </div>
       </div>
 
-      {/* Class Selection & Exam Matrix Controls */}
+      {/* Session, Term, Class, Section & Exam Controls */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4 print:hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-          {/* Class Select */}
-          <div className="sm:col-span-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+          {/* 1. Academic Session */}
+          <div className="lg:col-span-3 sm:col-span-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Academic Session <span className="text-rose-500">*</span></span>
+              <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200">
+                session
+              </span>
+            </label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 focus-within:ring-2 focus-within:ring-blue-500">
+              <Calendar size={15} className="text-blue-600 shrink-0" />
+              <select
+                value={selectedSessionId}
+                onChange={(e) => {
+                  const newSession = e.target.value
+                  setSelectedSessionId(newSession)
+                  setSelectedExamId('')
+                  fetchReports(undefined, undefined, newSession, selectedTermId, '')
+                }}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                {availableSessions.length === 0 ? (
+                  <option value="">{reportsData?.activeSession?.name || 'Current Session'}</option>
+                ) : (
+                  availableSessions.map((s) => (
+                    <option key={`sess-${s.id}`} value={s.id}>
+                      {s.name} {s.isCurrent ? '★ (Active)' : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* 2. Academic Term */}
+          <div className="lg:col-span-2 sm:col-span-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Academic Term <span className="text-rose-500">*</span></span>
+              <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200">
+                term
+              </span>
+            </label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 h-11 focus-within:ring-2 focus-within:ring-blue-500">
+              <Clock size={15} className="text-indigo-600 shrink-0" />
+              <select
+                value={selectedTermId}
+                onChange={(e) => {
+                  const newTerm = e.target.value
+                  setSelectedTermId(newTerm)
+                  setSelectedExamId('')
+                  fetchReports(undefined, undefined, selectedSessionId, newTerm, '')
+                }}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                <option value="1">1st Term</option>
+                <option value="2">2nd Term</option>
+                <option value="3">3rd Term</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 3. Class Select */}
+          <div className="lg:col-span-3 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
               Assigned Class <span className="text-rose-500">*</span>
             </label>
             <select
               value={selectedClassId}
               onChange={(e) => {
-                setSelectedClassId(e.target.value)
+                const newClass = e.target.value
+                setSelectedClassId(newClass)
                 setSelectedSectionId('')
+                fetchReports(newClass, '', selectedSessionId, selectedTermId, selectedExamId)
               }}
               className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -401,14 +578,18 @@ export function TeacherBroadReports() {
             </select>
           </div>
 
-          {/* Section Select */}
-          <div className="sm:col-span-3">
+          {/* 4. Section Select */}
+          <div className="lg:col-span-2 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
               Section
             </label>
             <select
               value={selectedSectionId}
-              onChange={(e) => setSelectedSectionId(e.target.value)}
+              onChange={(e) => {
+                const newSec = e.target.value
+                setSelectedSectionId(newSec)
+                fetchReports(selectedClassId, newSec, selectedSessionId, selectedTermId, selectedExamId)
+              }}
               className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="">All Sections</option>
@@ -420,39 +601,31 @@ export function TeacherBroadReports() {
             </select>
           </div>
 
-          {/* Exam Select (Per Exam Matrix Tabulation) */}
-          <div className="sm:col-span-3">
+          {/* 5. Exam Select (Examination Matrix Tabulation) */}
+          <div className="lg:col-span-2 sm:col-span-2">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Examination Period</span>
-              <span className="text-[10px] text-blue-600 font-bold lowercase">per matrix</span>
+              <span>Examination Matrix</span>
+              <span className="text-[10px] text-blue-600 font-bold lowercase">matrix</span>
             </label>
             <select
               value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
+              onChange={(e) => {
+                const newExam = e.target.value
+                setSelectedExamId(newExam)
+                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, newExam)
+              }}
               className="w-full h-11 px-3 bg-blue-50/50 border border-blue-200 rounded-xl text-xs font-bold text-blue-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               {availableExams.length > 0 ? (
                 availableExams.map((ex) => (
                   <option key={`ex-${ex.id}`} value={ex.id}>
-                    {ex.name}
+                    {ex.displayName || ex.name}
                   </option>
                 ))
               ) : (
-                <option value="">All Marks / Default Term</option>
+                <option value="">Select Examination Matrix</option>
               )}
             </select>
-          </div>
-
-          {/* Action Button */}
-          <div className="sm:col-span-2">
-            <button
-              onClick={() => fetchReports()}
-              disabled={loading}
-              className="w-full h-11 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-              <span>Generate</span>
-            </button>
           </div>
         </div>
 
@@ -569,6 +742,18 @@ export function TeacherBroadReports() {
           <Calendar size={14} />
           <span>Attendance Intelligence</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('totalSummary')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'totalSummary'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+          }`}
+        >
+          <Calculator size={14} />
+          <span>Total Score Summary</span>
+        </button>
       </div>
 
       {/* MAIN CONTENT AREA */}
@@ -597,14 +782,20 @@ export function TeacherBroadReports() {
                     <h2 className="text-base font-black text-slate-900 uppercase">
                       {classSummary.className || 'Class'} ({classSummary.sectionName || 'All Sections'}) — Exam Tabulation Sheet
                     </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                      {availableSessions.find((s) => String(s.id) === String(selectedSessionId))?.name || reportsData.activeSession?.name || 'Current Session'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                      {selectedTermId === '1' ? '1st Term' : selectedTermId === '2' ? '2nd Term' : selectedTermId === '3' ? '3rd Term' : `Term ${selectedTermId}`}
+                    </span>
                     {reportsData.selectedExamId && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
-                        {availableExams.find((e) => e.id === reportsData.selectedExamId)?.name || 'Active Exam'}
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
+                        Matrix: {availableExams.find((e) => e.id === reportsData.selectedExamId)?.displayName || availableExams.find((e) => e.id === reportsData.selectedExamId)?.name || 'Active Matrix'}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Total Enrolled: {classSummary.totalStudents || 0} | Subjects Offered: {reportsData.offeredSubjects?.length || 0} | Class Pass Rate: {classSummary.passRate ?? 0}%
+                    Total Enrolled: <span className="font-bold text-slate-700">{classSummary.totalStudents || 0}</span> | Currently Offered Subjects: <span className="font-bold text-slate-700">{reportsData.offeredSubjects?.length || 0}</span> | Class Pass Rate: <span className="font-bold text-slate-700">{classSummary.passRate ?? 0}%</span>
                   </p>
                 </div>
 
@@ -630,6 +821,17 @@ export function TeacherBroadReports() {
                 </div>
               </div>
 
+              {/* No Offered Subjects Notification */}
+              {reportsData.offeredSubjects.length === 0 && (
+                <div className="m-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-3">
+                  <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">No subjects currently assigned/offered for this class in this session.</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">Please ensure subjects are allocated under Subject Allocation or select the session/term when subjects were offered.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Tabulation Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs text-slate-700">
@@ -653,8 +855,10 @@ export function TeacherBroadReports() {
                   <tbody className="divide-y divide-slate-100 font-sans">
                     {filteredTabulation.length === 0 ? (
                       <tr>
-                        <td colSpan={reportsData.offeredSubjects.length + 6} className="p-8 text-center text-slate-400 text-xs">
-                          No students match the current filter.
+                        <td colSpan={reportsData.offeredSubjects.length + 6} className="py-12 px-6 text-center text-slate-400 text-xs">
+                          <Users size={28} className="mx-auto mb-2 opacity-40 text-slate-400" />
+                          <p className="font-bold text-slate-600">No active students enrolled in this class for the selected session.</p>
+                          <p className="text-[11px] text-slate-400 mt-1">If students were enrolled in another academic session, please switch the Academic Session selector above.</p>
                         </td>
                       </tr>
                     ) : (
@@ -1273,6 +1477,395 @@ export function TeacherBroadReports() {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: TOTAL SCORE SUMMARY (NON-EDITABLE ASSESSMENT BREAKDOWN) */}
+          {activeTab === 'totalSummary' && (
+            <div className="space-y-6">
+              {/* Header / Admin Matrix Scheme Banner */}
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-xs">
+                      <Calculator size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-slate-900 uppercase">
+                          Total Score Summary — Assessment & Exam Breakdown
+                        </h3>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          <Lock size={10} />
+                          <span>Non-Editable / Official Lock</span>
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                          {availableSessions.find((s) => String(s.id) === String(selectedSessionId))?.name || reportsData.activeSession?.name || 'Current Session'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                          {selectedTermId === '1' ? '1st Term' : selectedTermId === '2' ? '2nd Term' : selectedTermId === '3' ? '3rd Term' : `Term ${selectedTermId}`}
+                        </span>
+                        {reportsData.selectedExamId && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
+                            Matrix: {availableExams.find((e) => e.id === reportsData.selectedExamId)?.displayName || availableExams.find((e) => e.id === reportsData.selectedExamId)?.name || 'Active Matrix'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Consolidated test and exam scores entered by teachers for the current academic session. Evaluated based on the active assessment matrix set by the school admin.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 print:hidden">
+                    <button
+                      onClick={handlePrint}
+                      className="h-9 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Printer size={13} />
+                      <span>Print Summary</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Admin-Configured Components Scheme Display */}
+                {totalSummaryComponents.length > 0 && (
+                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                      <Layers size={14} className="text-blue-600" />
+                      <span>Admin Assessment Scheme Components:</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {totalSummaryComponents.map((comp) => (
+                        <span
+                          key={`sum-comp-${comp.key}`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs flex items-center gap-1.5 ${
+                            comp.category === 'EXAM'
+                              ? 'bg-blue-50/70 border-blue-200 text-blue-900'
+                              : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+                          }`}
+                        >
+                          <span>{comp.name}</span>
+                          <span className={comp.category === 'EXAM' ? 'text-blue-600 font-mono' : 'text-indigo-600 font-mono'}>
+                            ({comp.maxMarks}pts)
+                          </span>
+                        </span>
+                      ))}
+                      <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-slate-100 text-slate-800 border border-slate-200">
+                        Max Total: {totalSummaryMaxMarks} Marks
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* KPI Statistics Overview */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Class Average CA</span>
+                  <span className="text-xl font-black text-indigo-600 mt-1 block">
+                    {classAvgCA} pts
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Aggregated continuous assessment</span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Class Average Exam</span>
+                  <span className="text-xl font-black text-blue-600 mt-1 block">
+                    {classAvgExam} pts
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Terminal exam score average</span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Overall Total Average</span>
+                  <span className="text-xl font-black text-slate-900 mt-1 block">
+                    {classSummary.classAverage || 0}%
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Combined CA + Exam average</span>
+                </div>
+
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Highest Total Score</span>
+                  <span className="text-xl font-black text-emerald-600 mt-1 block">
+                    {classSummary.highestScore || 0}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Top performer overall mark</span>
+                </div>
+              </div>
+
+              {/* Toolbar & Filters */}
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 print:hidden">
+                <div className="flex items-center gap-3 flex-1 flex-wrap">
+                  {/* Subject Selector */}
+                  <div className="w-full sm:w-72">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Filter by Subject / Roster
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={summarySubjectFilter}
+                        onChange={(e) => setSummarySubjectFilter(e.target.value)}
+                        className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <option value="">All Subjects (Cumulative Roster)</option>
+                        {reportsData.offeredSubjects.map((sub) => (
+                          <option key={`sum-sub-${sub.id}`} value={String(sub.id)}>
+                            {sub.name} ({sub.subjectCode || sub.code || 'SUB'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Student Search */}
+                  <div className="w-full sm:w-64">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Search Student
+                    </label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <input
+                        type="text"
+                        value={filterSearch}
+                        onChange={(e) => setFilterSearch(e.target.value)}
+                        placeholder="Search student or reg no..."
+                        className="w-full h-10 pl-9 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 self-end md:self-auto">
+                  <span className="text-xs font-bold text-slate-500">View:</span>
+                  <div className="inline-flex p-1 bg-slate-100 rounded-xl">
+                    <button
+                      onClick={() => setSummaryViewMode('breakdown')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        summaryViewMode === 'breakdown'
+                          ? 'bg-white text-blue-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Detailed Breakdown
+                    </button>
+                    <button
+                      onClick={() => setSummaryViewMode('compact')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        summaryViewMode === 'compact'
+                          ? 'bg-white text-blue-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Compact Total
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* The Score Summary Table */}
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-slate-900 uppercase">
+                      {selectedSummarySubject
+                        ? `${selectedSummarySubject.name} — Continuous Assessment & Exam Breakdown`
+                        : 'Class Overall Continuous Assessment & Total Examination Roster'}
+                    </h4>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      {filteredTabulation.length} Students
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                    <Lock size={12} className="text-slate-400" />
+                    Read-only verified records
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-100 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                      {selectedSummarySubject ? (
+                        /* Subject Specific Column Headers */
+                        <tr>
+                          <th className="p-3 text-center w-14">Rank</th>
+                          <th className="p-3">Student Name</th>
+                          <th className="p-3">Reg No</th>
+                          {totalSummaryComponents.map((comp) => (
+                            <th key={`th-comp-${comp.key}`} className="p-3 text-center">
+                              <span className="block truncate max-w-[120px]" title={comp.name}>
+                                {comp.name}
+                              </span>
+                              <span className="block text-[9px] font-normal lowercase text-slate-500">
+                                max {comp.maxMarks}
+                              </span>
+                            </th>
+                          ))}
+                          <th className="p-3 text-center font-black bg-blue-50 text-blue-800">Total Score</th>
+                          <th className="p-3 text-center font-black bg-indigo-50 text-indigo-800">Grade</th>
+                          <th className="p-3 text-center">Remark</th>
+                        </tr>
+                      ) : (
+                        /* All Subjects Combined Headers */
+                        <tr>
+                          <th className="p-3 text-center w-14">Rank</th>
+                          <th className="p-3">Student Name</th>
+                          <th className="p-3">Reg No</th>
+                          <th className="p-3">Section</th>
+                          {summaryViewMode === 'breakdown' && (
+                            <>
+                              <th className="p-3 text-center font-bold bg-indigo-50/50 text-indigo-800">CA Total</th>
+                              <th className="p-3 text-center font-bold bg-blue-50/50 text-blue-800">Exam Total</th>
+                            </>
+                          )}
+                          <th className="p-3 text-center font-black bg-slate-200/80 text-slate-900">Grand Total</th>
+                          <th className="p-3 text-center font-black bg-blue-50 text-blue-800">Average %</th>
+                          <th className="p-3 text-center font-black bg-indigo-50 text-indigo-800">Grade</th>
+                          <th className="p-3 text-center">Remark</th>
+                        </tr>
+                      )}
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100 font-sans">
+                      {filteredTabulation.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="py-12 px-6 text-center text-slate-400 text-xs">
+                            <Users size={28} className="mx-auto mb-2 opacity-40 text-slate-400" />
+                            <p className="font-bold text-slate-600">No student records found matching filter.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredTabulation.map((row) => {
+                          if (selectedSummarySubject) {
+                            const subId = selectedSummarySubject.id
+                            const breakdown = row.subjectBreakdowns?.[subId] || {}
+                            const subScore = row.subjectScores?.[subId] ?? 0
+                            const subGrade = row.subjectGrades?.[subId]
+
+                            return (
+                              <tr key={`sum-row-${row.studentId}`} className="hover:bg-slate-50 transition">
+                                <td className="p-3 text-center font-black text-slate-600">{row.position}</td>
+                                <td className="p-3 font-bold text-slate-900">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{row.name}</span>
+                                    {row.position <= 3 && (
+                                      <Award size={13} className={row.position === 1 ? 'text-amber-500' : 'text-slate-400'} />
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-3 font-mono text-slate-500 text-[11px]">{row.registerNo}</td>
+
+                                {/* Dynamic Components Entered by Teachers */}
+                                {totalSummaryComponents.map((comp) => {
+                                  const compVal = breakdown[comp.code] ?? breakdown[comp.key] ?? breakdown[comp.name]
+                                  return (
+                                    <td
+                                      key={`comp-val-${row.studentId}-${comp.key}`}
+                                      className="p-3 text-center font-mono font-semibold"
+                                    >
+                                      {compVal !== undefined && compVal !== null ? (
+                                        <span
+                                          className={
+                                            Number(compVal) >= comp.maxMarks * 0.7
+                                              ? 'text-emerald-700 font-bold'
+                                              : Number(compVal) >= comp.maxMarks * 0.5
+                                              ? 'text-slate-800'
+                                              : 'text-rose-600 font-bold'
+                                          }
+                                        >
+                                          {compVal}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300">—</span>
+                                      )}
+                                    </td>
+                                  )
+                                })}
+
+                                <td className="p-3 text-center font-mono font-black text-blue-700 bg-blue-50/40">
+                                  {subScore}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      subGrade?.color === 'emerald'
+                                        ? 'bg-emerald-50 text-emerald-700'
+                                        : subGrade?.color === 'blue'
+                                        ? 'bg-blue-50 text-blue-700'
+                                        : subGrade?.color === 'rose'
+                                        ? 'bg-rose-50 text-rose-700'
+                                        : 'bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {subGrade?.grade || '-'}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center text-slate-600 text-[11px]">
+                                  {subGrade?.remark || '—'}
+                                </td>
+                              </tr>
+                            )
+                          }
+
+                          /* All Subjects Combined Row */
+                          return (
+                            <tr key={`sum-row-${row.studentId}`} className="hover:bg-slate-50 transition">
+                              <td className="p-3 text-center font-black text-slate-600">{row.position}</td>
+                              <td className="p-3 font-bold text-slate-900">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{row.name}</span>
+                                  {row.position <= 3 && (
+                                    <Award size={13} className={row.position === 1 ? 'text-amber-500' : 'text-slate-400'} />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 font-mono text-slate-500 text-[11px]">{row.registerNo}</td>
+                              <td className="p-3 text-slate-600">{row.sectionName}</td>
+
+                              {summaryViewMode === 'breakdown' && (
+                                <>
+                                  <td className="p-3 text-center font-mono font-bold text-indigo-700 bg-indigo-50/20">
+                                    {row.totalCA ?? '—'}
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-bold text-blue-700 bg-blue-50/20">
+                                    {row.totalExam ?? '—'}
+                                  </td>
+                                </>
+                              )}
+
+                              <td className="p-3 text-center font-mono font-black text-slate-900 bg-slate-50">
+                                {row.totalScore}
+                              </td>
+                              <td className="p-3 text-center font-mono font-bold text-blue-700">
+                                {row.averageScore}%
+                              </td>
+                              <td className="p-3 text-center">
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    row.gradeColor === 'emerald'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : row.gradeColor === 'blue'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : row.gradeColor === 'rose'
+                                      ? 'bg-rose-50 text-rose-700'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  {row.grade || '—'}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center text-slate-600 text-[11px]">
+                                {row.gradeRemark || '—'}
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>

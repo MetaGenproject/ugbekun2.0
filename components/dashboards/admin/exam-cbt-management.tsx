@@ -1018,7 +1018,7 @@ export function ExamCbtManagement({ initialTab }: ExamCbtManagementProps) {
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[11px] text-slate-700">
                                   {Array.isArray(ex.manualMarksBreakdown) && ex.manualMarksBreakdown.length > 0
-                                    ? ex.manualMarksBreakdown.map((m: any) => `${m.componentName} (${m.marks}m${m.averageMark !== undefined ? `, avg:${m.averageMark}m` : ''})`).join(' + ')
+                                    ? ex.manualMarksBreakdown.map((m: any) => `${m.componentName} (${m.marks} Marks${m.averageMark !== undefined ? `, avg: ${m.averageMark} Marks` : ''})`).join(' + ')
                                     : 'Manual Scheme'}
                                 </span>
                                 {ex.remark?.match(/Average:\s*([0-9.]+)/i)?.[1] && (

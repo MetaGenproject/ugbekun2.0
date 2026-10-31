@@ -113,6 +113,10 @@ export function TeacherClassesManager({
             // ignore
           }
 
+          if (!initialSectionId && res.assignedClasses[0].sections && res.assignedClasses[0].sections.length > 0) {
+            initialSectionId = String(res.assignedClasses[0].sections[0].id)
+          }
+
           setSelectedClassId(initialClassId)
           setSelectedSectionId(initialSectionId)
         }
@@ -383,7 +387,18 @@ export function TeacherClassesManager({
             {onNavigate && (
               <>
                 <button
-                  onClick={() => onNavigate('gradebook')}
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(
+                        'ugbekun_teacher_active_context',
+                        JSON.stringify({
+                          classId: Number(selectedClassId),
+                          sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
+                        })
+                      )
+                    } catch {}
+                    onNavigate('gradebook')
+                  }}
                   className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Building2 size={13} className="text-blue-600" />

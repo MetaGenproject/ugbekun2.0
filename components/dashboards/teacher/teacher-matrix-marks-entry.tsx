@@ -20,10 +20,13 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Printer,
   Wand2,
   Wifi,
   WifiOff,
+  CloudOff,
   Laptop,
   ArrowRightLeft,
   School,
@@ -44,6 +47,7 @@ interface EvaluationMatrix {
   id: number
   name: string
   code: string
+  generalHeading?: string
   totalMarks: number
   isDefault?: boolean
   components: MatrixComponent[]
@@ -96,6 +100,30 @@ interface ExamOption {
   name: string
 }
 
+interface SessionOption {
+  id: number
+  name: string
+  isCurrent?: boolean
+}
+
+export interface CbtOptionItem {
+  key: string
+  title: string
+  slot: string
+  componentId?: number | null
+  componentName: string
+  maxMarks: number
+  category: string
+  onlineExamId?: number | null
+  attemptsFound: number
+  scores: Array<{
+    studentId: number
+    rawScore: number | null
+    isAbsent: boolean
+    percentage?: number | null
+  }>
+}
+
 export function TeacherMatrixMarksEntry() {
   // Selector States
   const [classes, setClasses] = useState<ClassOption[]>([])
@@ -103,15 +131,19 @@ export function TeacherMatrixMarksEntry() {
   const [assignedSubjects, setAssignedSubjects] = useState<AssignedSubjectOption[]>([])
   const [exams, setExams] = useState<ExamOption[]>([])
   const [matrices, setMatrices] = useState<EvaluationMatrix[]>([])
+  const [sessions, setSessions] = useState<SessionOption[]>([])
 
   const [selectedClassId, setSelectedClassId] = useState<string>('')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('')
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('')
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [activeSessionName, setActiveSessionName] = useState<string>('')
   const [selectedExamId, setSelectedExamId] = useState<string>('')
   const [selectedMatrixId, setSelectedMatrixId] = useState<string>('')
 
   // Loaded Gradebook Data
   const [matrix, setMatrix] = useState<EvaluationMatrix | null>(null)
+  const [isReportGroupExpanded, setIsReportGroupExpanded] = useState<boolean>(true)
   const [gradingScale, setGradingScale] = useState<any>(null)
   const [studentRows, setStudentRows] = useState<StudentMarksRow[]>([])
   const [initialRowsState, setInitialRowsState] = useState<string>('')
@@ -134,17 +166,10 @@ export function TeacherMatrixMarksEntry() {
   // Auto-Fill CBT Marks Modal State (Workflow 3)
   const [isAutoFillModalOpen, setIsAutoFillModalOpen] = useState(false)
   const [loadingAutoFillScores, setLoadingAutoFillScores] = useState(false)
-  const [selectedAutoFillSlot, setSelectedAutoFillSlot] = useState<'CBT1' | 'CBT2' | 'CBT_EXAM'>('CBT1')
-  const [slotAttemptsData, setSlotAttemptsData] = useState<Record<'CBT1' | 'CBT2' | 'CBT_EXAM', {
-    title: string
-    count: number
-    maxMarks: number
-    scores: Array<{ studentId: number; rawScore: number | null; isAbsent: boolean }>
-  }>>({
-    CBT1: { title: 'CBT 1 (Continuous Assessment 1)', count: 0, maxMarks: 10, scores: [] },
-    CBT2: { title: 'CBT 2 (Continuous Assessment 2)', count: 0, maxMarks: 10, scores: [] },
-    CBT_EXAM: { title: 'Terminal CBT (Examination)', count: 0, maxMarks: 30, scores: [] },
-  })
+  const [cbtOptions, setCbtOptions] = useState<CbtOptionItem[]>([])
+  const [selectedCbtOptionKey, setSelectedCbtOptionKey] = useState<string>('')
+  const [selectedTargetColumnKey, setSelectedTargetColumnKey] = useState<string>('')
+  const [autoFillTargetStudentId, setAutoFillTargetStudentId] = useState<number | null>(null)
 
   // Search & Filter States
   const [studentSearch, setStudentSearch] = useState('')
@@ -154,8 +179,8 @@ export function TeacherMatrixMarksEntry() {
 
   // Buffer storage key
   const bufferKey = useMemo(() => {
-    return `ugbekun_teacher_offline_marks_${selectedClassId}_${selectedSubjectId}_${selectedMatrixId || 'default'}`
-  }, [selectedClassId, selectedSubjectId, selectedMatrixId])
+    return `ugbekun_teacher_offline_marks_${selectedSessionId || 'cur'}_${selectedClassId}_${selectedSectionId || 'all'}_${selectedSubjectId}_${selectedMatrixId || 'default'}`
+  }, [selectedSessionId, selectedClassId, selectedSectionId, selectedSubjectId, selectedMatrixId])
 
   // Helper to resolve score to grade badge
   const getGradeForScore = (score: number) => {
@@ -222,7 +247,12 @@ export function TeacherMatrixMarksEntry() {
       try {
         setLoadingConfig(true)
         const [classesRes, subjectsRes, examsRes, matricesRes] = await Promise.all([
-          apiSlice.get<{ success: boolean; assignedClasses: ClassOption[] }>(endpoints.teacher.roster),
+          apiSlice.get<{
+            success: boolean
+            assignedClasses: ClassOption[]
+            activeSession?: { id: number; name: string }
+            sessions?: SessionOption[]
+          }>(endpoints.teacher.roster),
           apiSlice.get<{
             success: boolean
             subjects: SubjectOption[]
@@ -239,6 +269,16 @@ export function TeacherMatrixMarksEntry() {
         setClasses(assignedClasses)
         setSubjects(branchSubjects)
         setAssignedSubjects(teacherAssignedSubjects)
+
+        // Session Initialization (Configured by School Admin)
+        if (classesRes.success && (classesRes as any).sessions && Array.isArray((classesRes as any).sessions)) {
+          setSessions((classesRes as any).sessions)
+        }
+        let initialSessionId = ''
+        if (classesRes.success && (classesRes as any).activeSession) {
+          initialSessionId = String((classesRes as any).activeSession.id)
+          setActiveSessionName((classesRes as any).activeSession.name)
+        }
 
         if (matricesRes.success && Array.isArray(matricesRes.matrices)) {
           setMatrices(matricesRes.matrices)
@@ -264,6 +304,9 @@ export function TeacherMatrixMarksEntry() {
               if (ctx.capacity === 'SUBJECT_TEACHER' && ctx.subjectId) {
                 initialSubjectId = String(ctx.subjectId)
               }
+              if (ctx.sessionId) {
+                initialSessionId = String(ctx.sessionId)
+              }
             }
           }
         } catch {
@@ -274,8 +317,26 @@ export function TeacherMatrixMarksEntry() {
           initialClassId = String(assignedClasses[0].id)
         }
 
+        // AUTOMATIC SECTION RESOLUTION:
+        // Automatically default to teacher's assigned section or the class's first admin-configured section (e.g. Bronze)
+        if (initialClassId) {
+          const cid = Number(initialClassId)
+          const targetClass = assignedClasses.find((c) => c.id === cid)
+          if (!initialSectionId) {
+            const assignedSec = teacherAssignedSubjects.find((as) => as.classId === cid && as.sectionId)
+            if (assignedSec?.sectionId) {
+              initialSectionId = String(assignedSec.sectionId)
+            } else if (targetClass?.sections && targetClass.sections.length > 0) {
+              initialSectionId = String(targetClass.sections[0].id)
+            }
+          }
+        }
+
         setSelectedClassId(initialClassId)
         setSelectedSectionId(initialSectionId)
+        if (initialSessionId) {
+          setSelectedSessionId(initialSessionId)
+        }
 
         // Determine initial subject for this class
         if (initialSubjectId) {
@@ -298,6 +359,25 @@ export function TeacherMatrixMarksEntry() {
 
     loadInitialContext()
   }, [])
+
+  // Optimized class change handler with automatic section pre-selection
+  const handleClassChange = (newClassId: string) => {
+    setSelectedClassId(newClassId)
+    if (!newClassId) {
+      setSelectedSectionId('')
+      return
+    }
+    const cid = Number(newClassId)
+    const targetClass = classes.find((c) => c.id === cid)
+    const assignedSec = assignedSubjects.find((as) => as.classId === cid && as.sectionId)
+    if (assignedSec?.sectionId) {
+      setSelectedSectionId(String(assignedSec.sectionId))
+    } else if (targetClass?.sections && targetClass.sections.length > 0) {
+      setSelectedSectionId(String(targetClass.sections[0].id))
+    } else {
+      setSelectedSectionId('')
+    }
+  }
 
   // Dynamically compute subjects offered by the selected class
   const availableSubjects = useMemo(() => {
@@ -380,6 +460,7 @@ export function TeacherMatrixMarksEntry() {
       if (selectedSectionId) params.append('sectionId', selectedSectionId)
       if (selectedExamId) params.append('examId', selectedExamId)
       if (selectedMatrixId) params.append('matrixId', selectedMatrixId)
+      if (selectedSessionId) params.append('sessionId', selectedSessionId)
 
       const res = await apiSlice.get<{
         success: boolean
@@ -389,6 +470,8 @@ export function TeacherMatrixMarksEntry() {
         students: any[]
         marksMap?: Record<number, any>
         exams?: ExamOption[]
+        activeSession?: { id: number; name: string }
+        sessions?: SessionOption[]
         classData?: { id: number; name: string; evaluationMatrixId?: number | null }
       }>(endpoints.teacher.marksEntry(params.toString()))
 
@@ -399,6 +482,15 @@ export function TeacherMatrixMarksEntry() {
         }
         if (res.gradingScale) {
           setGradingScale(res.gradingScale)
+        }
+        if ((res as any).sessions && Array.isArray((res as any).sessions) && (res as any).sessions.length > 0) {
+          setSessions((res as any).sessions)
+        }
+        if ((res as any).activeSession) {
+          setActiveSessionName((res as any).activeSession.name)
+          if (!selectedSessionId) {
+            setSelectedSessionId(String((res as any).activeSession.id))
+          }
         }
 
         // Align matrix selector
@@ -478,12 +570,12 @@ export function TeacherMatrixMarksEntry() {
     }
   }
 
-  // Auto-fetch when Class, Subject, Section, Exam, or Matrix changes
+  // Auto-fetch when Class, Subject, Section, Exam, Matrix, or Session changes
   useEffect(() => {
     if (selectedClassId && selectedSubjectId) {
       fetchMarksSheet()
     }
-  }, [selectedClassId, selectedSubjectId, selectedSectionId, selectedExamId, selectedMatrixId])
+  }, [selectedClassId, selectedSubjectId, selectedSectionId, selectedExamId, selectedMatrixId, selectedSessionId])
 
   // Handle Score Input Change for a student component
   const handleScoreChange = (targetStudentId: number, compKey: string, value: string) => {
@@ -547,54 +639,113 @@ export function TeacherMatrixMarksEntry() {
     setHasUnsavedChanges(true)
   }
 
+  // Helper to map an exam setup CBT option to the corresponding assessment column on the student desk
+  const getMatchingMatrixComponent = (optStr: string, comps: MatrixComponent[]): string => {
+    if (!comps || comps.length === 0) return ''
+    const s = optStr.toLowerCase().trim()
+
+    // 1. Exact match by name or code
+    const exact = comps.find((c) => (c.name && c.name.toLowerCase() === s) || (c.code && c.code.toLowerCase() === s))
+    if (exact) return exact.code || exact.name
+
+    // 2. Specific matching for CBT 1 / CA 1
+    if (/cbt[\s_-]*1|ca[\s_-]*1|first|1st/i.test(s)) {
+      const match1 = comps.find((c) => /cbt[\s_-]*1|ca[\s_-]*1|first|1st/i.test(c.name || c.code))
+      if (match1) return match1.code || match1.name
+      return comps[0]?.code || comps[0]?.name || ''
+    }
+
+    // 3. Specific matching for CBT 2 / CA 2
+    if (/cbt[\s_-]*2|ca[\s_-]*2|second|2nd/i.test(s)) {
+      const match2 = comps.find((c) => /cbt[\s_-]*2|ca[\s_-]*2|second|2nd/i.test(c.name || c.code))
+      if (match2) return match2.code || match2.name
+      if (comps.length > 1) return comps[1]?.code || comps[1]?.name || ''
+    }
+
+    // 4. Specific matching for Examination / Terminal
+    if (/exam|terminal|end/i.test(s)) {
+      const matchExam = comps.find((c) => /exam|terminal/i.test(c.name || c.code))
+      if (matchExam) return matchExam.code || matchExam.name
+      return comps[comps.length - 1]?.code || comps[comps.length - 1]?.name || ''
+    }
+
+    // 5. General substring match
+    const sub = comps.find((c) => (c.name && c.name.toLowerCase().includes(s)) || (c.code && c.code.toLowerCase().includes(s)))
+    if (sub) return sub.code || sub.name
+
+    return comps[0]?.code || comps[0]?.name || ''
+  }
+
   // Auto-Fill CBT Marks Handler (Workflow 3)
-  const handleOpenAutoFillModal = async () => {
+  const handleOpenAutoFillModal = async (targetStudentId?: number) => {
     if (!selectedClassId || !selectedSubjectId) {
       toast.error('Please select both a Classroom and Subject first.')
       return
     }
 
+    setAutoFillTargetStudentId(targetStudentId ?? null)
     setIsAutoFillModalOpen(true)
     setLoadingAutoFillScores(true)
 
     try {
-      const baseQs = `classId=${selectedClassId}&subjectId=${selectedSubjectId}${selectedSectionId ? `&sectionId=${selectedSectionId}` : ''}`
-      const [resCbt1, resCbt2, resExam] = await Promise.all([
-        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
-          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT1`)
-        ).catch(() => ({ success: false, slot: 'CBT1', examTitle: 'CBT 1', maxMarks: 10, attemptsFound: 0, scores: [] })),
-        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
-          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT2`)
-        ).catch(() => ({ success: false, slot: 'CBT2', examTitle: 'CBT 2', maxMarks: 10, attemptsFound: 0, scores: [] })),
-        apiSlice.get<{ success: boolean; slot: string; examTitle: string; maxMarks: number; attemptsFound: number; scores: any[] }>(
-          endpoints.teacher.cbtAttempts(`${baseQs}&slot=CBT_EXAM`)
-        ).catch(() => ({ success: false, slot: 'CBT_EXAM', examTitle: 'Terminal CBT', maxMarks: 30, attemptsFound: 0, scores: [] })),
-      ])
+      const baseQs = `classId=${selectedClassId}&subjectId=${selectedSubjectId}${selectedSectionId ? `&sectionId=${selectedSectionId}` : ''}${selectedSessionId ? `&sessionId=${selectedSessionId}` : ''}`
+      const res = await apiSlice.get<{
+        success: boolean
+        options?: CbtOptionItem[]
+        scores?: any[]
+        maxMarks?: number
+        examTitle?: string
+        slot?: string
+      }>(endpoints.teacher.cbtAttempts(baseQs))
 
-      setSlotAttemptsData({
-        CBT1: {
-          title: resCbt1.examTitle || 'CBT 1 (Continuous Assessment 1)',
-          count: resCbt1.attemptsFound || (resCbt1.scores ? resCbt1.scores.length : 0),
-          maxMarks: resCbt1.maxMarks || 10,
-          scores: resCbt1.scores || [],
-        },
-        CBT2: {
-          title: resCbt2.examTitle || 'CBT 2 (Continuous Assessment 2)',
-          count: resCbt2.attemptsFound || (resCbt2.scores ? resCbt2.scores.length : 0),
-          maxMarks: resCbt2.maxMarks || 10,
-          scores: resCbt2.scores || [],
-        },
-        CBT_EXAM: {
-          title: resExam.examTitle || 'Terminal CBT (Examination)',
-          count: resExam.attemptsFound || (resExam.scores ? resExam.scores.length : 0),
-          maxMarks: resExam.maxMarks || 30,
-          scores: resExam.scores || [],
-        },
-      })
+      let opts: CbtOptionItem[] = []
+      if (res.success && Array.isArray(res.options) && res.options.length > 0) {
+        opts = res.options
+      } else {
+        opts = [
+          {
+            key: 'CBT1',
+            title: 'CBT 1 (Continuous Assessment 1)',
+            slot: 'CBT1',
+            componentName: 'CBT 1',
+            maxMarks: 10,
+            category: 'CA',
+            attemptsFound: 0,
+            scores: [],
+          },
+          {
+            key: 'CBT2',
+            title: 'CBT 2 (Continuous Assessment 2)',
+            slot: 'CBT2',
+            componentName: 'CBT 2',
+            maxMarks: 10,
+            category: 'CA',
+            attemptsFound: 0,
+            scores: [],
+          },
+          {
+            key: 'CBT_EXAM',
+            title: 'Terminal CBT (Examination)',
+            slot: 'CBT_EXAM',
+            componentName: 'Terminal CBT',
+            maxMarks: 30,
+            category: 'EXAM',
+            attemptsFound: 0,
+            scores: [],
+          },
+        ]
+      }
 
-      if ((resCbt1.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT1')
-      else if ((resCbt2.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT2')
-      else if ((resExam.attemptsFound || 0) > 0) setSelectedAutoFillSlot('CBT_EXAM')
+      setCbtOptions(opts)
+
+      // Choose default active option (first with scores or first option)
+      const bestOpt = opts.find((o) => o.attemptsFound > 0) || opts[0]
+      setSelectedCbtOptionKey(bestOpt.key)
+
+      // Auto-target the matching assessment column on the student desk
+      const comps = matrix?.components || []
+      const matchedCol = getMatchingMatrixComponent(bestOpt.title || bestOpt.slot, comps)
+      setSelectedTargetColumnKey(matchedCol)
     } catch (err) {
       console.error('Failed to load CBT attempts for auto-fill:', err)
       toast.error('Failed to query online exam attempts.')
@@ -603,45 +754,53 @@ export function TeacherMatrixMarksEntry() {
     }
   }
 
+  // Handle switching chosen CBT Option in modal
+  const handleSelectCbtOption = (optionKey: string) => {
+    setSelectedCbtOptionKey(optionKey)
+    const opt = cbtOptions.find((o) => o.key === optionKey)
+    if (opt) {
+      const comps = matrix?.components || []
+      const matchedCol = getMatchingMatrixComponent(opt.title || opt.slot, comps)
+      setSelectedTargetColumnKey(matchedCol)
+    }
+  }
+
+  // Confirm and Populate CBT Scores into selected column
   const handleConfirmAutoFill = () => {
     if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) {
       toast.error('No evaluation matrix active for this classroom.')
       return
     }
 
-    const slotData = slotAttemptsData[selectedAutoFillSlot]
-    if (!slotData || !Array.isArray(slotData.scores) || slotData.scores.length === 0) {
-      toast.error(`No student scores recorded for ${selectedAutoFillSlot}.`)
+    const selectedOpt = cbtOptions.find((o) => o.key === selectedCbtOptionKey)
+    if (!selectedOpt) {
+      toast.error('Please select an exam setup option.')
       return
     }
 
-    let targetComp: MatrixComponent | undefined
-    if (selectedAutoFillSlot === 'CBT1') {
-      targetComp = matrix.components.find((c) => /ca1|continuous.*1|first.*ca|first.*assessment/i.test(c.name || c.code)) || matrix.components[0]
-    } else if (selectedAutoFillSlot === 'CBT2') {
-      targetComp = matrix.components.find((c) => /ca2|continuous.*2|second.*ca|second.*assessment/i.test(c.name || c.code)) || (matrix.components.length > 1 ? matrix.components[1] : matrix.components[0])
-    } else {
-      targetComp = matrix.components.find((c) => /exam|terminal|theory|cbt/i.test(c.name || c.code)) || matrix.components[matrix.components.length - 1]
-    }
-
-    if (!targetComp) {
-      toast.error('Could not find corresponding assessment component in evaluation matrix.')
-      return
-    }
-
+    const targetComp =
+      matrix.components.find((c) => (c.code || c.name) === selectedTargetColumnKey) ||
+      matrix.components[0]
     const targetKey = targetComp.code || targetComp.name
+
     const scoresByStudentId = new Map<number, { rawScore: number | null; isAbsent: boolean }>()
-    slotData.scores.forEach((s) => {
-      scoresByStudentId.set(s.studentId, s)
-    })
+    if (Array.isArray(selectedOpt.scores)) {
+      selectedOpt.scores.forEach((s) => {
+        scoresByStudentId.set(s.studentId, s)
+      })
+    }
 
     let populatedCount = 0
     setStudentRows((prev) => {
       const next = prev.map((row) => {
         const rowId = Number(row.studentId || row.id)
+        if (autoFillTargetStudentId && rowId !== autoFillTargetStudentId) {
+          return row
+        }
+
         const scoreInfo = scoresByStudentId.get(rowId)
-        if (scoreInfo) {
-          const scoreVal = scoreInfo.isAbsent ? 0 : (scoreInfo.rawScore !== null ? Number(scoreInfo.rawScore) : 0)
+        if (scoreInfo && scoreInfo.rawScore !== null && scoreInfo.rawScore !== undefined) {
+          const scoreVal = scoreInfo.isAbsent ? 0 : Number(scoreInfo.rawScore)
           const updated = {
             ...(row.componentMarks || {}),
             [targetKey]: scoreVal,
@@ -654,7 +813,7 @@ export function TeacherMatrixMarksEntry() {
             totalScore: total,
             isAbsent: scoreInfo.isAbsent,
             cbtMark: String(scoreVal),
-            cbtExamTitle: slotData.title,
+            cbtExamTitle: selectedOpt.title,
           }
         }
         return row
@@ -670,87 +829,14 @@ export function TeacherMatrixMarksEntry() {
 
     setHasUnsavedChanges(true)
     setIsAutoFillModalOpen(false)
-    toast.success(`Auto-filled CBT marks for ${populatedCount} student(s) into "${targetComp.name}".`)
+    toast.success(
+      `Autofilled "${selectedOpt.title}" marks into "${targetComp.name || targetComp.code}" column for ${populatedCount} student(s).`
+    )
   }
 
-  // Sync a single student's CBT Score to matrix Exam component
+  // Sync a single student's CBT Score (opens modal targeted to this student)
   const handleSyncSingleCbt = (targetStudentId: number) => {
-    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
-    const targetComp =
-      matrix.components.find((c) => /exam|terminal|cbt|objective|theory/i.test(c.name || c.code)) ||
-      matrix.components[matrix.components.length - 1]
-    const targetKey = targetComp.code || targetComp.name
-
-    setStudentRows((prev) => {
-      const next = prev.map((row) => {
-        const rowId = Number(row.studentId || row.id)
-        if (rowId === targetStudentId && row.cbtMark !== null && row.cbtMark !== undefined && String(row.cbtMark).trim() !== '') {
-          const numCbt = Number(row.cbtMark) || 0
-          const updated = {
-            ...(row.componentMarks || {}),
-            [targetKey]: numCbt,
-          }
-          const total = Object.values(updated).reduce<number>((a, b) => a + (Number(b) || 0), 0)
-          return {
-            ...row,
-            componentMarks: updated,
-            totalScore: total,
-            isAbsent: false,
-          }
-        }
-        return row
-      })
-
-      try {
-        localStorage.setItem(bufferKey, JSON.stringify(next))
-        setOfflineBufferCount(next.length)
-      } catch (e) {}
-
-      return next
-    })
-    setHasUnsavedChanges(true)
-    toast.success(`CBT score synced into "${targetComp.name}".`)
-  }
-
-  // Sync All CBT Scores to the Exam component
-  const handleSyncAllCbtToExam = () => {
-    if (!matrix || !Array.isArray(matrix.components) || matrix.components.length === 0) return
-    const targetComp =
-      matrix.components.find((c) => /exam|terminal|cbt|objective|theory/i.test(c.name || c.code)) ||
-      matrix.components[matrix.components.length - 1]
-    const targetKey = targetComp.code || targetComp.name
-
-    let synced = 0
-    setStudentRows((prev) => {
-      const next = prev.map((row) => {
-        if (row.cbtMark !== null && row.cbtMark !== undefined && String(row.cbtMark).trim() !== '') {
-          const numCbt = Number(row.cbtMark) || 0
-          const updated = {
-            ...(row.componentMarks || {}),
-            [targetKey]: numCbt,
-          }
-          const total = Object.values(updated).reduce<number>((a, b) => a + (Number(b) || 0), 0)
-          synced++
-          return {
-            ...row,
-            componentMarks: updated,
-            totalScore: total,
-            isAbsent: false,
-          }
-        }
-        return row
-      })
-
-      try {
-        localStorage.setItem(bufferKey, JSON.stringify(next))
-        setOfflineBufferCount(next.length)
-      } catch (e) {}
-
-      return next
-    })
-
-    setHasUnsavedChanges(true)
-    toast.success(`Synchronized CBT scores for ${synced} student(s) into matrix component "${targetComp.name}".`)
+    handleOpenAutoFillModal(targetStudentId)
   }
 
   // Batch Save Scores to Server
@@ -775,6 +861,7 @@ export function TeacherMatrixMarksEntry() {
         sectionId: selectedSectionId ? Number(selectedSectionId) : undefined,
         subjectId: Number(selectedSubjectId),
         examId: Number(selectedExamId),
+        sessionId: selectedSessionId ? Number(selectedSessionId) : undefined,
         marks: marksPayload,
         entries: marksPayload,
       }
@@ -952,9 +1039,23 @@ export function TeacherMatrixMarksEntry() {
 
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-200 border border-white/15">
-              <FileSpreadsheet size={14} className="text-emerald-300" />
-              <span>Classroom Assessments & Marks Gradebook</span>
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-emerald-200 border border-white/15">
+                <FileSpreadsheet size={14} className="text-emerald-300" />
+                <span>Classroom Assessments & Marks Gradebook</span>
+              </div>
+              {activeSessionName && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/20 backdrop-blur-md rounded-full text-xs font-bold text-indigo-200 border border-indigo-400/30">
+                  <Calendar size={13} />
+                  <span>Session: {activeSessionName}</span>
+                </div>
+              )}
+              {selectedSectionId && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 backdrop-blur-md rounded-full text-xs font-bold text-purple-200 border border-purple-400/30">
+                  <Layers size={13} />
+                  <span>Section: {currentSections.find((s) => String(s.id) === String(selectedSectionId))?.name || 'Bronze'}</span>
+                </div>
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
               Student Assessment Desk
@@ -967,31 +1068,21 @@ export function TeacherMatrixMarksEntry() {
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={handleOpenAutoFillModal}
+              onClick={() => handleOpenAutoFillModal()}
               disabled={!selectedClassId || !selectedSubjectId}
-              className="px-3.5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-              title="Auto-fill CBT online test scores into gradebook"
+              className="px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              title="CBT Test Fill: Auto-fill online test scores into assessment columns"
             >
-              <Wand2 size={14} className="text-cyan-200" /> Auto-Fill CBT Scores
+              <ArrowRightLeft size={14} className="text-purple-200" /> CBT Test Fill
             </button>
 
             <button
               type="button"
               onClick={() => setIsAiModalOpen(true)}
               disabled={!matrix}
-              className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
             >
               <Wand2 size={15} /> AI Score Assistant
-            </button>
-
-            <button
-              type="button"
-              onClick={handleBatchSave}
-              disabled={savingBatch || studentRows.length === 0}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-            >
-              {savingBatch ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              <span>Save Marks to Server</span>
             </button>
 
             <button
@@ -1051,7 +1142,7 @@ export function TeacherMatrixMarksEntry() {
 
       {/* SELECTORS & MATRIX BAR */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
           {/* 1. Class Selector (Strictly Teacher's Allocated Classes) */}
           <div className="space-y-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
@@ -1061,10 +1152,7 @@ export function TeacherMatrixMarksEntry() {
               <School size={16} className="text-emerald-600 shrink-0" />
               <select
                 value={selectedClassId}
-                onChange={(e) => {
-                  setSelectedClassId(e.target.value)
-                  setSelectedSectionId('')
-                }}
+                onChange={(e) => handleClassChange(e.target.value)}
                 className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
               >
                 {classes.length === 0 ? (
@@ -1080,10 +1168,15 @@ export function TeacherMatrixMarksEntry() {
             </div>
           </div>
 
-          {/* 2. Section Selector */}
+          {/* 2. Section Selector (Automatically defaults to admin-configured section e.g. Bronze) */}
           <div className="space-y-1">
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-              Section
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Section <span className="text-purple-500">*</span></span>
+              {currentSections.length > 0 && selectedSectionId && (
+                <span className="text-[9px] text-purple-600 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-50 border border-purple-200">
+                  auto
+                </span>
+              )}
             </label>
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
               <Layers size={16} className="text-purple-600 shrink-0" />
@@ -1092,12 +1185,18 @@ export function TeacherMatrixMarksEntry() {
                 onChange={(e) => setSelectedSectionId(e.target.value)}
                 className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
               >
-                <option value="">All Sections</option>
-                {currentSections.map((sec) => (
-                  <option key={`s-${sec.id}`} value={sec.id}>
-                    Section {sec.name}
-                  </option>
-                ))}
+                {currentSections.length === 0 ? (
+                  <option value="">Main Section</option>
+                ) : (
+                  <>
+                    {currentSections.map((sec) => (
+                      <option key={`s-${sec.id}`} value={sec.id}>
+                        Section {sec.name}
+                      </option>
+                    ))}
+                    <option value="">All Sections</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
@@ -1128,7 +1227,35 @@ export function TeacherMatrixMarksEntry() {
             </div>
           </div>
 
-          {/* 4. Evaluation Matrix Scheme Selector (Created by Admin) */}
+          {/* 4. Academic Session Selector (Set up by School Admin e.g. 2026-2027 Session) */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Session <span className="text-indigo-500">*</span></span>
+              <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200">
+                active
+              </span>
+            </label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 h-11">
+              <Calendar size={16} className="text-indigo-600 shrink-0" />
+              <select
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
+              >
+                {sessions.length === 0 ? (
+                  <option value="">{activeSessionName || 'Current Session'}</option>
+                ) : (
+                  sessions.map((s) => (
+                    <option key={`sess-${s.id}`} value={s.id}>
+                      {s.name} {s.isCurrent ? '★ (Active)' : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* 5. Evaluation Matrix Scheme Selector (Created by Admin) */}
           <div className="space-y-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               Matrix Scheme <span className="text-amber-500">*</span>
@@ -1153,7 +1280,7 @@ export function TeacherMatrixMarksEntry() {
             </div>
           </div>
 
-          {/* 5. Exam / Term Selector */}
+          {/* 6. Exam / Term Selector */}
           <div className="space-y-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
               Assessment Term <span className="text-rose-500">*</span>
@@ -1290,29 +1417,133 @@ export function TeacherMatrixMarksEntry() {
           </div>
         ) : studentRows.length > 0 && matrix ? (
           <>
+            {/* Evaluation Matrix Heading & Interactive Umbrella Accordion Controller */}
+            <div className="p-4 bg-gradient-to-r from-indigo-50/90 via-blue-50/70 to-slate-50 border-b border-indigo-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md border border-indigo-200">
+                      Evaluation Matrix Scheme
+                    </span>
+                    <h4 className="font-extrabold text-slate-900 text-sm">
+                      {matrix.name} <span className="font-mono text-slate-500 font-semibold">({matrix.code})</span>
+                    </h4>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    General Assessment Section:{' '}
+                    <strong className="text-indigo-900 font-black">{matrix.generalHeading || 'Termly Report'}</strong>
+                    <span className="text-slate-400 mx-1.5">•</span>
+                    <span className="text-slate-500">
+                      Components: {matrix.components?.map((c) => c.name || c.code).join(', ')} ({matrix.totalMarks} Marks)
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsReportGroupExpanded((prev) => !prev)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer shadow-2xs border bg-white hover:bg-indigo-50 text-indigo-950 border-indigo-200"
+                title="Click to expand/collapse CA and Examination columns"
+              >
+                <Layers size={14} className="text-indigo-600 shrink-0" />
+                <span>{matrix.generalHeading || 'Termly Report'}:</span>
+                <span className="text-[11px] font-bold text-indigo-600">
+                  {isReportGroupExpanded ? 'Click to Collapse' : 'Click to View CA1, CA2 & Exam'}
+                </span>
+                {isReportGroupExpanded ? (
+                  <ChevronUp size={15} className="text-indigo-600 shrink-0" />
+                ) : (
+                  <ChevronDown size={15} className="text-indigo-600 shrink-0" />
+                )}
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
-                    <th className="p-3 text-center w-12">#</th>
-                    <th className="p-3">Reg. No</th>
-                    <th className="p-3">Student Name</th>
+                  {/* Tier 1 Header */}
+                  <tr className="bg-slate-50/90 border-b border-slate-200/80 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                    <th rowSpan={2} className="p-3 text-center w-12 border-r border-slate-200/60">#</th>
+                    <th rowSpan={2} className="p-3 border-r border-slate-200/60">Reg. No</th>
+                    <th rowSpan={2} className="p-3 border-r border-slate-200/60">Student Name</th>
 
-                    {/* Matrix Component Headers */}
-                    {(Array.isArray(matrix.components) ? matrix.components : []).map((comp) => (
-                      <th key={`hdr-${comp.code || comp.name}`} className="p-3 text-center min-w-[100px]">
-                        <div className="font-extrabold text-slate-900">{comp.name || comp.code}</div>
-                        <div className="text-[10px] text-emerald-700 font-mono">Max: {comp.maxMarks}</div>
-                      </th>
-                    ))}
+                    {/* Umbrella General Heading Column (e.g. Termly Report) */}
+                    <th
+                      colSpan={isReportGroupExpanded ? (Array.isArray(matrix.components) ? matrix.components.length : 1) : 1}
+                      onClick={() => setIsReportGroupExpanded((prev) => !prev)}
+                      className="p-2.5 text-center bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-200/80 cursor-pointer hover:bg-indigo-100/90 transition select-none group border-r border-slate-200/60"
+                      title="Click to toggle breakdown columns (CA 1, CA 2, Examination)"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <Layers size={13} className="text-indigo-600 group-hover:scale-110 transition-transform" />
+                        <span className="font-black text-indigo-950 text-xs normal-case tracking-normal">
+                          {matrix.generalHeading || 'Termly Report'}
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-600 text-white shadow-2xs">
+                          {isReportGroupExpanded ? (
+                            <>
+                              <ChevronUp size={11} /> Collapse Breakdown
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown size={11} /> Click to View All
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-indigo-600/80 font-medium normal-case mt-0.5">
+                        {isReportGroupExpanded
+                          ? `(Showing ${matrix.components?.length || 0} columns: ${matrix.components?.map((c) => c.name || c.code).join(', ')})`
+                          : `(Click to show CA1, CA2 & Examination — ${matrix.totalMarks} Marks total)`}
+                      </div>
+                    </th>
 
-                    <th className="p-3 text-center min-w-[100px] bg-slate-100/70">
+                    <th rowSpan={2} className="p-3 text-center min-w-[100px] bg-slate-100/70 border-r border-slate-200/60">
                       <div className="font-extrabold text-slate-900">Total</div>
                       <div className="text-[10px] text-slate-400 font-normal">/{matrix.totalMarks}</div>
                     </th>
 
-                    <th className="p-3 text-center min-w-[90px]">CBT Test</th>
-                    <th className="p-3 text-center min-w-[80px]">Status</th>
+                    <th rowSpan={2} className="p-3 text-center min-w-[110px] border-r border-slate-200/60 bg-purple-50/20">
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <div className="font-extrabold text-slate-800 text-[11px]">CBT Test</div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAutoFillModal()}
+                          disabled={!selectedClassId || !selectedSubjectId}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-300 font-bold text-[10px] shadow-2xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+                          title="CBT Test Fill: Autofill online test scores into assessment columns"
+                        >
+                          <ArrowRightLeft size={11} />
+                          <span>Autofill</span>
+                        </button>
+                      </div>
+                    </th>
+                    <th rowSpan={2} className="p-3 text-center min-w-[80px]">Status</th>
+                  </tr>
+
+                  {/* Tier 2 Header */}
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
+                    {isReportGroupExpanded ? (
+                      (Array.isArray(matrix.components) ? matrix.components : []).map((comp) => (
+                        <th key={`hdr-${comp.code || comp.name}`} className="p-2.5 text-center min-w-[105px] border-r border-slate-200/60 last:border-r-0 bg-white">
+                          <div className="font-black text-slate-900">{comp.name || comp.code}</div>
+                          <div className="text-[10px] text-emerald-700 font-mono font-bold">Max: {comp.maxMarks}</div>
+                        </th>
+                      ))
+                    ) : (
+                      <th
+                        onClick={() => setIsReportGroupExpanded(true)}
+                        className="p-2.5 text-center min-w-[150px] bg-indigo-50/40 cursor-pointer hover:bg-indigo-100/60 transition"
+                        title="Click to expand individual assessment components"
+                      >
+                        <div className="font-black text-indigo-900 text-[11px]">Consolidated Assessment Score</div>
+                        <div className="text-[10px] text-indigo-600 font-mono">Combined Max: {matrix.totalMarks}</div>
+                      </th>
+                    )}
                   </tr>
                 </thead>
 
@@ -1341,32 +1572,47 @@ export function TeacherMatrixMarksEntry() {
                           </div>
                         </td>
 
-                        {/* Matrix Dynamic Component Inputs */}
-                        {(Array.isArray(matrix.components) ? matrix.components : []).map((comp) => {
-                          const compKey = comp.code || comp.name
-                          const currentVal = st.componentMarks?.[compKey] ?? st.componentMarks?.[comp.code] ?? ''
-                          const numVal = Number(currentVal) || 0
-                          const isOverMax = currentVal !== '' && numVal > comp.maxMarks
+                        {/* Matrix Assessment Components: Individual Inputs (when expanded) vs Consolidated (when collapsed) */}
+                        {isReportGroupExpanded ? (
+                          (Array.isArray(matrix.components) ? matrix.components : []).map((comp) => {
+                            const compKey = comp.code || comp.name
+                            const currentVal = st.componentMarks?.[compKey] ?? st.componentMarks?.[comp.code] ?? ''
+                            const numVal = Number(currentVal) || 0
+                            const isOverMax = currentVal !== '' && numVal > comp.maxMarks
 
-                          return (
-                            <td key={`input-${stId}-${compKey}`} className="p-2.5 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max={comp.maxMarks}
-                                disabled={st.isAbsent}
-                                value={st.isAbsent ? '' : currentVal}
-                                onChange={(e) => handleScoreChange(stId, compKey, e.target.value)}
-                                placeholder={st.isAbsent ? 'ABS' : '0'}
-                                className={`w-20 h-10 text-center font-bold font-mono text-xs rounded-xl border transition focus:outline-hidden focus:ring-2 ${
-                                  isOverMax
-                                    ? 'bg-rose-50 border-rose-400 text-rose-700 focus:ring-rose-500'
-                                    : 'bg-white border-slate-200 text-slate-900 focus:ring-emerald-500'
-                                } ${st.isAbsent ? 'cursor-not-allowed bg-slate-100 text-slate-400' : ''}`}
-                              />
-                            </td>
-                          )
-                        })}
+                            return (
+                              <td key={`input-${stId}-${compKey}`} className="p-2.5 text-center border-r border-slate-100">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={comp.maxMarks}
+                                  disabled={st.isAbsent}
+                                  value={st.isAbsent ? '' : currentVal}
+                                  onChange={(e) => handleScoreChange(stId, compKey, e.target.value)}
+                                  placeholder={st.isAbsent ? 'ABS' : '0'}
+                                  className={`w-20 h-10 text-center font-bold font-mono text-xs rounded-xl border transition focus:outline-hidden focus:ring-2 ${
+                                    isOverMax
+                                      ? 'bg-rose-50 border-rose-400 text-rose-700 focus:ring-rose-500'
+                                      : 'bg-white border-slate-200 text-slate-900 focus:ring-emerald-500'
+                                  } ${st.isAbsent ? 'cursor-not-allowed bg-slate-100 text-slate-400' : ''}`}
+                                />
+                              </td>
+                            )
+                          })
+                        ) : (
+                          <td
+                            onClick={() => setIsReportGroupExpanded(true)}
+                            className="p-2.5 text-center bg-indigo-50/20 cursor-pointer hover:bg-indigo-50/50 transition border-r border-slate-100"
+                            title="Click to expand and edit CA 1, CA 2, Examination"
+                          >
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-indigo-200 shadow-2xs">
+                              <span className="font-mono font-black text-xs text-indigo-950">
+                                {st.isAbsent ? 'ABS' : `${st.totalScore} / ${matrix.totalMarks}`}
+                              </span>
+                              <span className="text-[10px] text-indigo-600 font-bold underline">Edit Marks</span>
+                            </div>
+                          </td>
+                        )}
 
                         {/* Auto-Calculated Total & Grade Badge */}
                         <td className="p-2.5 text-center bg-slate-50/70">
@@ -1407,15 +1653,25 @@ export function TeacherMatrixMarksEntry() {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleSyncSingleCbt(stId)}
+                                onClick={() => handleOpenAutoFillModal(stId)}
                                 className="p-1 text-slate-400 hover:text-purple-600 transition cursor-pointer"
-                                title="Copy CBT score into Exam component"
+                                title="CBT Test Fill: Autofill this student's score into assessment column"
                               >
                                 <ArrowRightLeft size={13} />
                               </button>
                             </div>
                           ) : (
-                            <span className="text-[10px] text-slate-300 font-mono">-</span>
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="text-[10px] text-slate-300 font-mono">-</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAutoFillModal(stId)}
+                                className="p-1 text-slate-300 hover:text-purple-600 transition cursor-pointer"
+                                title="CBT Test Fill: Query CBT score for this student"
+                              >
+                                <ArrowRightLeft size={12} />
+                              </button>
+                            </div>
                           )}
                         </td>
 
@@ -1519,6 +1775,45 @@ export function TeacherMatrixMarksEntry() {
                 </div>
               </div>
             )}
+
+            {/* Bottom Action Bar: Save Marks to Server at the bottom of the list */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-50 via-emerald-50/30 to-teal-50/40 border-t border-slate-200/90 rounded-b-3xl flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-slate-800">Class Progress:</span>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {scoredCount} of {studentRows.length} Students Scored
+                  </span>
+                </div>
+
+                {hasUnsavedChanges && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-800 rounded-full font-bold text-xs border border-amber-300 animate-pulse">
+                    <AlertCircle size={14} className="text-amber-600" />
+                    <span>Unsaved Changes in Gradebook</span>
+                  </div>
+                )}
+
+                {offlineBufferCount > 0 && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-bold text-xs border border-blue-300">
+                    <CloudOff size={13} className="text-blue-600" />
+                    <span>{offlineBufferCount} marks in local buffer</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={handleBatchSave}
+                  disabled={savingBatch || studentRows.length === 0}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2.5 shadow-xl hover:shadow-emerald-600/25 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  title="Save marks to server"
+                >
+                  {savingBatch ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  <span>Save Marks to Server</span>
+                </button>
+              </div>
+            </div>
           </>
         ) : (
           <div className="p-16 text-center">
@@ -1613,112 +1908,202 @@ export function TeacherMatrixMarksEntry() {
       )}
       {/* AUTO-FILL CBT SCORES MODAL (Workflow 3) */}
       {isAutoFillModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200/90 flex flex-col max-h-[88vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header - Always Visible */}
+            <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100">
-                  <Wand2 size={20} />
+                <div className="p-2.5 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200/80">
+                  <ArrowRightLeft size={18} />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-base">Auto-Fill CBT Marks</h3>
-                  <p className="text-[11px] text-slate-500">Populate online test scores directly into gradebook</p>
+                  <h3 className="font-black text-slate-900 text-base leading-tight">CBT Test Fill (Autofill Marks)</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Populate online test scores directly into assessment columns</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAutoFillModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-50 transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                title="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {loadingAutoFillScores ? (
-              <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
-                <Loader2 className="animate-spin text-cyan-600" size={28} />
-                <p className="text-xs font-semibold">Querying student test attempts...</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Select which assessment slot to auto-fill for this subject. Student attempts will be mapped directly to the matrix component:
-                </p>
-
-                <div className="space-y-2.5">
-                  {(['CBT1', 'CBT2', 'CBT_EXAM'] as const).map((slotKey) => {
-                    const slot = slotAttemptsData[slotKey]
-                    const isSelected = selectedAutoFillSlot === slotKey
-                    const hasScores = slot.count > 0
-
-                    return (
-                      <div
-                        key={slotKey}
-                        onClick={() => setSelectedAutoFillSlot(slotKey)}
-                        className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-cyan-50/70 border-cyan-400 ring-2 ring-cyan-200'
-                            : 'bg-slate-50/60 border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-xs text-slate-900">
-                              {slotKey === 'CBT1' ? 'CBT 1' : slotKey === 'CBT2' ? 'CBT 2' : 'Terminal CBT'}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium">
-                              (Max: {slot.maxMarks} Marks)
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-600 font-medium truncate max-w-[260px]">
-                            {slot.title}
-                          </p>
-                        </div>
-
-                        <div className="shrink-0">
-                          {hasScores ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              {slot.count} score{slot.count > 1 ? 's' : ''} found
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-600">
-                              0 scores logged
-                            </span>
-                          )}
-                        </div>
+            {/* Modal Body - Scrollable */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
+              {loadingAutoFillScores ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
+                  <Loader2 className="animate-spin text-purple-600" size={28} />
+                  <p className="text-xs font-semibold">Querying school admin exam setup and test attempts...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Scope Badge */}
+                  {autoFillTargetStudentId ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-white px-2 py-0.5 rounded border border-purple-200">
+                          Single Student
+                        </span>
+                        <span className="font-bold text-purple-900">
+                          {studentRows.find((s) => Number(s.studentId || s.id) === autoFillTargetStudentId)?.name || 'Selected Student'}
+                        </span>
                       </div>
-                    )
-                  })}
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => setAutoFillTargetStudentId(null)}
+                        className="text-[11px] font-extrabold text-purple-700 hover:underline cursor-pointer"
+                      >
+                        Apply to Entire Class
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs flex items-center justify-between">
+                      <span className="text-slate-600 font-medium">
+                        Target Scope: <strong className="text-slate-900 font-bold">All Enrolled Students ({studentRows.length})</strong>
+                      </span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                        Full Roster
+                      </span>
+                    </div>
+                  )}
 
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 text-xs font-medium space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Info size={14} className="text-amber-700 shrink-0" />
-                    <span>Real-time Calculation Rule</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-snug">
-                    Imported CBT scores will immediately lock in the test column and combine with manual Theory scores in real-time.
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Select a CBT assessment from the admin exam setup below. The matching assessment column is automatically selected:
                   </p>
-                </div>
-              </div>
-            )}
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                  {/* Exam Setup Options List */}
+                  <div className="space-y-2">
+                    {cbtOptions.map((opt) => {
+                      const isSelected = selectedCbtOptionKey === opt.key
+                      const hasScores = opt.attemptsFound > 0
+
+                      // Clean title and subtitle
+                      let displayTitle = opt.title
+                      let displaySub = opt.componentName || opt.slot
+                      if (displayTitle.includes('(')) {
+                        const parts = displayTitle.split('(')
+                        displayTitle = parts[0].trim()
+                        displaySub = parts[1].replace(')', '').trim()
+                      }
+
+                      return (
+                        <div
+                          key={opt.key}
+                          onClick={() => handleSelectCbtOption(opt.key)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-purple-50/90 to-indigo-50/60 border-purple-500 ring-2 ring-purple-200 shadow-xs'
+                              : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/70 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-xs text-slate-900">
+                                {displayTitle}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-slate-700 border border-slate-200 shadow-2xs font-mono">
+                                Max: {opt.maxMarks}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                              <span>{displaySub}</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                {opt.category === 'EXAM' ? 'Terminal Examination' : 'Continuous Assessment'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-2.5">
+                            {hasScores ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                {opt.attemptsFound} score{opt.attemptsFound > 1 ? 's' : ''} found
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-600 border border-slate-300/60">
+                                0 scores logged
+                              </span>
+                            )}
+                            <div
+                              className={`w-5 h-5 rounded-full flex items-center justify-center border transition ${
+                                isSelected
+                                  ? 'bg-purple-600 border-purple-600 text-white'
+                                  : 'border-slate-300 bg-white'
+                              }`}
+                            >
+                              {isSelected && <Check size={12} strokeWidth={3} />}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Destination Assessment Column Selector on Student Desk */}
+                  {matrix && Array.isArray(matrix.components) && matrix.components.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-slate-50 border border-indigo-200/90 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span className="flex items-center gap-1.5">
+                          <Layers size={14} className="text-indigo-600" />
+                          <span>Autofill Destination Column:</span>
+                        </span>
+                        <span className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider bg-white px-2 py-0.5 rounded-md border border-indigo-200 shadow-2xs">
+                          Auto-Targeted
+                        </span>
+                      </div>
+
+                      <select
+                        value={selectedTargetColumnKey}
+                        onChange={(e) => setSelectedTargetColumnKey(e.target.value)}
+                        className="w-full h-10 px-3 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
+                      >
+                        {matrix.components.map((comp) => {
+                          const compKey = comp.code || comp.name
+                          return (
+                            <option key={`target-dest-${compKey}`} value={compKey}>
+                              {comp.name || comp.code} (Max Marks: {comp.maxMarks})
+                            </option>
+                          )
+                        })}
+                      </select>
+
+                      <p className="text-[11px] text-indigo-900 font-medium pt-0.5">
+                        Selected scores will autofill into the <strong className="text-purple-700 underline font-bold">{matrix.components.find((c) => (c.code || c.name) === selectedTargetColumnKey)?.name || selectedTargetColumnKey}</strong> column.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Compact Rule Notice */}
+                  <div className="p-2.5 bg-amber-50/90 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                    <Info size={14} className="text-amber-700 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-800 leading-snug">
+                      Imported CBT scores will immediately update in the assessment column and recalculate student totals in real-time. Review marks and click <strong>Save Marks to Server</strong> at the bottom of the roster.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer - Always Visible */}
+            <div className="px-5 sm:px-6 py-3.5 border-t border-slate-100 bg-slate-50/90 flex items-center justify-end gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsAutoFillModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmAutoFill}
-                disabled={loadingAutoFillScores || slotAttemptsData[selectedAutoFillSlot]?.count === 0}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-40"
+                disabled={loadingAutoFillScores || cbtOptions.length === 0}
+                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md hover:shadow-purple-600/20 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40"
               >
-                <Check size={14} />
-                <span>Confirm & Populate</span>
+                <ArrowRightLeft size={14} />
+                <span>Confirm &amp; Populate Marks</span>
               </button>
             </div>
           </div>

@@ -64,6 +64,7 @@ export interface EvaluationMatrixData {
   id: number
   name: string
   code: string
+  generalHeading?: string
   description?: string | null
   totalMarks: number | string
   isDefault: boolean
@@ -106,6 +107,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   const [editingMatrixId, setEditingMatrixId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [generalHeading, setGeneralHeading] = useState('Termly Report')
   const [description, setDescription] = useState('')
   const [totalMarks, setTotalMarks] = useState<number>(100)
   const [isDefault, setIsDefault] = useState(false)
@@ -291,6 +293,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
     setEditingMatrixId(null)
     setName('')
     setCode('')
+    setGeneralHeading('Termly Report')
     setDescription('')
     setTotalMarks(100)
     setIsDefault(false)
@@ -303,6 +306,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
     setEditingMatrixId(matrix.id)
     setName(matrix.name)
     setCode(matrix.code)
+    setGeneralHeading(matrix.generalHeading || 'Termly Report')
     setDescription(matrix.description || '')
     setTotalMarks(Number(matrix.totalMarks) || 100)
     setIsDefault(matrix.isDefault)
@@ -479,6 +483,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
       const payload: any = {
         name: name.trim(),
         code: code.trim().toUpperCase(),
+        generalHeading: generalHeading.trim() || 'Termly Report',
         description: description.trim() || undefined,
         totalMarks: Number(totalMarks) > 0 ? Number(totalMarks) : currentTotalCalculated,
         isDefault,
@@ -581,15 +586,15 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 skew-x-12 pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 relative z-10">
+          <div className="space-y-1.5 sm:space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold text-indigo-200 border border-white/15">
-              <FileSpreadsheet size={14} className="text-indigo-300" /> Academic Evaluation Schemes
+              <FileSpreadsheet size={14} className="text-indigo-300 shrink-0" /> Academic Evaluation Schemes
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">Evaluation Matrices</h1>
+            <h1 className="text-xl sm:text-3xl font-black tracking-tight text-white">Evaluation Matrices</h1>
             <p className="text-xs sm:text-sm text-indigo-200/80 max-w-xl leading-relaxed">
               Define assessment structures (CA1, CA2, Terminal Exam) with multi-component rollups combining CBT Online tests and Teacher Theory marks.
             </p>
@@ -598,7 +603,7 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
           {!isGateLocked && (
             <button
               onClick={handleOpenCreateModal}
-              className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer shrink-0"
+              className="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] cursor-pointer shrink-0"
             >
               <Plus size={16} /> Create Evaluation Matrix
             </button>
@@ -767,6 +772,12 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
                             )}
                           </div>
                           <h3 className="font-extrabold text-slate-900 text-base leading-snug">{matrix.name}</h3>
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              <Layers size={12} className="text-indigo-600" />
+                              Umbrella: <span className="font-extrabold">{matrix.generalHeading || 'Termly Report'}</span>
+                            </span>
+                          </div>
                         </div>
 
                         <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
@@ -888,525 +899,568 @@ export function EvaluationMatrices({ onGoToExamSetup }: EvaluationMatricesProps 
 
       {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 my-6">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-900 text-white">
-              <div className="flex items-center gap-2 font-black text-sm">
-                <FileSpreadsheet size={18} className="text-indigo-400" />
-                <span>{editingMatrixId ? 'Edit Evaluation Matrix' : 'Configure Evaluation Matrix Scheme'}</span>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/70 backdrop-blur-xs p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl border border-slate-100 shadow-2xl max-w-3xl w-full flex flex-col h-[94vh] sm:h-auto sm:max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* STICKY MODAL HEADER */}
+            <div className="shrink-0 flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white">
+              <div className="flex items-center gap-2 font-black text-xs sm:text-sm">
+                <FileSpreadsheet size={17} className="text-indigo-400 shrink-0" />
+                <span className="truncate">{editingMatrixId ? 'Edit Evaluation Matrix' : 'Configure Evaluation Matrix Scheme'}</span>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-lg text-white/80 transition cursor-pointer"
+                className="p-1.5 hover:bg-white/20 rounded-lg text-white/80 hover:text-white transition cursor-pointer shrink-0"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveMatrix} className="p-6 space-y-5 text-xs">
-              {modalError && (
-                <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-2">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
-                  <span>{modalError}</span>
-                </div>
-              )}
-
-              {/* Mode Selection & Non-CBT Isolation Toggle */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabMode('multiRollup')}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
-                      activeTabMode === 'multiRollup' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    <Layers size={14} /> Multi-Component Rollup (CBT + Theory)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTabMode('standard')}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
-                      activeTabMode === 'standard' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white'
-                    }`}
-                  >
-                    <FileText size={14} /> Simple Scheme
-                  </button>
-                </div>
-
-                {/* Scenario C: Non-CBT Isolation Switcher */}
-                <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
-                  <label className="text-[11px] font-bold text-slate-600">School CBT Capability:</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsCbtMode(!isCbtMode)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition flex items-center gap-1 ${
-                      isCbtMode ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' : 'bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <Monitor size={12} /> {isCbtMode ? 'CBT Enabled' : 'Paper-Only (Non-CBT)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick Preset Schemes */}
-              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-1.5">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-900 flex items-center gap-1">
-                  <Sparkles size={12} className="text-indigo-600" /> Quick Scheme Presets:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => applyPresetScheme('hybridCbt100')}
-                    className="px-2.5 py-1 bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border border-indigo-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
-                  >
-                    ⚡ Hybrid CBT + Manual (100: CA1 20, CA2 20, Exam 60)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetScheme('standard100')}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-700 hover:text-white text-slate-800 border border-slate-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
-                  >
-                    📝 Standard Simple (100 Marks)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetScheme('ca40')}
-                    className="px-2.5 py-1 bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
-                  >
-                    🎯 CA Only (40 Marks)
-                  </button>
-                </div>
-              </div>
-
-              {/* Name & Short Code */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Scheme Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Primary 5 Gold Term 1 Assessment Scheme"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Scheme Code *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. PRI5-T1"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-indigo-500 uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Description</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Continuous assessment and terminal exam component mapping"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-indigo-500"
-                />
-              </div>
-
-              {/* Default checkbox */}
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                  className="rounded text-indigo-600"
-                />
-                Set as default evaluation matrix for this branch
-              </label>
-
-              {/* MULTI-COMPONENT ROLLUP BUILDER (Scenario B) */}
-              {activeTabMode === 'multiRollup' && (
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <div>
-                      <h4 className="font-black text-slate-900">Multi-Component Columns & Sub-Item Feed</h4>
-                      <p className="text-[11px] text-slate-500">Configure report card columns (e.g. CA1 = CBT 1 + Manual Theory 1)</p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-black border border-indigo-100">
-                      Target Total: {currentTotalCalculated} Marks
-                    </span>
+            {/* SCROLLABLE FORM BODY & STICKY FOOTER */}
+            <form onSubmit={handleSaveMatrix} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5 text-xs">
+                {modalError && (
+                  <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{modalError}</span>
                   </div>
+                )}
 
-                  <div className="space-y-3">
-                    {builderColumns.map((col, colIdx) => (
-                      <div key={colIdx} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <input
-                              type="text"
-                              value={col.columnKey}
-                              onChange={(e) => handleUpdateRollupColumn(colIdx, 'columnKey', e.target.value.toUpperCase())}
-                              className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold uppercase text-slate-900 text-center"
-                              placeholder="KEY"
-                            />
-                            <input
-                              type="text"
-                              value={col.columnLabel}
-                              onChange={(e) => handleUpdateRollupColumn(colIdx, 'columnLabel', e.target.value)}
-                              className="flex-1 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
-                              placeholder="Column Label"
-                            />
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-slate-400 text-[11px] font-bold">Column Marks:</span>
-                              <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-black text-indigo-700 font-mono text-center">
-                                {col.feedItems.reduce((sum, it) => sum + (Number(it.weightMarks) || 0), 0)} Marks
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRollupColumn(colIdx)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                              title="Remove Column"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Sub-item Feed Mapping (Section 2 & 3) */}
-                        <div className="space-y-2 pl-2">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                            Sub-Components Feeding Into {col.columnKey}:
-                          </p>
-                          {col.feedItems.map((item, itemIdx) => (
-                            <div key={itemIdx} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-white p-2 rounded-xl border border-slate-200">
-                              <input
-                                type="text"
-                                value={item.componentName}
-                                onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'componentName', e.target.value)}
-                                placeholder="Component Name (e.g. CBT 1)"
-                                className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
-                              />
-
-                              {isCbtMode ? (
-                                <select
-                                  value={item.componentType}
-                                  onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'componentType', e.target.value)}
-                                  className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700"
-                                >
-                                  <option value="CBT">CBT</option>
-                                  <option value="MANUAL">MANUAL</option>
-                                </select>
-                              ) : (
-                                <span className="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-200">
-                                  MANUAL PAPER
-                                </span>
-                              )}
-
-                              {isCbtMode && item.componentType === 'CBT' ? (
-                                <select
-                                  value={item.examMasterId || ''}
-                                  onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'examMasterId', e.target.value)}
-                                  className="flex-1 px-2 py-1 bg-cyan-50/60 border border-cyan-200 rounded-lg text-xs font-semibold text-cyan-900 focus:outline-cyan-500"
-                                >
-                                  <option value="">-- Link to CBT Exam Master --</option>
-                                  {cbtExamMasters.map((em) => (
-                                    <option key={em.id} value={em.id}>
-                                      {em.name} ({em.cbtTotalMarks || 'Auto'} Marks)
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <select
-                                  value={
-                                    (() => {
-                                      if (!item.examMasterId) return ''
-                                      const match = theoryExamMasters.find((em) => em.id === item.examMasterId)
-                                      if (!match) return String(item.examMasterId)
-                                      const breakdown = Array.isArray(match.manualMarksBreakdown) ? match.manualMarksBreakdown : []
-                                      const matchedComp = breakdown.find((c: any) => c.componentName === item.componentName)
-                                      if (matchedComp) {
-                                        return `${match.id}::${matchedComp.componentName}::${matchedComp.marks}`
-                                      }
-                                      const total = breakdown.reduce((s: number, m: any) => s + (Number(m.marks) || 0), 0)
-                                      return `${match.id}::${match.name}::${total || 10}`
-                                    })()
-                                  }
-                                  onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'theorySetup', e.target.value)}
-                                  className="flex-1 px-2 py-1 bg-amber-50/70 border border-amber-200 rounded-lg text-xs font-semibold text-amber-900 focus:outline-amber-500"
-                                >
-                                  <option value="">
-                                    {theoryExamMasters.length > 0 ? '-- Link to Theory Setup (Master Exam) --' : '-- No Theory Setups Found --'}
-                                  </option>
-                                  {theoryExamMasters.map((em) => {
-                                    const breakdown = Array.isArray(em.manualMarksBreakdown) ? em.manualMarksBreakdown : []
-                                    const breakdownTotal = breakdown.reduce((sum: number, m: any) => sum + (Number(m.marks) || 0), 0)
-                                    const parsedAvg = em.remark?.match(/Average:\s*([0-9.]+)/i)?.[1]
-                                    const avgInfo = parsedAvg ? ` - Avg: ${parsedAvg}m` : ''
-
-                                    if (breakdown.length > 1) {
-                                      return (
-                                        <optgroup key={em.id} label={`${em.name} (${breakdownTotal}m Total${avgInfo})`}>
-                                          <option value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
-                                            {em.name} (Combined: {breakdownTotal} Marks)
-                                          </option>
-                                          {breakdown.map((comp: any, cIdx: number) => (
-                                            <option
-                                              key={`${em.id}-comp-${cIdx}`}
-                                              value={`${em.id}::${comp.componentName}::${comp.marks}`}
-                                            >
-                                              ↳ {comp.componentName} ({comp.marks} Marks{comp.averageMark !== undefined ? `, Avg: ${comp.averageMark}m` : ''})
-                                            </option>
-                                          ))}
-                                        </optgroup>
-                                      )
-                                    }
-
-                                    return (
-                                      <option key={em.id} value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
-                                        {em.name} ({breakdownTotal > 0 ? `${breakdownTotal} Marks` : 'Theory Paper'}{avgInfo})
-                                      </option>
-                                    )
-                                  })}
-                                </select>
-                              )}
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span
-                                  className="px-2.5 py-1 rounded-lg bg-indigo-50/70 border border-indigo-200 text-indigo-700 font-mono font-bold text-xs"
-                                  title="Mark auto-derived from Master Exam Setup"
-                                >
-                                  {item.weightMarks || 0} Marks
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveFeedItem(colIdx, itemIdx)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                                  title="Remove Sub-Component"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-
-                          <button
-                            type="button"
-                            onClick={() => handleAddFeedItem(colIdx)}
-                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-0.5 cursor-pointer"
-                          >
-                            <Plus size={12} /> Add Sub-Component
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
+                {/* Mode Selection & Non-CBT Isolation Toggle */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="grid grid-cols-2 sm:flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                     <button
                       type="button"
-                      onClick={handleAddRollupColumn}
-                      className="w-full py-2.5 border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-indigo-600 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      onClick={() => setActiveTabMode('multiRollup')}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-xl font-bold text-[11px] sm:text-xs transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activeTabMode === 'multiRollup' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white bg-white/70 sm:bg-transparent'
+                      }`}
                     >
-                      <Plus size={14} /> Add Rollup Column (e.g. CA3, Practicals)
+                      <Layers size={13} className="shrink-0" />
+                      <span className="truncate">Rollup (CBT + Theory)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabMode('standard')}
+                      className={`px-2.5 sm:px-3 py-1.5 rounded-xl font-bold text-[11px] sm:text-xs transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activeTabMode === 'standard' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white bg-white/70 sm:bg-transparent'
+                      }`}
+                    >
+                      <FileText size={13} className="shrink-0" />
+                      <span className="truncate">Simple Scheme</span>
                     </button>
                   </div>
 
-                  {/* REAL-TIME PREVIEW SIMULATION (Section 3) */}
-                  <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl space-y-3 mt-4">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                      <div className="flex items-center gap-2">
-                        <Calculator size={16} className="text-indigo-400" />
-                        <span className="font-black text-xs text-white">Live Calculation Simulator (Student: Chinedu Okafor)</span>
-                      </div>
-                      <span className="text-[10px] text-indigo-200/80 font-mono">Dynamic Scaling Preview</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
-                      <div className="bg-white/5 p-2.5 rounded-xl border border-white/10 space-y-1">
-                        <span className="text-indigo-300 font-bold block">1. Raw CBT Test Score</span>
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <input
-                            type="number"
-                            value={simRawCbtScore}
-                            onChange={(e) => setSimRawCbtScore(Number(e.target.value))}
-                            className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white font-black"
-                          />
-                          <span>/</span>
-                          <input
-                            type="number"
-                            value={simRawCbtTotal}
-                            onChange={(e) => setSimRawCbtTotal(Number(e.target.value))}
-                            className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white/70 font-semibold"
-                          />
-                        </div>
-                        <span className="text-[10px] text-cyan-300 font-mono block">
-                          Scaled (10 pts): {simWeightedCbtScore} marks
-                        </span>
-                      </div>
-
-                      <div className="bg-white/5 p-2.5 rounded-xl border border-white/10 space-y-1">
-                        <span className="text-indigo-300 font-bold block">2. Teacher Theory Score</span>
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <input
-                            type="number"
-                            step="0.5"
-                            value={simTheoryScore}
-                            onChange={(e) => setSimTheoryScore(Number(e.target.value))}
-                            className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white font-black"
-                          />
-                          <span>/</span>
-                          <input
-                            type="number"
-                            value={simTheoryTotal}
-                            onChange={(e) => setSimTheoryTotal(Number(e.target.value))}
-                            className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white/70 font-semibold"
-                          />
-                        </div>
-                        <span className="text-[10px] text-amber-300 font-mono block">
-                          Direct: {simTheoryScore} marks
-                        </span>
-                      </div>
-
-                      <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 space-y-1 flex flex-col justify-between">
-                        <span className="text-emerald-300 font-black block">CA1 Column Total</span>
-                        <div className="text-lg font-black text-emerald-400">
-                          {simTotalCa1} / 20.0 Marks
-                        </div>
-                        <span className="text-[10px] text-emerald-200/80">
-                          {((simTotalCa1 / 20) * 100).toFixed(1)}% (Excellent)
-                        </span>
-                      </div>
-                    </div>
+                  {/* Scenario C: Non-CBT Isolation Switcher */}
+                  <div className="flex items-center justify-between sm:justify-start gap-2 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3 w-full sm:w-auto">
+                    <label className="text-[11px] font-bold text-slate-600 shrink-0">CBT Capability:</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCbtMode(!isCbtMode)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition flex items-center gap-1 ${
+                        isCbtMode ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <Monitor size={12} /> {isCbtMode ? 'CBT Enabled' : 'Paper-Only'}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* STANDARD SIMPLE COMPONENTS MODE */}
-              {activeTabMode === 'standard' && (
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <div>
-                      <h4 className="font-black text-slate-900">Standard Components</h4>
-                      <p className="text-[11px] text-slate-500">Simple flat assessment components</p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-black border border-indigo-100">
-                      Total: {currentTotalCalculated} Marks
+                {/* Quick Preset Schemes */}
+                <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-900 flex items-center gap-1">
+                    <Sparkles size={12} className="text-indigo-600 shrink-0" /> Quick Scheme Presets:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => applyPresetScheme('hybridCbt100')}
+                      className="px-2.5 py-1 bg-white hover:bg-indigo-600 hover:text-white text-indigo-900 border border-indigo-200 rounded-lg text-[11px] sm:text-xs font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      ⚡ Hybrid CBT + Manual (100)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPresetScheme('standard100')}
+                      className="px-2.5 py-1 bg-white hover:bg-slate-700 hover:text-white text-slate-800 border border-slate-200 rounded-lg text-[11px] sm:text-xs font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      📝 Standard (100)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPresetScheme('ca40')}
+                      className="px-2.5 py-1 bg-white hover:bg-emerald-600 hover:text-white text-emerald-800 border border-emerald-200 rounded-lg text-[11px] sm:text-xs font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      🎯 CA Only (40)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Name & Short Code */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Scheme Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Primary 5 Term Assessment Scheme"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Scheme Code *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. PRI5-T1"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-indigo-500 focus:bg-white uppercase"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Description</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Continuous assessment and terminal exam component mapping"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-indigo-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* General Assessment Heading (Teacher View Umbrella Title) */}
+                <div className="p-3 sm:p-3.5 bg-gradient-to-r from-blue-50/70 via-indigo-50/60 to-purple-50/50 border border-indigo-200/80 rounded-2xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                      <Layers size={14} className="text-indigo-600 shrink-0" />
+                      General Assessment Heading (Umbrella Title) *
+                    </label>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200 shrink-0">
+                      Teacher View
                     </span>
                   </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Heading (e.g. <strong className="text-indigo-900 font-bold">&quot;Termly Report&quot;</strong>) that wraps CA1, CA2, and Exam. Teachers click this to expand/collapse columns.
+                  </p>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Termly Report"
+                    value={generalHeading}
+                    onChange={(e) => setGeneralHeading(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-indigo-500 shadow-2xs placeholder:text-slate-400"
+                  />
+                </div>
 
-                  <div className="space-y-2">
-                    {components.map((comp, idx) => (
-                      <div key={idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-12 gap-2 items-center">
-                        <div className="col-span-5">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Component Name</label>
-                          <input
-                            type="text"
-                            required
-                            value={comp.name}
-                            onChange={(e) => {
-                              const updated = [...components]
-                              updated[idx].name = e.target.value
-                              setComponents(updated)
-                            }}
-                            className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
-                          />
+                {/* Default checkbox */}
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={isDefault}
+                    onChange={(e) => setIsDefault(e.target.checked)}
+                    className="rounded text-indigo-600"
+                  />
+                  Set as default evaluation matrix for this branch
+                </label>
+
+                {/* MULTI-COMPONENT ROLLUP BUILDER (Scenario B) */}
+                {activeTabMode === 'multiRollup' && (
+                  <div className="space-y-3.5 pt-2">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-xs sm:text-sm">Columns & Sub-Item Feed</h4>
+                        <p className="text-[11px] text-slate-500">Report card columns (e.g. CA1 = CBT 1 + Theory 1)</p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-black border border-indigo-100 text-xs shrink-0">
+                        Total: {currentTotalCalculated} Marks
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {builderColumns.map((col, colIdx) => (
+                        <div key={colIdx} className="p-3 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <input
+                                type="text"
+                                value={col.columnKey}
+                                onChange={(e) => handleUpdateRollupColumn(colIdx, 'columnKey', e.target.value.toUpperCase())}
+                                className="w-16 shrink-0 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold uppercase text-slate-900 text-center"
+                                placeholder="KEY"
+                              />
+                              <input
+                                type="text"
+                                value={col.columnLabel}
+                                onChange={(e) => handleUpdateRollupColumn(colIdx, 'columnLabel', e.target.value)}
+                                className="flex-1 min-w-0 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                                placeholder="Column Label"
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-400 text-[11px] font-bold">Marks:</span>
+                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-black text-indigo-700 font-mono text-center">
+                                  {col.feedItems.reduce((sum, it) => sum + (Number(it.weightMarks) || 0), 0)} Marks
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRollupColumn(colIdx)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                                title="Remove Column"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Sub-item Feed Mapping (Responsive Card Layout) */}
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                              Sub-Components Feeding Into {col.columnKey}:
+                            </p>
+                            {col.feedItems.map((item, itemIdx) => (
+                              <div key={itemIdx} className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                                {/* Row 1: Component Name & Type */}
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  <input
+                                    type="text"
+                                    value={item.componentName}
+                                    onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'componentName', e.target.value)}
+                                    placeholder="Component Name (e.g. CBT 1)"
+                                    className="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:outline-indigo-500"
+                                  />
+
+                                  {isCbtMode ? (
+                                    <select
+                                      value={item.componentType}
+                                      onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'componentType', e.target.value)}
+                                      className="w-22 sm:w-24 shrink-0 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 cursor-pointer"
+                                    >
+                                      <option value="CBT">CBT</option>
+                                      <option value="MANUAL">MANUAL</option>
+                                    </select>
+                                  ) : (
+                                    <span className="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-200 shrink-0">
+                                      MANUAL
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Row 2: Link Dropdown + Marks Badge + Delete */}
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex-1 min-w-0">
+                                    {isCbtMode && item.componentType === 'CBT' ? (
+                                      <select
+                                        value={item.examMasterId || ''}
+                                        onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'examMasterId', e.target.value)}
+                                        className="w-full px-2 py-1.5 bg-cyan-50/60 border border-cyan-200 rounded-lg text-xs font-semibold text-cyan-900 focus:outline-cyan-500 truncate"
+                                      >
+                                        <option value="">-- Link to CBT Exam Master --</option>
+                                        {cbtExamMasters.map((em) => (
+                                          <option key={em.id} value={em.id}>
+                                            {em.name} ({em.cbtTotalMarks || 'Auto'} Marks)
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <select
+                                        value={
+                                          (() => {
+                                            if (!item.examMasterId) return ''
+                                            const match = theoryExamMasters.find((em) => em.id === item.examMasterId)
+                                            if (!match) return String(item.examMasterId)
+                                            const breakdown = Array.isArray(match.manualMarksBreakdown) ? match.manualMarksBreakdown : []
+                                            const matchedComp = breakdown.find((c: any) => c.componentName === item.componentName)
+                                            if (matchedComp) {
+                                              return `${match.id}::${matchedComp.componentName}::${matchedComp.marks}`
+                                            }
+                                            const total = breakdown.reduce((s: number, m: any) => s + (Number(m.marks) || 0), 0)
+                                            return `${match.id}::${match.name}::${total || 10}`
+                                          })()
+                                        }
+                                        onChange={(e) => handleUpdateFeedItem(colIdx, itemIdx, 'theorySetup', e.target.value)}
+                                        className="w-full px-2 py-1.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs font-semibold text-amber-900 focus:outline-amber-500 truncate"
+                                      >
+                                        <option value="">
+                                          {theoryExamMasters.length > 0 ? '-- Link to Theory Setup --' : '-- No Theory Setups --'}
+                                        </option>
+                                        {theoryExamMasters.map((em) => {
+                                          const breakdown = Array.isArray(em.manualMarksBreakdown) ? em.manualMarksBreakdown : []
+                                          const breakdownTotal = breakdown.reduce((sum: number, m: any) => sum + (Number(m.marks) || 0), 0)
+                                          const parsedAvg = em.remark?.match(/Average:\s*([0-9.]+)/i)?.[1]
+                                          const avgInfo = parsedAvg ? ` - Avg: ${parsedAvg} Marks` : ''
+
+                                          if (breakdown.length > 1) {
+                                            return (
+                                              <optgroup key={em.id} label={`${em.name} (${breakdownTotal} Marks Total${avgInfo})`}>
+                                                <option value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
+                                                  {em.name} (Combined: {breakdownTotal} Marks)
+                                                </option>
+                                                {breakdown.map((comp: any, cIdx: number) => (
+                                                  <option
+                                                    key={`${em.id}-comp-${cIdx}`}
+                                                    value={`${em.id}::${comp.componentName}::${comp.marks}`}
+                                                  >
+                                                    ↳ {comp.componentName} ({comp.marks} Marks{comp.averageMark !== undefined ? `, Avg: ${comp.averageMark} Marks` : ''})
+                                                  </option>
+                                                ))}
+                                              </optgroup>
+                                            )
+                                          }
+
+                                          return (
+                                            <option key={em.id} value={`${em.id}::${em.name}::${breakdownTotal || 10}`}>
+                                              {em.name} ({breakdownTotal > 0 ? `${breakdownTotal} Marks` : 'Theory Paper'}{avgInfo})
+                                            </option>
+                                          )
+                                        })}
+                                      </select>
+                                    )}
+                                  </div>
+
+                                  <span
+                                    className="px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono font-black text-[11px] shrink-0 text-center whitespace-nowrap"
+                                    title="Auto-derived from Master Exam Setup"
+                                  >
+                                    {item.weightMarks || 0} Marks
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFeedItem(colIdx, itemIdx)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                                    title="Remove Sub-Component"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddFeedItem(colIdx)}
+                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-0.5 cursor-pointer"
+                            >
+                              <Plus size={12} /> Add Sub-Component
+                            </button>
+                          </div>
                         </div>
-                        <div className="col-span-2">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Code</label>
-                          <input
-                            type="text"
-                            required
-                            value={comp.code}
-                            onChange={(e) => {
-                              const updated = [...components]
-                              updated[idx].code = e.target.value.toUpperCase()
-                              setComponents(updated)
-                            }}
-                            className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 uppercase"
-                          />
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={handleAddRollupColumn}
+                        className="w-full py-2.5 border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 text-indigo-600 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Plus size={14} /> Add Rollup Column (e.g. CA3, Practicals)
+                      </button>
+                    </div>
+
+                    {/* REAL-TIME PREVIEW SIMULATION (Section 3) */}
+                    <div className="p-3 sm:p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl space-y-3 mt-4">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Calculator size={15} className="text-indigo-400 shrink-0" />
+                          <span className="font-black text-xs text-white truncate">Live Simulator Preview</span>
                         </div>
-                        <div className="col-span-2">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Max</label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={comp.maxMarks}
-                            onChange={(e) => {
-                              const updated = [...components]
-                              updated[idx].maxMarks = Number(e.target.value)
-                              setComponents(updated)
-                            }}
-                            className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-black text-indigo-700 text-center"
-                          />
+                        <span className="text-[10px] text-indigo-200/80 font-mono shrink-0">Dynamic Scaling</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-[11px]">
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/10 space-y-1">
+                          <span className="text-indigo-300 font-bold block">1. Raw CBT Test Score</span>
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <input
+                              type="number"
+                              value={simRawCbtScore}
+                              onChange={(e) => setSimRawCbtScore(Number(e.target.value))}
+                              className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white font-black"
+                            />
+                            <span>/</span>
+                            <input
+                              type="number"
+                              value={simRawCbtTotal}
+                              onChange={(e) => setSimRawCbtTotal(Number(e.target.value))}
+                              className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white/70 font-semibold"
+                            />
+                          </div>
+                          <span className="text-[10px] text-cyan-300 font-mono block">
+                            Scaled (10 pts): {simWeightedCbtScore} Marks
+                          </span>
                         </div>
-                        <div className="col-span-2">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase">Pass</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={comp.passMarks}
-                            onChange={(e) => {
-                              const updated = [...components]
-                              updated[idx].passMarks = Number(e.target.value)
-                              setComponents(updated)
-                            }}
-                            className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 text-center"
-                          />
+
+                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/10 space-y-1">
+                          <span className="text-indigo-300 font-bold block">2. Teacher Theory Score</span>
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={simTheoryScore}
+                              onChange={(e) => setSimTheoryScore(Number(e.target.value))}
+                              className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white font-black"
+                            />
+                            <span>/</span>
+                            <input
+                              type="number"
+                              value={simTheoryTotal}
+                              onChange={(e) => setSimTheoryTotal(Number(e.target.value))}
+                              className="w-12 px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-center text-white/70 font-semibold"
+                            />
+                          </div>
+                          <span className="text-[10px] text-amber-300 font-mono block">
+                            Direct: {simTheoryScore} Marks
+                          </span>
                         </div>
-                        <div className="col-span-1 flex justify-end pt-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (components.length <= 1) return
-                              setComponents(components.filter((_, i) => i !== idx))
-                            }}
-                            className="p-1 text-slate-400 hover:text-rose-600 rounded-lg"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+
+                        <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 space-y-1 flex flex-col justify-between">
+                          <span className="text-emerald-300 font-black block">CA1 Column Total</span>
+                          <div className="text-base sm:text-lg font-black text-emerald-400">
+                            {simTotalCa1} / 20.0 Marks
+                          </div>
+                          <span className="text-[10px] text-emerald-200/80">
+                            {((simTotalCa1 / 20) * 100).toFixed(1)}% (Excellent)
+                          </span>
                         </div>
                       </div>
-                    ))}
+                    </div>
                   </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextNum = components.length + 1
-                      setComponents([
-                        ...components,
-                        { name: `Component ${nextNum}`, code: `CA${nextNum}`, maxMarks: 10, passMarks: 4 },
-                      ])
-                    }}
-                    className="w-full py-2 border-2 border-dashed border-slate-200 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-1.5"
-                  >
-                    <Plus size={14} /> Add Component Row
-                  </button>
-                </div>
-              )}
+                {/* STANDARD SIMPLE COMPONENTS MODE */}
+                {activeTabMode === 'standard' && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-xs sm:text-sm">Standard Components</h4>
+                        <p className="text-[11px] text-slate-500">Simple flat assessment components</p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-black border border-indigo-100 text-xs">
+                        Total: {currentTotalCalculated} Marks
+                      </span>
+                    </div>
 
-              {/* Modal Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-slate-100">
+                    <div className="space-y-2">
+                      {components.map((comp, idx) => (
+                        <div key={idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 sm:space-y-0 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center">
+                          <div className="flex items-center gap-2 sm:col-span-7">
+                            <div className="flex-1 min-w-0">
+                              <label className="text-[9px] font-bold text-slate-400 uppercase block">Component Name</label>
+                              <input
+                                type="text"
+                                required
+                                value={comp.name}
+                                onChange={(e) => {
+                                  const updated = [...components]
+                                  updated[idx].name = e.target.value
+                                  setComponents(updated)
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                              />
+                            </div>
+                            <div className="w-20 shrink-0">
+                              <label className="text-[9px] font-bold text-slate-400 uppercase block">Code</label>
+                              <input
+                                type="text"
+                                required
+                                value={comp.code}
+                                onChange={(e) => {
+                                  const updated = [...components]
+                                  updated[idx].code = e.target.value.toUpperCase()
+                                  setComponents(updated)
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 uppercase text-center"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 sm:col-span-5 sm:justify-end">
+                            <div className="flex-1 sm:w-16">
+                              <label className="text-[9px] font-bold text-slate-400 uppercase block">Max</label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={comp.maxMarks}
+                                onChange={(e) => {
+                                  const updated = [...components]
+                                  updated[idx].maxMarks = Number(e.target.value)
+                                  setComponents(updated)
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-black text-indigo-700 text-center"
+                              />
+                            </div>
+                            <div className="flex-1 sm:w-16">
+                              <label className="text-[9px] font-bold text-slate-400 uppercase block">Pass</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={comp.passMarks}
+                                onChange={(e) => {
+                                  const updated = [...components]
+                                  updated[idx].passMarks = Number(e.target.value)
+                                  setComponents(updated)
+                                }}
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 text-center"
+                              />
+                            </div>
+                            <div className="shrink-0 pt-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (components.length <= 1) return
+                                  setComponents(components.filter((_, i) => i !== idx))
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextNum = components.length + 1
+                        setComponents([
+                          ...components,
+                          { name: `Component ${nextNum}`, code: `CA${nextNum}`, maxMarks: 10, passMarks: 4 },
+                        ])
+                      }}
+                      className="w-full py-2 border-2 border-dashed border-slate-200 text-indigo-600 font-bold rounded-xl flex items-center justify-center gap-1.5"
+                    >
+                      <Plus size={14} /> Add Component Row
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* STICKY MODAL FOOTER */}
+              <div className="shrink-0 p-3 sm:p-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={isSaving}
-                  className="flex-1 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="flex-1 sm:flex-initial sm:min-w-[100px] py-2.5 sm:py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer shadow-2xs text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 sm:flex-initial sm:min-w-[150px] py-2.5 sm:py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save Evaluation Matrix
+                  {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  <span>{isSaving ? 'Saving...' : editingMatrixId ? 'Update Matrix' : 'Save Matrix'}</span>
                 </button>
               </div>
             </form>

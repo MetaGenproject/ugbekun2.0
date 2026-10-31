@@ -476,7 +476,7 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
         throw new Error(res.message || 'Failed to update photograph.')
       }
     } catch (err: any) {
-      showSystemStatus(err?.message || 'Failed to update profile photo.', 'error')
+      showSystemStatus(resolveHttpStatus(500, err?.message || 'Failed to update profile photo.'))
     } finally {
       setUploadingPhoto(false)
     }
