@@ -40,20 +40,26 @@ export function LoginForm() {
     const fetchBranding = async () => {
       try {
         const host = typeof window !== 'undefined' ? window.location.hostname : ''
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+        const branchIdParam = params?.get('branchId')
         let json: any = null
 
+        const query = new URLSearchParams()
+        if (host) query.set('domain', host)
+        if (branchIdParam) query.set('branchId', branchIdParam)
+
         try {
-          const proxyRes = await fetch(`/api/proxy/public/tenant/branding?domain=${encodeURIComponent(host)}`)
+          const proxyRes = await fetch(`/api/proxy/public/tenant/branding?${query.toString()}`)
           if (proxyRes.ok) json = await proxyRes.json().catch(() => null)
         } catch {}
 
         if (!json || !json.success) {
           const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.ugbekun.com').replace(/\/api\/?$/, '')
-          const res = await fetch(`${backendUrl}/api/public/tenant/branding?domain=${encodeURIComponent(host)}`)
+          const res = await fetch(`${backendUrl}/api/public/tenant/branding?${query.toString()}`)
           json = await res.json()
         }
 
-        if (json?.success && json.data?.isCustomDomain) {
+        if (json?.success && json.data && (json.data.isCustomDomain || branchIdParam)) {
           setTenantBranding(json.data)
         }
       } catch {

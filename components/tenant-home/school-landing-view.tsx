@@ -184,7 +184,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
           <div className="flex items-center space-x-3">
             {data.showPortalLoginCta && (
               <Link
-                href="/login"
+                href={`/login?branchId=${data.branchId}`}
                 className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-200 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 transition-all hover:border-slate-500 shadow-sm"
               >
                 <LogIn size={16} className="text-cyan-400" />
@@ -194,7 +194,7 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
 
             {data.showAdmissionCta && (
               <Link
-                href="/admissions"
+                href={`/admissions?branchId=${data.branchId}`}
                 className="inline-flex items-center space-x-2 px-5 py-2 rounded-xl text-sm font-bold text-white shadow-lg transition-all hover:scale-105"
                 style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
               >
@@ -232,11 +232,11 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
                 </div>
 
                 <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight mb-4 drop-shadow-md">
-                  {banner.caption || data.heroHeadline}
+                  {index === 0 ? (data.heroHeadline || banner.caption) : (banner.caption || data.heroHeadline)}
                 </h1>
 
                 <p className="text-base sm:text-lg text-slate-300 font-normal leading-relaxed mb-8 max-w-2xl drop-shadow">
-                  {banner.subcaption || data.heroSubheadline}
+                  {index === 0 ? (data.heroSubheadline || banner.subcaption) : (banner.subcaption || data.heroSubheadline)}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-4">
@@ -684,8 +684,8 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
                 <li><a href="#about" className="hover:text-white transition-colors">About Our School</a></li>
                 <li><a href="#academics" className="hover:text-white transition-colors">Academic Programs</a></li>
                 <li><a href="#gallery" className="hover:text-white transition-colors">Campus Photo Gallery</a></li>
-                <li><Link href="/admissions" className="hover:text-white transition-colors">Online Admission</Link></li>
-                <li><Link href="/login" className="hover:text-white transition-colors">Student & Staff Portal</Link></li>
+                <li><Link href={`/admissions?branchId=${data.branchId}`} className="hover:text-white transition-colors">Online Admission</Link></li>
+                <li><Link href={`/login?branchId=${data.branchId}`} className="hover:text-white transition-colors">Student & Staff Portal</Link></li>
               </ul>
             </div>
 
@@ -695,15 +695,15 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-start space-x-3">
                   <MapPin size={16} className="text-cyan-400 mt-1 flex-shrink-0" />
-                  <span>{data.address}</span>
+                  <span>{data.address || (data as any).contact?.address || 'Campus Education Boulevard'}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Phone size={16} className="text-emerald-400 flex-shrink-0" />
-                  <span>{data.phone}</span>
+                  <span>{data.phone || (data as any).contact?.phone || '+234 800 UGBEKUN'}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Mail size={16} className="text-blue-400 flex-shrink-0" />
-                  <span>{data.email}</span>
+                  <span>{data.email || (data as any).contact?.email || 'admissions@school.edu.ng'}</span>
                 </div>
               </div>
             </div>
@@ -714,9 +714,9 @@ export function SchoolLandingView({ initialData, previewMode = false }: SchoolLa
               &copy; {new Date().getFullYear()} {data.schoolName}. Powered by Ugbekun Educational Platform.
             </div>
             <div className="flex items-center space-x-4">
-              <Link href="/login" className="hover:text-slate-300">Staff Portal</Link>
+              <Link href={`/login?branchId=${data.branchId}`} className="hover:text-slate-300">Staff Portal</Link>
               <span>•</span>
-              <Link href="/admissions" className="hover:text-slate-300">Admissions</Link>
+              <Link href={`/admissions?branchId=${data.branchId}`} className="hover:text-slate-300">Admissions</Link>
               <span>•</span>
               <a href="#contact" className="hover:text-slate-300">Privacy Policy</a>
             </div>

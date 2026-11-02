@@ -8,7 +8,7 @@ const nextConfig = {
   },
   headers: async () => [
     {
-      source: '/(subscribe|login|dashboard|api/:path*)',
+      source: '/(subscribe|login|dashboard|tenant-home|api/:path*)',
       headers: [
         {
           key: 'Cache-Control',

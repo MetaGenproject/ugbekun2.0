@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
@@ -15,8 +17,8 @@ function TenantHomeContent() {
   const [error, setError] = useState<string | null>(null)
   const [homepageData, setHomepageData] = useState<SchoolHomepageData | null>(null)
 
-  const fetchHomepageData = async () => {
-    setLoading(true)
+  const fetchHomepageData = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
 
     try {
@@ -31,11 +33,20 @@ function TenantHomeContent() {
         query.set('domain', host)
       }
 
+      // Add unique timestamp query parameter to bypass all aggressive browser/CDN caching
+      query.set('_t', String(Date.now()))
+
       let json: any = null
 
       // 1. Try same-origin Next.js proxy route first (bypasses browser CORS and mixed-content blocks)
       try {
-        const proxyRes = await fetch(`/api/proxy/public/tenant/homepage?${query.toString()}`)
+        const proxyRes = await fetch(`/api/proxy/public/tenant/homepage?${query.toString()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        })
         if (proxyRes.ok) {
           json = await proxyRes.json().catch(() => null)
         }
@@ -46,7 +57,13 @@ function TenantHomeContent() {
       // 2. Fallback to direct backend URL if proxy did not return valid data
       if (!json || !json.success) {
         const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.ugbekun.com').replace(/\/api\/?$/, '')
-        const directRes = await fetch(`${backendUrl}/api/public/tenant/homepage?${query.toString()}`)
+        const directRes = await fetch(`${backendUrl}/api/public/tenant/homepage?${query.toString()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        })
         json = await directRes.json()
       }
 
@@ -57,14 +74,53 @@ function TenantHomeContent() {
       }
     } catch (err: any) {
       console.error('[TENANT HOME] Fetch error:', err)
-      setError(err.message || 'Unable to connect to school portal.')
+      if (!homepageData) {
+        setError(err.message || 'Unable to connect to school portal.')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchHomepageData()
+
+    // Multi-tab real-time sync via BroadcastChannel
+    let channel: BroadcastChannel | null = null
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        channel = new BroadcastChannel('ugbekun_cms_sync')
+        channel.onmessage = (event) => {
+          if (!branchIdParam || String(event.data?.branchId) === String(branchIdParam)) {
+            fetchHomepageData(true)
+          }
+        }
+      }
+    } catch {}
+
+    // Storage event fallback for cross-tab sync
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'ugbekun_cms_sync') {
+        fetchHomepageData(true)
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+
+    // Re-fetch automatically when user focuses or returns to this tab
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchHomepageData(true)
+      }
+    }
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    window.addEventListener('focus', handleVisibilityOrFocus)
+
+    return () => {
+      if (channel) channel.close()
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+    }
   }, [domainParam, subdomainParam, branchIdParam])
 
   if (loading) {
@@ -90,7 +146,7 @@ function TenantHomeContent() {
             </p>
           </div>
           <button
-            onClick={fetchHomepageData}
+            onClick={() => fetchHomepageData()}
             className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl text-sm font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg cursor-pointer"
           >
             <RefreshCw size={16} />

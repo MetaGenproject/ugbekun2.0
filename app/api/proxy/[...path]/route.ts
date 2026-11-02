@@ -104,6 +104,10 @@ async function handleProxyRequest(request: NextRequest, params: { path: string[]
         // Cache read-only structural data (e.g., class arms, teacher profile) briefly with stale-while-revalidate
         if (request.method === 'GET' && /^(teacher\/(profile|classes)|admin\/classes)/i.test(path)) {
           nextRes.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300')
+        } else if (/public\/tenant|landing-page/i.test(path)) {
+          nextRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+          nextRes.headers.set('Pragma', 'no-cache')
+          nextRes.headers.set('Expires', '0')
         }
         return nextRes
       }

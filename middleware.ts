@@ -64,8 +64,9 @@ export function middleware(request: NextRequest) {
     requestHeaders.set('x-tenant-subdomain', detectedSubdomain)
   }
 
-  // If visitor is accessing the root "/" from a custom domain or school subdomain, rewrite to /tenant-home
-  if (url.pathname === '/' && (isCustomDomain || detectedSubdomain)) {
+  // If visitor is accessing the root "/" from a custom domain, school subdomain, or with explicit query params, rewrite to /tenant-home
+  const hasTenantParam = url.searchParams.has('branchId') || url.searchParams.has('domain') || url.searchParams.has('subdomain')
+  if (url.pathname === '/' && (isCustomDomain || detectedSubdomain || hasTenantParam)) {
     const rewriteUrl = new URL('/tenant-home', request.url)
     if (detectedSubdomain) {
       rewriteUrl.searchParams.set('subdomain', detectedSubdomain)
@@ -73,11 +74,15 @@ export function middleware(request: NextRequest) {
       rewriteUrl.searchParams.set('domain', normalizedHostname)
     }
 
-    return NextResponse.rewrite(rewriteUrl, {
+    const response = NextResponse.rewrite(rewriteUrl, {
       request: {
         headers: requestHeaders
       }
     })
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    return response
   }
 
   return NextResponse.next({
