@@ -36,9 +36,30 @@ interface StudentDailyRecord {
   registerNo: string | null
   photo: string | null
   gender?: string | null
+  classId?: number
+  className?: string
+  sectionId?: number
+  sectionName?: string
   status: string
   remark: string | null
   markedAt: string | null
+}
+
+interface ClassBreakdownItem {
+  classId: number
+  className: string
+  sectionId: number
+  sectionName: string
+  total: number
+  present: number
+  absent: number
+  late: number
+  excused?: number
+  sick?: number
+  unmarked: number
+  attendanceRate: number
+  registerStatus: string
+  takenByTeacherName: string | null
 }
 
 interface DailyAttendanceData {
@@ -64,6 +85,7 @@ interface DailyAttendanceData {
     unmarked: number
     attendanceRate: number
   }
+  classBreakdown?: ClassBreakdownItem[]
   students: StudentDailyRecord[]
 }
 
@@ -73,6 +95,7 @@ interface TeacherDailyAttendanceProps {
   onSelectFormIdx: (idx: number) => void
   currentDate: string
   onDateChange: (date: string) => void
+  isAdmin?: boolean
 }
 
 export default function TeacherDailyAttendance({
@@ -81,6 +104,7 @@ export default function TeacherDailyAttendance({
   onSelectFormIdx,
   currentDate,
   onDateChange,
+  isAdmin = false,
 }: TeacherDailyAttendanceProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,19 +112,22 @@ export default function TeacherDailyAttendance({
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PRESENT' | 'ABSENT' | 'LATE' | 'UNMARKED'>('ALL')
 
-  const activeForm = formAllocations[selectedFormIdx] || formAllocations[0]
+  const isAllClasses = isAdmin && selectedFormIdx === -1
+  const activeForm = isAllClasses ? null : (formAllocations[selectedFormIdx] || formAllocations[0])
 
   const fetchDailyReport = async () => {
-    if (!activeForm) return
+    if (!isAllClasses && !activeForm) return
     setLoading(true)
     setError(null)
 
     try {
-      const url = endpoints.teacher.attendanceDailyReport(
-        activeForm.classId,
-        activeForm.sectionId,
-        currentDate
-      )
+      const url = isAllClasses
+        ? endpoints.teacher.attendanceDailyReport('all', 'all', currentDate)
+        : endpoints.teacher.attendanceDailyReport(
+            activeForm!.classId,
+            activeForm!.sectionId,
+            currentDate
+          )
       const res = await apiSlice.get<DailyAttendanceData>(url)
       if (res.success) {
         setReportData(res)
@@ -117,7 +144,7 @@ export default function TeacherDailyAttendance({
 
   useEffect(() => {
     fetchDailyReport()
-  }, [activeForm?.classId, activeForm?.sectionId, currentDate])
+  }, [isAllClasses, activeForm?.classId, activeForm?.sectionId, currentDate])
 
   const handlePrevDay = () => {
     const cur = new Date(currentDate)
@@ -153,7 +180,8 @@ export default function TeacherDailyAttendance({
         const matchName = st.name.toLowerCase().includes(q)
         const matchReg = st.registerNo?.toLowerCase().includes(q)
         const matchRoll = String(st.roll).includes(q)
-        if (!matchName && !matchReg && !matchRoll) return false
+        const matchClass = `${st.className || ''} ${st.sectionName || ''}`.toLowerCase().includes(q)
+        if (!matchName && !matchReg && !matchRoll && !matchClass) return false
       }
       return true
     })
@@ -162,21 +190,37 @@ export default function TeacherDailyAttendance({
   // Export CSV
   const handleExportCSV = () => {
     if (!reportData?.students || reportData.students.length === 0) return
-    const headers = ['Roll No', 'Student Name', 'Admission No', 'Gender', 'Status', 'Time Marked', 'Remarks']
-    const rows = reportData.students.map((st) => [
-      st.roll,
-      `"${st.name}"`,
-      st.registerNo || 'N/A',
-      st.gender || 'N/A',
-      st.status,
-      st.markedAt ? new Date(st.markedAt).toLocaleTimeString() : 'N/A',
-      `"${st.remark || ''}"`,
-    ])
+    const headers = isAllClasses
+      ? ['Roll No', 'Class / Arm', 'Student Name', 'Admission No', 'Gender', 'Status', 'Time Marked', 'Remarks']
+      : ['Roll No', 'Student Name', 'Admission No', 'Gender', 'Status', 'Time Marked', 'Remarks']
+    const rows = reportData.students.map((st) =>
+      isAllClasses
+        ? [
+            st.roll,
+            `"${[st.className, st.sectionName].filter(Boolean).join(' - ')}"`,
+            `"${st.name}"`,
+            st.registerNo || 'N/A',
+            st.gender || 'N/A',
+            st.status,
+            st.markedAt ? new Date(st.markedAt).toLocaleTimeString() : 'N/A',
+            `"${st.remark || ''}"`,
+          ]
+        : [
+            st.roll,
+            `"${st.name}"`,
+            st.registerNo || 'N/A',
+            st.gender || 'N/A',
+            st.status,
+            st.markedAt ? new Date(st.markedAt).toLocaleTimeString() : 'N/A',
+            `"${st.remark || ''}"`,
+          ]
+    )
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n')
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
     link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `Daily_Attendance_${activeForm?.className}_${activeForm?.sectionName}_${currentDate}.csv`)
+    const scopeName = isAllClasses ? 'All_Classes' : `${activeForm?.className}_${activeForm?.sectionName}`
+    link.setAttribute('download', `Daily_Attendance_${scopeName}_${currentDate}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -208,23 +252,54 @@ export default function TeacherDailyAttendance({
               <Users size={14} className="text-indigo-600" />
               Classroom:
             </span>
-            <div className="flex flex-wrap gap-1.5">
-              {formAllocations.map((form, idx) => (
-                <button
-                  key={`${form.classId}-${form.sectionId}`}
-                  type="button"
-                  onClick={() => onSelectFormIdx(idx)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                    selectedFormIdx === idx
-                      ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-600/20'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
-                  }`}
+            {(isAdmin || formAllocations.length > 4) ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectFormIdx(-1)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      selectedFormIdx === -1
+                        ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-600/20'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+                    }`}
+                  >
+                    All Classes ({formAllocations.length})
+                  </button>
+                )}
+                <select
+                  aria-label="Select Class and Arm"
+                  value={selectedFormIdx}
+                  onChange={(e) => onSelectFormIdx(Number(e.target.value))}
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                 >
-                  <span>{form.className}</span>
-                  <span className="text-[10px] opacity-80 font-normal">({form.sectionName})</span>
-                </button>
-              ))}
-            </div>
+                  {isAdmin && <option value={-1}>All Classes (School-Wide)</option>}
+                  {formAllocations.map((form, idx) => (
+                    <option key={`${form.classId}-${form.sectionId}`} value={idx}>
+                      {form.className} ({form.sectionName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {formAllocations.map((form, idx) => (
+                  <button
+                    key={`${form.classId}-${form.sectionId}`}
+                    type="button"
+                    onClick={() => onSelectFormIdx(idx)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      selectedFormIdx === idx
+                        ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-600/20'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+                    }`}
+                  >
+                    <span>{form.className}</span>
+                    <span className="text-[10px] opacity-80 font-normal">({form.sectionName})</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Date Navigator Controls */}
@@ -445,8 +520,80 @@ export default function TeacherDailyAttendance({
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             Late ({summary.late})
           </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('UNMARKED')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+              statusFilter === 'UNMARKED'
+                ? 'bg-slate-700 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Unmarked ({summary.unmarked})
+          </button>
         </div>
       </div>
+
+      {/* ALL-CLASSES BREAKDOWN FOR SCHOOL ADMIN */}
+      {isAllClasses && reportData?.classBreakdown && reportData.classBreakdown.length > 0 && (
+        <div className="print:hidden bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                Class-by-Class Attendance Status ({reportData.classBreakdown.length} Class Streams)
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Click any class card below to filter and inspect that class directly.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {reportData.classBreakdown.map((cb) => {
+              const targetIdx = formAllocations.findIndex(
+                (f) => f.classId === cb.classId && f.sectionId === cb.sectionId
+              )
+              const isSubmitted = cb.registerStatus === 'SUBMITTED' || cb.registerStatus === 'LOCKED'
+              const isDraft = cb.registerStatus === 'DRAFT'
+              return (
+                <button
+                  key={`${cb.classId}-${cb.sectionId}`}
+                  type="button"
+                  onClick={() => {
+                    if (targetIdx >= 0) onSelectFormIdx(targetIdx)
+                  }}
+                  className="text-left p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 transition cursor-pointer flex flex-col justify-between gap-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-xs text-slate-900 truncate">
+                      {cb.className} ({cb.sectionName})
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
+                        isSubmitted
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : isDraft
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {isSubmitted ? 'Submitted' : isDraft ? 'Draft' : 'Unmarked'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                    <span>
+                      P: <strong className="text-emerald-700">{cb.present}</strong> · A:{' '}
+                      <strong className="text-rose-700">{cb.absent}</strong> · L:{' '}
+                      <strong className="text-amber-700">{cb.late}</strong>
+                    </span>
+                    <span className="font-black text-indigo-700">{cb.attendanceRate}%</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* STUDENT DAILY BREAKDOWN TABLE */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
@@ -454,7 +601,7 @@ export default function TeacherDailyAttendance({
         <div className="hidden print:block p-6 border-b border-slate-200 text-center">
           <h2 className="text-xl font-black text-slate-900 uppercase">Daily Attendance Report</h2>
           <p className="text-sm font-semibold text-slate-600 mt-1">
-            Class: {activeForm?.className} - {activeForm?.sectionName} | Date: {currentDate} ({reportData?.weekday})
+            Class: {isAllClasses ? 'All Classes (School-Wide)' : `${activeForm?.className} - ${activeForm?.sectionName}`} | Date: {currentDate} ({reportData?.weekday})
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
             Total: {summary.total} | Present: {summary.present} | Absent: {summary.absent} | Late: {summary.late} | Rate: {summary.attendanceRate}%
@@ -467,6 +614,7 @@ export default function TeacherDailyAttendance({
               <tr>
                 <th className="p-3.5 pl-5 w-16 text-center">Roll</th>
                 <th className="p-3.5">Student Details</th>
+                {isAllClasses && <th className="p-3.5">Class / Arm</th>}
                 <th className="p-3.5 text-center">Attendance Signal</th>
                 <th className="p-3.5 text-center">Time Marked</th>
                 <th className="p-3.5 pr-5">Remarks & Notes</th>
@@ -479,7 +627,7 @@ export default function TeacherDailyAttendance({
                   const isPresent = upperStatus === 'PRESENT'
                   const isAbsent = upperStatus === 'ABSENT'
                   const isLate = upperStatus === 'LATE'
-                  const isExcused = upperStatus === 'EXCUSED'
+                  const isExcused = upperStatus === 'EXCUSED' || upperStatus === 'SICK'
 
                   return (
                     <tr key={student.studentId} className="hover:bg-slate-50/60 transition">
@@ -506,6 +654,14 @@ export default function TeacherDailyAttendance({
                           </div>
                         </div>
                       </td>
+
+                      {isAllClasses && (
+                        <td className="p-3.5">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px]">
+                            {[student.className, student.sectionName].filter(Boolean).join(' • ') || '—'}
+                          </span>
+                        </td>
+                      )}
 
                       {/* Highlighted Signal Box Beside Student */}
                       <td className="p-3.5 text-center">
@@ -570,7 +726,7 @@ export default function TeacherDailyAttendance({
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-slate-400">
+                  <td colSpan={isAllClasses ? 6 : 5} className="p-10 text-center text-slate-400">
                     <UserCheck size={28} className="mx-auto text-slate-300 mb-2" />
                     <p className="font-bold text-sm text-slate-700">No attendance records found</p>
                     <p className="text-xs text-slate-400 mt-0.5">

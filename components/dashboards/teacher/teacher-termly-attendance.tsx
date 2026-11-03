@@ -35,6 +35,10 @@ interface StudentTermlyRecord {
   lastName: string
   registerNo: string | null
   photo: string | null
+  classId?: number | null
+  className?: string
+  sectionId?: number | null
+  sectionName?: string
   presentDays: number
   absentDays: number
   lateDays: number
@@ -65,6 +69,7 @@ interface TeacherTermlyAttendanceProps {
   onSelectFormIdx: (idx: number) => void
   currentTermId?: number
   onTermChange?: (termId: number) => void
+  isAdmin?: boolean
 }
 
 export default function TeacherTermlyAttendance({
@@ -73,6 +78,7 @@ export default function TeacherTermlyAttendance({
   onSelectFormIdx,
   currentTermId = 1,
   onTermChange,
+  isAdmin = false,
 }: TeacherTermlyAttendanceProps) {
   const [selectedTerm, setSelectedTerm] = useState<number>(currentTermId)
   const [loading, setLoading] = useState(false)
@@ -81,7 +87,8 @@ export default function TeacherTermlyAttendance({
   const [searchQuery, setSearchQuery] = useState('')
   const [evalFilter, setEvalFilter] = useState<'ALL' | 'EXCELLENT' | 'GOOD' | 'AVERAGE' | 'CRITICAL'>('ALL')
 
-  const activeForm = formAllocations[selectedFormIdx] || formAllocations[0]
+  const isAllClasses = isAdmin && selectedFormIdx === -1
+  const activeForm = isAllClasses ? null : formAllocations[selectedFormIdx] || formAllocations[0]
 
   const handleTermChange = (t: number) => {
     setSelectedTerm(t)
@@ -89,16 +96,16 @@ export default function TeacherTermlyAttendance({
   }
 
   const fetchTermlyReport = async () => {
-    if (!activeForm) return
+    if (!isAllClasses && !activeForm) return
     setLoading(true)
     setError(null)
 
     try {
       const url = endpoints.teacher.attendanceTermlyReport(
-        activeForm.classId,
-        activeForm.sectionId,
+        isAllClasses ? 'all' : activeForm!.classId,
+        isAllClasses ? 'all' : activeForm!.sectionId,
         selectedTerm,
-        (activeForm as any).sessionId
+        isAllClasses ? undefined : (activeForm as any)?.sessionId
       )
       const res = await apiSlice.get<TermlyAttendanceData>(url)
       if (res.success) {
@@ -116,7 +123,7 @@ export default function TeacherTermlyAttendance({
 
   useEffect(() => {
     fetchTermlyReport()
-  }, [activeForm?.classId, activeForm?.sectionId, selectedTerm])
+  }, [isAllClasses, activeForm?.classId, activeForm?.sectionId, selectedTerm])
 
   // Filter students based on search and evaluation filter
   const filteredStudents = useMemo(() => {
@@ -133,7 +140,9 @@ export default function TeacherTermlyAttendance({
         (s) =>
           s.name.toLowerCase().includes(q) ||
           (s.registerNo && s.registerNo.toLowerCase().includes(q)) ||
-          String(s.roll).includes(q)
+          String(s.roll).includes(q) ||
+          (s.className && s.className.toLowerCase().includes(q)) ||
+          (s.sectionName && s.sectionName.toLowerCase().includes(q))
       )
     }
 
@@ -148,6 +157,7 @@ export default function TeacherTermlyAttendance({
       'Roll',
       'Register No',
       'Student Name',
+      ...(isAllClasses ? ['Class', 'Arm'] : []),
       'Total Days Held',
       'Present Days',
       'Absent Days',
@@ -160,6 +170,7 @@ export default function TeacherTermlyAttendance({
       s.roll,
       s.registerNo || 'N/A',
       `"${s.name.replace(/"/g, '""')}"`,
+      ...(isAllClasses ? [`"${s.className || ''}"`, `"${s.sectionName || ''}"`] : []),
       s.totalDays,
       s.presentDays,
       s.absentDays,
@@ -177,7 +188,7 @@ export default function TeacherTermlyAttendance({
     link.setAttribute('href', encodedUri)
     link.setAttribute(
       'download',
-      `Termly_Attendance_Broadsheet_${activeForm?.className || 'Class'}_${activeForm?.sectionName || 'Arm'}_Term${selectedTerm}.csv`
+      `Termly_Attendance_Broadsheet_${isAllClasses ? 'All_Classes' : `${activeForm?.className || 'Class'}_${activeForm?.sectionName || 'Arm'}`}_Term${selectedTerm}.csv`
     )
     document.body.appendChild(link)
     link.click()
@@ -205,16 +216,17 @@ export default function TeacherTermlyAttendance({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 dark:from-blue-500/20 dark:to-indigo-500/20 text-blue-700 dark:text-blue-300 px-3.5 py-1.5 rounded-xl border border-blue-200/50 dark:border-blue-700/30 font-semibold text-sm">
               <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>Assigned Form Class:</span>
+              <span>{isAdmin ? 'Select Class / Arm:' : 'Assigned Form Class:'}</span>
             </div>
 
-            {formAllocations.length > 1 ? (
+            {isAdmin || formAllocations.length > 1 ? (
               <select
                 aria-label="Select Assigned Form Class"
                 value={selectedFormIdx}
                 onChange={(e) => onSelectFormIdx(Number(e.target.value))}
                 className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               >
+                {isAdmin && <option value={-1}>All Classes (School-Wide)</option>}
                 {formAllocations.map((f, i) => (
                   <option key={`${f.classId}-${f.sectionId}`} value={i}>
                     {f.className} • {f.sectionName}
@@ -451,6 +463,7 @@ export default function TeacherTermlyAttendance({
               <tr className="bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider text-[11px]">
                 <th className="px-4 py-3 text-center font-bold w-14">Roll</th>
                 <th className="px-4 py-3 font-bold">Student Name</th>
+                {isAllClasses && <th className="px-4 py-3 font-bold">Class / Arm</th>}
                 <th className="px-4 py-3 font-bold">Register No</th>
                 <th className="px-3 py-3 text-center font-bold">Held Days</th>
                 <th className="px-3 py-3 text-center font-bold text-emerald-700 dark:text-emerald-400">Present</th>
@@ -464,7 +477,7 @@ export default function TeacherTermlyAttendance({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={isAllClasses ? 10 : 9} className="py-12 text-center text-slate-500">
                     <div className="flex items-center justify-center gap-3">
                       <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
                       <span>Loading termly attendance broadsheet...</span>
@@ -473,7 +486,7 @@ export default function TeacherTermlyAttendance({
                 </tr>
               ) : filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={isAllClasses ? 10 : 9} className="py-12 text-center text-slate-500">
                     <p className="font-semibold text-slate-700 dark:text-slate-300">
                       No student records found
                     </p>
@@ -515,6 +528,14 @@ export default function TeacherTermlyAttendance({
                           </div>
                         </div>
                       </td>
+
+                      {isAllClasses && (
+                        <td className="px-4 py-3">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[11px]">
+                            {[student.className, student.sectionName].filter(Boolean).join(' • ') || '—'}
+                          </span>
+                        </td>
+                      )}
 
                       <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 text-xs">
                         {student.registerNo || '—'}

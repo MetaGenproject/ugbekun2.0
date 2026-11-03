@@ -134,6 +134,8 @@ export default function AttendanceHub({
           formAllocations={formAllocations as any}
           schoolName={schoolName}
           teacherName={teacherName}
+          selectedFormIdx={selectedFormIdx}
+          onSelectFormIdx={setSelectedFormIdx}
         />
       )}
 

@@ -760,8 +760,37 @@ export function AdminDashboard({ user, activeSection = 'overview', branchStats: 
     return <MarksEntry />
   }
 
-  if (activeSection === 'attendance') {
-    return <AttendanceManager />
+  if (
+    activeSection === 'attendance' ||
+    activeSection === 'attendance-register' ||
+    activeSection === 'attendance-daily' ||
+    activeSection === 'attendance-monthly' ||
+    activeSection === 'attendance-termly' ||
+    activeSection === 'attendance-staff' ||
+    activeSection === 'attendance-gate' ||
+    activeSection === 'attendance-reports' ||
+    activeSection === 'attendance-report'
+  ) {
+    const initialTab =
+      activeSection === 'attendance-daily'
+        ? 'daily'
+        : activeSection === 'attendance-monthly'
+        ? 'monthly'
+        : activeSection === 'attendance-termly'
+        ? 'termly'
+        : activeSection === 'attendance-staff'
+        ? 'staff'
+        : activeSection === 'attendance-gate'
+        ? 'gate'
+        : 'register'
+
+    return (
+      <AttendanceManager
+        initialTab={initialTab}
+        schoolName={stats?.branchName}
+        adminName={user?.username || 'School Admin'}
+      />
+    )
   }
 
   if (activeSection === 'card-management') {

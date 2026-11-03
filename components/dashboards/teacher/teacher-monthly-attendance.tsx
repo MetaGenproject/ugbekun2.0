@@ -48,6 +48,10 @@ interface StudentMonthlyRecord {
   lastName: string
   registerNo: string | null
   photo: string | null
+  classId?: number | null
+  className?: string
+  sectionId?: number | null
+  sectionName?: string
   days: Record<string, string> // "1" -> "P" | "A" | "L" | "H" | "—"
   presentCount: number
   absentCount: number
@@ -78,6 +82,7 @@ interface TeacherMonthlyAttendanceProps {
   onSelectFormIdx: (idx: number) => void
   currentMonth?: string // YYYY-MM
   onMonthChange?: (month: string) => void
+  isAdmin?: boolean
 }
 
 export default function TeacherMonthlyAttendance({
@@ -86,6 +91,7 @@ export default function TeacherMonthlyAttendance({
   onSelectFormIdx,
   currentMonth: propCurrentMonth,
   onMonthChange,
+  isAdmin = false,
 }: TeacherMonthlyAttendanceProps) {
   // Default to current year-month
   const now = new Date()
@@ -96,7 +102,8 @@ export default function TeacherMonthlyAttendance({
   const [reportData, setReportData] = useState<MonthlyAttendanceData | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const activeForm = formAllocations[selectedFormIdx] || formAllocations[0]
+  const isAllClasses = isAdmin && selectedFormIdx === -1
+  const activeForm = isAllClasses ? null : formAllocations[selectedFormIdx] || formAllocations[0]
 
   const handleMonthChange = (newMonth: string) => {
     setSelectedMonth(newMonth)
@@ -113,14 +120,14 @@ export default function TeacherMonthlyAttendance({
   }
 
   const fetchMonthlyReport = async () => {
-    if (!activeForm) return
+    if (!isAllClasses && !activeForm) return
     setLoading(true)
     setError(null)
 
     try {
       const url = endpoints.teacher.attendanceMonthlyReport(
-        activeForm.classId,
-        activeForm.sectionId,
+        isAllClasses ? 'all' : activeForm!.classId,
+        isAllClasses ? 'all' : activeForm!.sectionId,
         selectedMonth
       )
       const res = await apiSlice.get<MonthlyAttendanceData>(url)
@@ -139,7 +146,7 @@ export default function TeacherMonthlyAttendance({
 
   useEffect(() => {
     fetchMonthlyReport()
-  }, [activeForm?.classId, activeForm?.sectionId, selectedMonth])
+  }, [isAllClasses, activeForm?.classId, activeForm?.sectionId, selectedMonth])
 
   // Filter students based on search query
   const filteredStudents = useMemo(() => {
@@ -151,7 +158,9 @@ export default function TeacherMonthlyAttendance({
       (s) =>
         s.name.toLowerCase().includes(q) ||
         (s.registerNo && s.registerNo.toLowerCase().includes(q)) ||
-        String(s.roll).includes(q)
+        String(s.roll).includes(q) ||
+        (s.className && s.className.toLowerCase().includes(q)) ||
+        (s.sectionName && s.sectionName.toLowerCase().includes(q))
     )
   }, [reportData?.students, searchQuery])
 
@@ -175,6 +184,7 @@ export default function TeacherMonthlyAttendance({
       'Roll',
       'Register No',
       'Student Name',
+      ...(isAllClasses ? ['Class', 'Arm'] : []),
       ...days.map((d) => `Day ${d.day} (${d.dateKey})`),
       'Total Present',
       'Total Absent',
@@ -188,6 +198,7 @@ export default function TeacherMonthlyAttendance({
         s.roll,
         s.registerNo || 'N/A',
         `"${s.name.replace(/"/g, '""')}"`,
+        ...(isAllClasses ? [`"${s.className || ''}"`, `"${s.sectionName || ''}"`] : []),
         ...dayValues,
         s.presentCount,
         s.absentCount,
@@ -205,7 +216,7 @@ export default function TeacherMonthlyAttendance({
     link.setAttribute('href', encodedUri)
     link.setAttribute(
       'download',
-      `Monthly_Attendance_${activeForm?.className || 'Class'}_${activeForm?.sectionName || 'Arm'}_${selectedMonth}.csv`
+      `Monthly_Attendance_${isAllClasses ? 'All_Classes' : `${activeForm?.className || 'Class'}_${activeForm?.sectionName || 'Arm'}`}_${selectedMonth}.csv`
     )
     document.body.appendChild(link)
     link.click()
@@ -233,16 +244,17 @@ export default function TeacherMonthlyAttendance({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 dark:from-blue-500/20 dark:to-indigo-500/20 text-blue-700 dark:text-blue-300 px-3.5 py-1.5 rounded-xl border border-blue-200/50 dark:border-blue-700/30 font-semibold text-sm">
               <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>Assigned Form Class:</span>
+              <span>{isAdmin ? 'Select Class / Arm:' : 'Assigned Form Class:'}</span>
             </div>
 
-            {formAllocations.length > 1 ? (
+            {isAdmin || formAllocations.length > 1 ? (
               <select
                 aria-label="Select Assigned Form Class"
                 value={selectedFormIdx}
                 onChange={(e) => onSelectFormIdx(Number(e.target.value))}
                 className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               >
+                {isAdmin && <option value={-1}>All Classes (School-Wide)</option>}
                 {formAllocations.map((f, i) => (
                   <option key={`${f.classId}-${f.sectionId}`} value={i}>
                     {f.className} • {f.sectionName}
@@ -651,6 +663,9 @@ export default function TeacherMonthlyAttendance({
                             </div>
                             <div className="text-[10px] text-slate-400 font-mono">
                               {student.registerNo || `ID: ${student.studentId}`}
+                              {isAllClasses && student.className
+                                ? ` • ${[student.className, student.sectionName].filter(Boolean).join(' ')}`
+                                : ''}
                             </div>
                           </div>
                         </div>

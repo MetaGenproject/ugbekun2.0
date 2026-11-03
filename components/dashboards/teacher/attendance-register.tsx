@@ -94,7 +94,7 @@ interface FormAllocation {
   className: string
   sectionId: number
   sectionName: string
-  sessionId: number
+  sessionId?: number
 }
 
 interface RosterStudent {
@@ -137,6 +137,9 @@ interface AttendanceRegisterProps {
   formAllocations?: FormAllocation[]
   schoolName?: string
   teacherName?: string
+  selectedFormIdx?: number
+  onSelectFormIdx?: (idx: number) => void
+  isAdmin?: boolean
 }
 
 function studentDisplayName(student: RosterStudent) {
@@ -218,9 +221,19 @@ export default function AttendanceRegister({
   formAllocations = [],
   schoolName,
   teacherName,
+  selectedFormIdx: propSelectedFormIdx,
+  onSelectFormIdx,
+  isAdmin = false,
 }: AttendanceRegisterProps) {
-  const [selectedFormIdx, setSelectedFormIdx] = useState(0)
+  const [internalFormIdx, setInternalFormIdx] = useState(0)
+  const selectedFormIdx = propSelectedFormIdx !== undefined && propSelectedFormIdx >= 0 ? propSelectedFormIdx : internalFormIdx
+  const setSelectedFormIdx = (idx: number) => {
+    setInternalFormIdx(idx)
+    onSelectFormIdx?.(idx)
+  }
   const [attendanceDate, setAttendanceDate] = useState(todaySchoolDateKey)
+  const [unlocking, setUnlocking] = useState(false)
+  const [unlockReason, setUnlockReason] = useState('')
   const [students, setStudents] = useState<RosterStudent[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Record<number, AttendanceRecord>>({})
   const [loading, setLoading] = useState(false)
@@ -738,12 +751,42 @@ export default function AttendanceRegister({
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm print:hidden">
         <UserCheck size={28} className="mx-auto text-slate-300 mb-3" />
-        <h3 className="text-base font-black text-slate-900">No class allocated</h3>
+        <h3 className="text-base font-black text-slate-900">
+          {isAdmin ? 'No classes found for this school' : 'No class allocated'}
+        </h3>
         <p className="text-xs font-semibold text-slate-400 mt-1 max-w-md mx-auto">
-          Only the designated class teacher can take the daily class register. Ask your school admin to assign you as class teacher.
+          {isAdmin
+            ? 'Set up classes and sections in Campus & Students to open and manage class attendance registers.'
+            : 'Only the designated class teacher can take the daily class register. Ask your school admin to assign you as class teacher.'}
         </p>
       </div>
     )
+  }
+
+  const handleAdminUnlock = async () => {
+    if (!registerMeta?.id) return
+    setUnlocking(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message?: string }>(
+        endpoints.admin.unlockAttendanceRegister,
+        {
+          registerId: registerMeta.id,
+          classId: activeForm?.classId,
+          sectionId: activeForm?.sectionId,
+          date: attendanceDate,
+          reason: unlockReason.trim() || 'Unlocked by school admin',
+        }
+      )
+      setSuccess(res.message || 'Register unlocked for editing.')
+      setUnlockReason('')
+      await loadRegister(attendanceDate, selectedFormIdx)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to unlock register.')
+    } finally {
+      setUnlocking(false)
+    }
   }
 
   return (
@@ -968,13 +1011,37 @@ export default function AttendanceRegister({
         )}
 
         {isTrulyLocked ? (
-          <div className="m-4 p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 text-xs text-amber-900 font-semibold flex items-center gap-2">
-            <Lock size={14} className="text-amber-700 shrink-0" />
-            {calendar?.isHoliday && !calendar.isSchoolDay
-              ? "This date is marked as a holiday or non-school day on the academic calendar."
-              : calendar?.isFuture
-                ? "Future school days cannot be marked yet."
-                : "This register is locked by school admin. Ask an admin to unlock if further changes are required."}
+          <div className="m-4 p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 text-xs text-amber-900 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Lock size={14} className="text-amber-700 shrink-0" />
+              <span>
+                {calendar?.isHoliday && !calendar.isSchoolDay
+                  ? "This date is marked as a holiday or non-school day on the academic calendar."
+                  : calendar?.isFuture
+                    ? "Future school days cannot be marked yet."
+                    : isAdmin
+                      ? "This register is currently locked. You can unlock it below so the class teacher or admin can edit."
+                      : "This register is locked by school admin. Ask an admin to unlock if further changes are required."}
+              </span>
+            </div>
+            {isAdmin && registerMeta?.id && !calendar?.isFuture && (
+              <div className="flex items-center gap-2">
+                <input
+                  value={unlockReason}
+                  onChange={(e) => setUnlockReason(e.target.value)}
+                  placeholder="Unlock reason (optional)"
+                  className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white text-slate-800 text-xs font-semibold"
+                />
+                <button
+                  type="button"
+                  onClick={handleAdminUnlock}
+                  disabled={unlocking}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shrink-0"
+                >
+                  {unlocking ? 'Unlocking…' : 'Unlock Register'}
+                </button>
+              </div>
+            )}
           </div>
         ) : isSubmitted && !isEditingSubmitted ? (
           <div className="m-4 p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/80 text-xs text-emerald-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -982,17 +1049,29 @@ export default function AttendanceRegister({
               <Check size={16} className="text-emerald-600 shrink-0" />
               <span>
                 Register submitted{registerMeta?.takenByTeacherName ? ` by ${registerMeta.takenByTeacherName}` : ""}.
-                Need to correct an attendance record or student status? Click <strong>Edit Register</strong>.
+                Need to correct an attendance record or student status? Click <strong>Edit Register</strong>{isAdmin ? " or unlock it for the class teacher" : ""}.
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsEditingSubmitted(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition cursor-pointer shrink-0"
-            >
-              <Edit3 size={13} />
-              Edit Register
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {isAdmin && registerMeta?.id && (
+                <button
+                  type="button"
+                  onClick={handleAdminUnlock}
+                  disabled={unlocking}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                >
+                  {unlocking ? 'Unlocking…' : 'Unlock for Teacher'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsEditingSubmitted(true)}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+              >
+                <Edit3 size={13} />
+                Edit Register
+              </button>
+            </div>
           </div>
         ) : isSubmitted && isEditingSubmitted ? (
           <div className="m-4 p-3.5 rounded-xl border border-blue-200 bg-blue-50/80 text-xs text-blue-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
