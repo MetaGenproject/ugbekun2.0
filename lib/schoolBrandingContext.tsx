@@ -35,6 +35,32 @@ interface SchoolBrandingContextType {
   refreshBranding: () => Promise<void>
 }
 
+export const UGBEKUN_ADMIN_BRANDING: SchoolBrandingData = {
+  branchId: 0,
+  branchCode: 'UGB',
+  branchName: 'Ugbekun Admin Portal',
+  schoolName: 'Ugbekun Admin Portal',
+  tagline: 'SaaS Platform Management & Control Center',
+  address: '',
+  phone: '',
+  email: 'admin@ugbekun.com',
+  whatsappNo: null,
+  website: 'https://ugbekun.com',
+  facebookUrl: null,
+  instagramUrl: null,
+  twitterUrl: null,
+  linkedinUrl: null,
+  youtubeUrl: null,
+  logoUrl: null,
+  principalSignatureUrl: null,
+  primaryColor: '#0b1739',
+  secondaryColor: '#e11d48',
+  idCardTheme: 'EMERALD_MODERN',
+  academicSession: '2025/2026',
+  currentTerm: 'Active Session',
+  currencySymbol: '₦',
+}
+
 const defaultBranding: SchoolBrandingData = {
   branchId: 1,
   branchCode: 'UG',
@@ -90,6 +116,13 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
           try {
             const parsed = JSON.parse(rawUser)
             const role = Number(parsed?.role)
+            // Superadmin belongs to the entire SaaS platform, not a school branch
+            if (role === 1) {
+              setBranding(UGBEKUN_ADMIN_BRANDING)
+              applyColors(UGBEKUN_ADMIN_BRANDING.primaryColor, UGBEKUN_ADMIN_BRANDING.secondaryColor)
+              setIsLoading(false)
+              return
+            }
             const targetBranchId = parsed?.branchId || parsed?.branch?.id
             // Parents: do not pin branding to a stale parent/HQ branchId.
             // The children overview header uses the selected child's school.
@@ -135,10 +168,20 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
     // 1. Immediately hydrate from localStorage cache if available to prevent layout flash
     if (typeof window !== 'undefined') {
       try {
+        const rawUser = localStorage.getItem('ugbekun_user')
+        if (rawUser) {
+          const parsedUser = JSON.parse(rawUser)
+          if (Number(parsedUser?.role) === 1) {
+            setBranding(UGBEKUN_ADMIN_BRANDING)
+            applyColors(UGBEKUN_ADMIN_BRANDING.primaryColor, UGBEKUN_ADMIN_BRANDING.secondaryColor)
+            setIsLoading(false)
+            return
+          }
+        }
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
           const parsed = JSON.parse(cached)
-          if (parsed && typeof parsed === 'object' && parsed.schoolName) {
+          if (parsed && typeof parsed === 'object' && parsed.schoolName && parsed.schoolName !== 'MetaGen Academy') {
             setBranding((prev) => ({ ...prev, ...parsed }))
             applyColors(parsed.primaryColor, parsed.secondaryColor)
           }

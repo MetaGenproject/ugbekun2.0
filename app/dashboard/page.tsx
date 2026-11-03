@@ -439,6 +439,16 @@ export default function DashboardPage() {
               currentTerm: res.data.settings?.currentTerm || 'First Term',
             })
           }
+        } else if (Number(user?.role) === 1) {
+          if (!cancelled) {
+            setSchoolInfo({
+              schoolName: 'Ugbekun Admin Portal',
+              tagline: 'SaaS Platform Management & Control Center',
+              logoUrl: null,
+              academicSession: '2025/2026',
+              currentTerm: 'Active Session',
+            })
+          }
         } else {
           const res = await apiSlice.get<{ success: boolean; data: { schoolName: string; tagline?: string; logoUrl: string | null; academicSession: string; currentTerm: string } }>(endpoints.public.schoolInfo)
           if (!cancelled && res.data) {
@@ -534,9 +544,10 @@ export default function DashboardPage() {
     )
   }
 
-  const displayLogo = branchStats?.settings?.logoUrl || schoolInfo?.logoUrl || (user as any)?.branch?.logo || null
-  const displaySchoolName = branchStats?.branchName || schoolInfo?.schoolName || (user as any)?.branch?.name || 'School Dashboard'
-  const displayTagline = schoolInfo?.tagline || branchStats?.settings?.tagline || 'Nurturing Excellence, Raising Leaders'
+  const isSuperAdmin = Number(user.role) === 1
+  const displayLogo = isSuperAdmin ? null : (branchStats?.settings?.logoUrl || schoolInfo?.logoUrl || (user as any)?.branch?.logo || null)
+  const displaySchoolName = isSuperAdmin ? 'Ugbekun Admin Portal' : (branchStats?.branchName || schoolInfo?.schoolName || (user as any)?.branch?.name || 'School Dashboard')
+  const displayTagline = isSuperAdmin ? 'SaaS Platform Management & Control Center' : (schoolInfo?.tagline || branchStats?.settings?.tagline || 'Nurturing Excellence, Raising Leaders')
 
   const navLinks = getNavLinks(user.role, branchStats)
   const activeSection = selectedSection

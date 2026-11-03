@@ -17,15 +17,47 @@ import {
 export function SchoolFooter() {
   const { branding } = useSchoolBranding()
 
+  // Detect if current session or branding is SuperAdmin / Ugbekun Admin Portal
+  let isSuperAdmin = branding.schoolName === 'Ugbekun Admin Portal'
+  if (typeof window !== 'undefined') {
+    try {
+      const rawUser = localStorage.getItem('ugbekun_user')
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser)
+        if (Number(parsed?.role) === 1) isSuperAdmin = true
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const effectiveBranding = isSuperAdmin
+    ? {
+        ...branding,
+        schoolName: 'Ugbekun Admin Portal',
+        tagline: 'SaaS Platform Management & Control Center',
+        phone: '',
+        email: 'admin@ugbekun.com',
+        website: 'https://ugbekun.com',
+        whatsappNo: null,
+        facebookUrl: null,
+        instagramUrl: null,
+        twitterUrl: null,
+        linkedinUrl: null,
+        youtubeUrl: null,
+        logoUrl: null,
+      }
+    : branding
+
   const hasSocials = Boolean(
-    branding.facebookUrl ||
-    branding.instagramUrl ||
-    branding.twitterUrl ||
-    branding.linkedinUrl ||
-    branding.youtubeUrl
+    effectiveBranding.facebookUrl ||
+    effectiveBranding.instagramUrl ||
+    effectiveBranding.twitterUrl ||
+    effectiveBranding.linkedinUrl ||
+    effectiveBranding.youtubeUrl
   )
 
-  const rawWhatsapp = branding.whatsappNo ? branding.whatsappNo.replace(/[^0-9]/g, '') : null
+  const rawWhatsapp = effectiveBranding.whatsappNo ? effectiveBranding.whatsappNo.replace(/[^0-9]/g, '') : null
 
   return (
     <footer className="print:hidden w-full mt-auto bg-gradient-to-r from-[#0b1739] via-[#091436] to-[#040c21] border-t border-blue-900/60 px-6 py-4 text-white shadow-xl font-sans">
@@ -34,10 +66,10 @@ export function SchoolFooter() {
           {/* School Identity */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl p-0.5 flex items-center justify-center border border-white/20 shrink-0 overflow-hidden bg-white/10 backdrop-blur-md shadow-xs">
-              {branding.logoUrl ? (
+              {effectiveBranding.logoUrl ? (
                 <img
-                  src={branding.logoUrl}
-                  alt={branding.schoolName}
+                  src={effectiveBranding.logoUrl}
+                  alt={effectiveBranding.schoolName}
                   className="w-full h-full object-contain rounded-lg"
                 />
               ) : (
@@ -45,28 +77,28 @@ export function SchoolFooter() {
               )}
             </div>
             <div>
-              <h4 className="font-extrabold text-sm text-white leading-tight tracking-wide">{branding.schoolName}</h4>
-              <p className="text-[11px] text-slate-300 font-medium leading-tight mt-0.5">{branding.tagline}</p>
+              <h4 className="font-extrabold text-sm text-white leading-tight tracking-wide">{effectiveBranding.schoolName}</h4>
+              <p className="text-[11px] text-slate-300 font-medium leading-tight mt-0.5">{effectiveBranding.tagline}</p>
             </div>
           </div>
 
           {/* Quick Contact Details & Socials */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-200 font-semibold">
-            {branding.phone && (
-              <a href={`tel:${branding.phone}`} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white transition">
+            {effectiveBranding.phone && (
+              <a href={`tel:${effectiveBranding.phone}`} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white transition">
                 <Phone size={13} className="text-cyan-400" />
-                <span>{branding.phone}</span>
+                <span>{effectiveBranding.phone}</span>
               </a>
             )}
-            {branding.email && (
-              <a href={`mailto:${branding.email}`} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white transition">
+            {effectiveBranding.email && (
+              <a href={`mailto:${effectiveBranding.email}`} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white transition">
                 <Mail size={13} className="text-cyan-400" />
-                <span>{branding.email}</span>
+                <span>{effectiveBranding.email}</span>
               </a>
             )}
-            {branding.website && (
+            {effectiveBranding.website && (
               <a
-                href={branding.website.startsWith('http') ? branding.website : `https://${branding.website}`}
+                href={effectiveBranding.website.startsWith('http') ? effectiveBranding.website : `https://${effectiveBranding.website}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-white transition"
