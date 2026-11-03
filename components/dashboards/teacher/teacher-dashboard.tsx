@@ -74,7 +74,7 @@ const SectionLoadingSkeleton = () => (
 
 const GradebookInterface = dynamic(() => import('./gradebook-interface'), { loading: () => <SectionLoadingSkeleton /> })
 const MontessoriMatrix = dynamic(() => import('./montessori-matrix'), { loading: () => <SectionLoadingSkeleton /> })
-const AttendanceRegister = dynamic(() => import('./attendance-register'), { loading: () => <SectionLoadingSkeleton /> })
+const AttendanceHub = dynamic(() => import('./attendance-hub'), { loading: () => <SectionLoadingSkeleton /> })
 const MediaLibrary = dynamic(() => import('./media-library').then(mod => mod.MediaLibrary), { loading: () => <SectionLoadingSkeleton /> })
 const AiLessonPlanner = dynamic(() => import('./ai-lesson-planner').then(mod => mod.AiLessonPlanner), { loading: () => <SectionLoadingSkeleton /> })
 const LiveClassroomHub = dynamic(() => import('./live-classroom-hub').then(mod => mod.LiveClassroomHub), { loading: () => <SectionLoadingSkeleton /> })
@@ -961,12 +961,32 @@ export function TeacherDashboard({ user, activeSection, onNavigate, onIdentityCh
 
   const normalizedProfile = profile ? { ...profile, id: profile.teacherId } : undefined
 
-  if (activeSection === 'attendance') {
-    return <AttendanceRegister
-      formAllocations={profile?.formAllocations || []}
-      schoolName={profile?.branchName}
-      teacherName={profile?.name || user.username}
-    />
+  if (
+    activeSection === 'attendance' ||
+    activeSection === 'attendance-register' ||
+    activeSection === 'attendance-daily' ||
+    activeSection === 'attendance-monthly' ||
+    activeSection === 'attendance-termly' ||
+    activeSection === 'attendance-reports' ||
+    activeSection === 'attendance-report'
+  ) {
+    const initialTab =
+      activeSection === 'attendance-daily'
+        ? 'daily'
+        : activeSection === 'attendance-monthly'
+        ? 'monthly'
+        : activeSection === 'attendance-termly'
+        ? 'termly'
+        : 'register'
+
+    return (
+      <AttendanceHub
+        formAllocations={profile?.formAllocations || []}
+        schoolName={profile?.branchName}
+        teacherName={profile?.name || user.username}
+        initialTab={initialTab}
+      />
+    )
   }
   if (activeSection === 'ai-planner' || activeSection === 'lesson-plan') {
     return <AiLessonPlanner profile={normalizedProfile as any} />

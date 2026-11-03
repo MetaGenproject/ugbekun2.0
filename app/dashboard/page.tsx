@@ -35,6 +35,7 @@ import {
   Boxes,
   LayoutGrid,
   ChevronRight,
+  ChevronDown,
   Mail,
   Globe,
   UserPlus,
@@ -127,6 +128,12 @@ interface User {
   lastLogin?: string
 }
 
+interface NavSubLink {
+  id: string
+  label: string
+  badge?: string
+}
+
 interface NavLink {
   id: string
   label: string
@@ -135,6 +142,7 @@ interface NavLink {
   badge?: string
   hasSub?: boolean
   group?: string
+  children?: NavSubLink[]
 }
 
 const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] => {
@@ -185,7 +193,19 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, group: 'Teaching' },
         { id: 'my-classes', label: 'My Classes', icon: Users, group: 'Teaching' },
-        { id: 'attendance', label: 'Attendance', icon: CheckSquare, group: 'Teaching' },
+        {
+          id: 'attendance',
+          label: 'Attendance',
+          icon: CheckSquare,
+          group: 'Teaching',
+          hasSub: true,
+          children: [
+            { id: 'attendance', label: 'Mark Register' },
+            { id: 'attendance-daily', label: 'Daily Report' },
+            { id: 'attendance-monthly', label: 'Monthly Report' },
+            { id: 'attendance-termly', label: 'Termly Report' },
+          ],
+        },
         { id: 'gradebook', label: 'Assessments', icon: TrendingUp, group: 'Teaching' },
         { id: 'report-cards', label: 'Report Cards', icon: FileSpreadsheet, group: 'Teaching' },
         { id: 'assignments', label: 'Assignments', icon: CheckSquare, group: 'Teaching' },
@@ -236,6 +256,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState('overview')
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ attendance: true })
   const [branchStats, setBranchStats] = useState<BranchStats | null>(null)
   const [schoolInfo, setSchoolInfo] = useState<{
     schoolName: string
@@ -639,10 +660,14 @@ export default function DashboardPage() {
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5 custom-sidebar-scroll">
           {navLinks.map((link, idx) => {
             const IconComponent = link.icon
-            const isActive = link.id === activeSection
+            const hasChildren = Boolean(link.children && link.children.length > 0)
+            const isChildActive = hasChildren && link.children!.some((c) => c.id === activeSection)
+            const isActive = link.id === activeSection || isChildActive
+            const isExpanded = expandedMenus[link.id] ?? (isActive && hasChildren)
             const showGroup = Boolean(link.group && link.group !== navLinks[idx - 1]?.group)
+
             return (
-              <div key={link.id}>
+              <div key={link.id} className="space-y-1">
                 {showGroup && (
                   <p className="px-3.5 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400/90">
                     {link.group}
@@ -651,8 +676,16 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedSection(link.id)
-                    setIsSidebarOpen(false)
+                    if (hasChildren) {
+                      setExpandedMenus((prev) => ({
+                        ...prev,
+                        [link.id]: !isExpanded,
+                      }))
+                      setSelectedSection(link.id)
+                    } else {
+                      setSelectedSection(link.id)
+                      setIsSidebarOpen(false)
+                    }
                   }}
                   className={`w-full text-left flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-[13px] transition-all relative group cursor-pointer ${
                     isActive
@@ -668,12 +701,56 @@ export default function DashboardPage() {
                     <span className="min-w-4 h-4 px-1.5 rounded-full bg-rose-500 text-[9px] font-extrabold flex items-center justify-center text-white shadow-xs">
                       {link.badge}
                     </span>
+                  ) : hasChildren ? (
+                    isExpanded ? (
+                      <ChevronDown size={14} className="shrink-0 text-white/80 transition-transform" />
+                    ) : (
+                      <ChevronRight size={14} className="shrink-0 text-slate-400/70 group-hover:text-white transition-transform" />
+                    )
                   ) : (
                     link.hasSub !== false && (
                       <ChevronRight size={14} className={`shrink-0 transition-transform ${isActive ? 'text-white/80' : 'text-slate-400/70 group-hover:text-white group-hover:translate-x-0.5'}`} />
                     )
                   )}
                 </button>
+
+                {/* Submenu Accordion */}
+                {hasChildren && isExpanded && (
+                  <div className="ml-5 pl-3 border-l-2 border-slate-700/60 dark:border-slate-800 space-y-1 my-1">
+                    {link.children!.map((sub) => {
+                      const isSubActive = activeSection === sub.id
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSection(sub.id)
+                            setIsSidebarOpen(false)
+                          }}
+                          className={`w-full text-left flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            isSubActive
+                              ? 'bg-white/15 text-white font-bold shadow-xs'
+                              : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isSubActive ? 'bg-red-400 ring-2 ring-red-400/30' : 'bg-slate-500'
+                              }`}
+                            />
+                            <span className="truncate">{sub.label}</span>
+                          </div>
+                          {sub.badge && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                              {sub.badge}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}

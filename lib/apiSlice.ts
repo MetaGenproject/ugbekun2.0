@@ -460,6 +460,23 @@ export const endpoints = {
     attendanceRegisterEntries: `${BASE_URL}/teacher/attendance/register/entries`,
     attendanceRegisterSubmit: `${BASE_URL}/teacher/attendance/register/submit`,
     attendanceWeek: `${BASE_URL}/teacher/attendance/week`,
+    attendanceDailyReport: (classId: number | string, sectionId: number | string, date?: string) =>
+      `${BASE_URL}/teacher/attendance/daily-report?classId=${classId}&sectionId=${sectionId}${date ? `&date=${encodeURIComponent(date)}` : ''}`,
+    attendanceMonthlyReport: (classId: number | string, sectionId: number | string, month?: string) =>
+      `${BASE_URL}/teacher/attendance/monthly-report?classId=${classId}&sectionId=${sectionId}${month ? `&month=${encodeURIComponent(month)}` : ''}`,
+    attendanceTermlyReport: (
+      classId: number | string,
+      sectionId: number | string,
+      termId?: number | string,
+      sessionId?: number | string
+    ) => {
+      const q = new URLSearchParams()
+      q.set('classId', String(classId))
+      q.set('sectionId', String(sectionId))
+      if (termId) q.set('termId', String(termId))
+      if (sessionId) q.set('sessionId', String(sessionId))
+      return `${BASE_URL}/teacher/attendance/termly-report?${q.toString()}`
+    },
     commentary: `${BASE_URL}/teacher/commentary`,
     generateAiCommentary: `${BASE_URL}/teacher/commentary/generate-ai`,
     batchGenerateAiCommentary: `${BASE_URL}/teacher/commentary/batch-generate-ai`,
