@@ -327,93 +327,93 @@ export default function TeacherTermlyAttendance({
       </div>
 
       {/* Top Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 sm:gap-4">
         {/* Total School Days */}
-        <div className="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent dark:from-indigo-500/20 border border-indigo-200/60 dark:border-indigo-700/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
+        <div className="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent dark:from-indigo-500/20 border border-indigo-200/60 dark:border-indigo-700/40 rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
               Days Held
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
-              <Calendar className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black text-indigo-700 dark:text-indigo-300 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-indigo-700 dark:text-indigo-300 tracking-tight">
             {reportData?.totalSchoolDays || 0}
           </div>
-          <p className="text-[11px] text-indigo-600/80 dark:text-indigo-400/80 font-medium mt-1">
-            School days held in term
+          <p className="text-[10px] sm:text-[11px] text-indigo-600/80 dark:text-indigo-400/80 font-medium mt-0.5 sm:mt-1">
+            School days held
           </p>
         </div>
 
         {/* Average Class Rate */}
-        <div className="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent dark:from-blue-500/20 border border-blue-200/60 dark:border-blue-700/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
-              Avg Attendance
+        <div className="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent dark:from-blue-500/20 border border-blue-200/60 dark:border-blue-700/40 rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+              Avg Rate
             </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
-              <Percent className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-500/20 dark:bg-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
+              <Percent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black text-blue-700 dark:text-blue-300 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-blue-700 dark:text-blue-300 tracking-tight">
             {summary.averageClassRate}%
           </div>
-          <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 font-medium mt-1">
+          <p className="text-[10px] sm:text-[11px] text-blue-600/80 dark:text-blue-400/80 font-medium mt-0.5 sm:mt-1">
             Term cumulative average
           </p>
         </div>
 
         {/* Total Present Days */}
-        <div className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-500/20 border border-emerald-200/60 dark:border-emerald-700/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+        <div className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-500/20 border border-emerald-200/60 dark:border-emerald-700/40 rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
               Total Present
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 dark:bg-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
-              <CheckCircle2 className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-500/20 dark:bg-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight">
             {summary.totalPresent}
           </div>
-          <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-medium mt-1">
+          <p className="text-[10px] sm:text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-medium mt-0.5 sm:mt-1">
             Cumulative presences
           </p>
         </div>
 
         {/* Total Absences */}
-        <div className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent dark:from-rose-500/20 border border-rose-200/60 dark:border-rose-700/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
+        <div className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent dark:from-rose-500/20 border border-rose-200/60 dark:border-rose-700/40 rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
               Total Absences
             </span>
-            <div className="w-8 h-8 rounded-xl bg-rose-500/20 dark:bg-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
-              <XCircle className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-500/20 dark:bg-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
+              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black text-rose-700 dark:text-rose-300 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-rose-700 dark:text-rose-300 tracking-tight">
             {summary.totalAbsent}
           </div>
-          <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 font-medium mt-1">
+          <p className="text-[10px] sm:text-[11px] text-rose-600/80 dark:text-rose-400/80 font-medium mt-0.5 sm:mt-1">
             Missed student sessions
           </p>
         </div>
 
         {/* Chronic Absentee Risk */}
-        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-500/20 border border-amber-200/60 dark:border-amber-700/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-500/20 border border-amber-200/60 dark:border-amber-700/40 rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
               Chronic Risk
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 dark:bg-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
-              <AlertTriangle className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/20 dark:bg-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
+              <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black text-amber-700 dark:text-amber-300 tracking-tight">
+          <div className="text-2xl sm:text-3xl font-black text-amber-700 dark:text-amber-300 tracking-tight">
             {summary.chronicAbsenteeCount}
           </div>
-          <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 font-medium mt-1">
+          <p className="text-[10px] sm:text-[11px] text-amber-600/80 dark:text-amber-400/80 font-medium mt-0.5 sm:mt-1">
             Students with rate &lt; 75%
           </p>
         </div>
@@ -457,7 +457,116 @@ export default function TeacherTermlyAttendance({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* MOBILE CARDS VIEW FOR SMARTPHONES (md:hidden) */}
+        <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+          {loading ? (
+            <div className="py-12 text-center text-slate-500">
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
+                <span>Loading termly attendance broadsheet...</span>
+              </div>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 px-4">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">No student records found</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {searchQuery ? 'Try clearing your search query.' : 'No students enrolled or recorded for this term.'}
+              </p>
+            </div>
+          ) : (
+            filteredStudents.map((student) => {
+              const isPending = student.evaluation === 'Pending' || student.totalDays === 0
+              const isCritical = !isPending && student.evaluation === 'Critical'
+              const isExcellent = !isPending && student.evaluation === 'Excellent'
+              const isGood = !isPending && student.evaluation === 'Good'
+
+              return (
+                <div key={student.studentId} className="p-3.5 space-y-2.5 bg-white dark:bg-slate-900">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                        {student.firstName?.[0] || 'S'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-[11px] text-slate-500">#{student.roll}</span>
+                          <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight truncate">{student.name}</h4>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                          {student.registerNo || `ID #${student.studentId}`}
+                          {isAllClasses && [student.className, student.sectionName].filter(Boolean).length > 0
+                            ? ` · ${[student.className, student.sectionName].filter(Boolean).join(' - ')}`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${
+                        isPending
+                          ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                          : isCritical
+                          ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300'
+                          : isExcellent
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          : isGood
+                          ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300'
+                          : 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
+                      }`}
+                    >
+                      {student.evaluation}
+                    </span>
+                  </div>
+
+                  {/* Rate progress bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-500 text-[11px]">Attendance Rate</span>
+                      <span className="text-slate-900 dark:text-white font-black">{student.percentage}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          student.percentage >= 95
+                            ? 'bg-emerald-500'
+                            : student.percentage >= 85
+                            ? 'bg-blue-500'
+                            : student.percentage >= 75
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.min(student.percentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Counts grid: Held, Present, Absent, Late */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-1 text-center text-xs">
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <p className="text-[9.5px] font-bold text-slate-400 uppercase">Held</p>
+                      <p className="font-black text-slate-700 dark:text-slate-200">{student.totalDays}</p>
+                    </div>
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40">
+                      <p className="text-[9.5px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">Present</p>
+                      <p className="font-black text-emerald-800 dark:text-emerald-300">{student.presentDays}</p>
+                    </div>
+                    <div className="bg-rose-50 dark:bg-rose-950/20 p-1.5 rounded-xl border border-rose-100 dark:border-rose-900/40">
+                      <p className="text-[9.5px] font-bold text-rose-700 dark:text-rose-400 uppercase">Absent</p>
+                      <p className="font-black text-rose-800 dark:text-rose-300">{student.absentDays}</p>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded-xl border border-amber-100 dark:border-amber-900/40">
+                      <p className="text-[9.5px] font-bold text-amber-700 dark:text-amber-400 uppercase">Late</p>
+                      <p className="font-black text-amber-800 dark:text-amber-300">{student.lateDays}</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* DESKTOP TABLE VIEW (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
             <thead>
               <tr className="bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider text-[11px]">

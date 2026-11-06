@@ -307,6 +307,23 @@ function AdmissionsContent() {
   const secondaryColor = meta?.secondaryColor || '#0284c7'
   const selectedClassName = meta?.classes?.find((c) => String(c.id) === String(formData.classId))?.name || 'Class'
 
+  // Dynamic school landing page link preserving tenant branch and domain
+  const schoolLandingUrl = branchIdParam
+    ? `/tenant-home?branchId=${branchIdParam}`
+    : domainParam
+    ? `/tenant-home?domain=${encodeURIComponent(domainParam)}`
+    : subdomainParam
+    ? `/tenant-home?subdomain=${encodeURIComponent(subdomainParam)}`
+    : meta?.branchId
+    ? `/tenant-home?branchId=${meta.branchId}`
+    : '/tenant-home'
+
+  const schoolLoginUrl = branchIdParam
+    ? `/login?branchId=${branchIdParam}`
+    : meta?.branchId
+    ? `/login?branchId=${meta.branchId}`
+    : '/login'
+
   if (loadingMeta) {
     return (
       <div className="min-h-screen bg-[#070d19] flex flex-col items-center justify-center text-white space-y-4">
@@ -346,7 +363,7 @@ function AdmissionsContent() {
       <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center space-x-3.5">
-            <Link href="/" className="flex items-center space-x-3 group">
+            <Link href={schoolLandingUrl} className="flex items-center space-x-3 group">
               {meta.logoUrl ? (
                 <img
                   src={meta.logoUrl}
@@ -372,7 +389,7 @@ function AdmissionsContent() {
 
           <div className="flex items-center space-x-3">
             <Link
-              href="/"
+              href={schoolLandingUrl}
               className="hidden sm:inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition border border-slate-800"
             >
               <ArrowLeft size={14} />
@@ -380,7 +397,7 @@ function AdmissionsContent() {
             </Link>
 
             <Link
-              href="/login"
+              href={schoolLoginUrl}
               className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition shadow"
             >
               <span>Portal Login</span>
@@ -972,7 +989,7 @@ function AdmissionsContent() {
             {/* Completion Actions */}
             <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
               <Link
-                href="/"
+                href={schoolLandingUrl}
                 className="inline-flex items-center space-x-2 px-7 py-3.5 rounded-2xl text-sm font-bold text-white shadow-xl hover:scale-105 transition-all"
                 style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
               >
@@ -1018,7 +1035,7 @@ function AdmissionsContent() {
       {/* ─── FOOTER ─── */}
       <footer className="border-t border-slate-900 bg-slate-950 py-8 text-center text-xs text-slate-500">
         <div className="max-w-6xl mx-auto px-4">
-          &copy; {new Date().getFullYear()} {meta.schoolName}. Powered by Ugbekun Educational Platform.
+          &copy; {new Date().getFullYear()} {meta.schoolName}. All rights reserved.
         </div>
       </footer>
     </div>

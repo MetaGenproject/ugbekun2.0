@@ -39,6 +39,33 @@ export default function ForgotPasswordPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [demoCode, setDemoCode] = useState('')
+  const [tenantBranding, setTenantBranding] = useState<{
+    schoolName?: string
+    logoUrl?: string | null
+    primaryColor?: string
+    secondaryColor?: string
+    tagline?: string
+  } | null>(null)
+
+  useState(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const branchIdParam = params.get('branchId')
+    const host = window.location.hostname
+
+    const query = new URLSearchParams()
+    if (host) query.set('domain', host)
+    if (branchIdParam) query.set('branchId', branchIdParam)
+
+    fetch(`/api/proxy/public/tenant/branding?${query.toString()}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json?.success && json.data && (branchIdParam || json.data.isCustomDomain)) {
+          setTenantBranding(json.data)
+        }
+      })
+      .catch(() => {})
+  })
 
   // Handle Step 1: Request Code
   const handleRequestCode = async (e: React.FormEvent) => {
@@ -145,10 +172,39 @@ export default function ForgotPasswordPage() {
         {/* Top Centered Brand Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <UgbekunLogo size="lg" />
+            {tenantBranding ? (
+              <div className="flex items-center gap-3.5 group">
+                {tenantBranding.logoUrl ? (
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 p-1 border border-white/20 shadow-xl overflow-hidden shrink-0">
+                    <img
+                      src={tenantBranding.logoUrl}
+                      alt={tenantBranding.schoolName || 'School'}
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl border border-white/20 shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${tenantBranding.primaryColor || '#003da5'}, ${tenantBranding.secondaryColor || '#009ca6'})` }}
+                  >
+                    {tenantBranding.schoolName?.slice(0, 2).toUpperCase() || 'SC'}
+                  </div>
+                )}
+                <div className="flex flex-col text-left justify-center leading-tight">
+                  <span className="text-2xl font-black tracking-tight text-white drop-shadow">
+                    {tenantBranding.schoolName}
+                  </span>
+                  <span className="text-xs font-semibold text-cyan-300 tracking-wide">
+                    Account Security Portal
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <UgbekunLogo size="lg" />
+            )}
           </div>
-          <p className="text-xs sm:text-sm font-medium text-gray-300 tracking-wide">
-            Empowering Schools. Connecting Communities. Building Futures.
+          <p className="text-xs sm:text-sm font-medium text-gray-300 tracking-wide drop-shadow">
+            {tenantBranding?.tagline || 'Empowering Schools. Connecting Communities. Building Futures.'}
           </p>
         </div>
 
@@ -378,13 +434,17 @@ export default function ForgotPasswordPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-right">
-            <span>© 2026 Ugbekun School Management System. All rights reserved.</span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span>Powered by Metagen Project</span>
-              <div className="w-5 h-5 rounded bg-gradient-to-r from-blue-600 to-pink-600 flex items-center justify-center text-white font-bold text-[10px]">
-                M
+            <span>
+              &copy; {new Date().getFullYear()} {tenantBranding ? `${tenantBranding.schoolName}. All rights reserved.` : 'Ugbekun School Management System. All rights reserved.'}
+            </span>
+            {!tenantBranding && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span>Powered by Metagen Project</span>
+                <div className="w-5 h-5 rounded bg-gradient-to-r from-blue-600 to-pink-600 flex items-center justify-center text-white font-bold text-[10px]">
+                  M
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

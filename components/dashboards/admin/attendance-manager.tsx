@@ -105,39 +105,41 @@ function PaginationBar({
   const end = Math.min(page * pageSize, total)
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-        <span>Rows per page:</span>
-        <select
-          value={pageSize}
-          onChange={(e) => onPageSize(Number(e.target.value))}
-          className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
-        >
-          <option value={10}>10</option>
-          <option value={25}>25</option>
-          <option value={50}>50</option>
-        </select>
+      <div className="flex flex-wrap items-center justify-between sm:justify-start w-full sm:w-auto gap-2 text-xs font-semibold text-slate-500">
+        <div className="flex items-center gap-1.5">
+          <span>Rows:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSize(Number(e.target.value))}
+            className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
         <span>
-          Showing <strong className="text-slate-900">{start}</strong>–<strong className="text-slate-900">{end}</strong> of{' '}
+          <strong className="text-slate-900">{start}</strong>–<strong className="text-slate-900">{end}</strong> of{' '}
           <strong className="text-slate-900">{total}</strong> {noun}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-1.5">
         <button
           type="button"
           onClick={() => onPage(Math.max(1, page - 1))}
           disabled={page <= 1}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
         >
-          <ChevronLeft size={14} /> Previous
+          <ChevronLeft size={14} /> Prev
         </button>
-        <div className="px-3 py-1.5 text-xs font-black text-slate-800 bg-slate-100 rounded-xl">
-          Page {page} of {totalPages}
+        <div className="px-3 py-1.5 text-xs font-black text-slate-800 bg-slate-100 rounded-xl text-center">
+          {page} / {totalPages || 1}
         </div>
         <button
           type="button"
           onClick={() => onPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
         >
           Next <ChevronRight size={14} />
         </button>
@@ -278,9 +280,9 @@ function StaffAttendancePanel() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-6 shadow-sm space-y-4">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 border-b border-slate-100 pb-3">
-        <div className="grid sm:grid-cols-2 gap-3 flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
           <div>
             <label className="text-[11px] font-bold text-slate-500 block mb-1">Attendance date</label>
             <input
@@ -307,7 +309,7 @@ function StaffAttendancePanel() {
           type="button"
           onClick={handleSave}
           disabled={saving || dirtyCount === 0}
-          className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer"
+          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           Save{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
@@ -315,7 +317,7 @@ function StaffAttendancePanel() {
       </div>
 
       {metrics && (
-        <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 text-[11px] font-bold">
           <span className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200">{metrics.totalStaff} staff</span>
           <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{metrics.presentCount} present</span>
           <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">{metrics.absentCount} absent</span>
@@ -334,81 +336,161 @@ function StaffAttendancePanel() {
         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-semibold">{success}</div>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Staff Name</TableHead>
-            <TableHead>Role / Department</TableHead>
-            <TableHead>Clock-In</TableHead>
-            <TableHead>Clock-Out</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Quick Mark</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
-                <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading staff roster…</span>
-              </TableCell>
-            </TableRow>
-          ) : teachers.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
-                {debouncedSearch ? 'No staff match that search.' : 'No active staff found for this school.'}
-              </TableCell>
-            </TableRow>
-          ) : (
-            teachers.map((staff) => {
-              const draft = staffDraft(staff.id)
-              const status = draft.status
-              return (
-                <TableRow key={staff.id}>
-                  <TableCell className="font-bold text-slate-900">{staff.name}</TableCell>
-                  <TableCell className="text-xs font-semibold text-slate-700">{staff.department || 'Staff'}</TableCell>
-                  <TableCell>
+      {/* MOBILE CARD VIEW FOR SMARTPHONES (md:hidden) */}
+      <div className="md:hidden divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden bg-white">
+        {loading ? (
+          <div className="py-10 text-center text-slate-400 font-medium text-xs">
+            <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading staff roster…</span>
+          </div>
+        ) : teachers.length === 0 ? (
+          <div className="py-10 text-center text-slate-400 font-medium text-xs px-4">
+            {debouncedSearch ? 'No staff match that search.' : 'No active staff found for this school.'}
+          </div>
+        ) : (
+          teachers.map((staff) => {
+            const draft = staffDraft(staff.id)
+            const status = draft.status
+            return (
+              <div key={staff.id} className="p-3.5 space-y-3 bg-white">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{staff.name}</h4>
+                    <p className="text-[11px] font-semibold text-slate-500 mt-0.5">{staff.department || 'Staff Member'}</p>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${statusTone(status)}`}>
+                    {status || 'UNMARKED'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock-In</label>
                     <input
                       type="time"
                       value={draft.clockIn}
                       onChange={(e) => setClockIn(staff.id, e.target.value)}
-                      className="px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50 focus:bg-white"
                     />
-                  </TableCell>
-                  <TableCell>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Clock-Out</label>
                     <input
                       type="time"
                       value={draft.clockOut}
                       onChange={(e) => setClockOut(staff.id, e.target.value)}
-                      className="px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50 focus:bg-white"
                     />
-                  </TableCell>
-                  <TableCell>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${statusTone(status)}`}>
-                      {status || 'UNMARKED'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {STAFF_CODES.map((code) => (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => markStaff(staff.id, code)}
-                        className={`px-2 py-1 font-bold text-[11px] rounded-lg cursor-pointer ${
-                          status.toUpperCase() === code
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        {code.replaceAll('_', ' ')}
-                      </button>
-                    ))}
-                  </TableCell>
-                </TableRow>
-              )
-            })
-          )}
-        </TableBody>
-      </Table>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">Quick Mark</label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {STAFF_CODES.map((code) => {
+                      const isSelected = status.toUpperCase() === code
+                      const label = code === 'HALF_DAY' ? 'Half' : code === 'ON_LEAVE' ? 'Leave' : code === 'PRESENT' ? 'Pres' : code === 'ABSENT' ? 'Abs' : 'Late'
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => markStaff(staff.id, code)}
+                          className={`py-1.5 px-1 font-bold text-[10px] rounded-lg cursor-pointer text-center transition active:scale-95 truncate ${
+                            isSelected
+                              ? 'bg-slate-900 text-white shadow-xs'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
+                          }`}
+                          title={code.replaceAll('_', ' ')}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* DESKTOP TABLE VIEW (hidden md:block) */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Staff Name</TableHead>
+              <TableHead>Role / Department</TableHead>
+              <TableHead>Clock-In</TableHead>
+              <TableHead>Clock-Out</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Quick Mark</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                  <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading staff roster…</span>
+                </TableCell>
+              </TableRow>
+            ) : teachers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-10 text-slate-400 font-medium text-xs">
+                  {debouncedSearch ? 'No staff match that search.' : 'No active staff found for this school.'}
+                </TableCell>
+              </TableRow>
+            ) : (
+              teachers.map((staff) => {
+                const draft = staffDraft(staff.id)
+                const status = draft.status
+                return (
+                  <TableRow key={staff.id}>
+                    <TableCell className="font-bold text-slate-900">{staff.name}</TableCell>
+                    <TableCell className="text-xs font-semibold text-slate-700">{staff.department || 'Staff'}</TableCell>
+                    <TableCell>
+                      <input
+                        type="time"
+                        value={draft.clockIn}
+                        onChange={(e) => setClockIn(staff.id, e.target.value)}
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <input
+                        type="time"
+                        value={draft.clockOut}
+                        onChange={(e) => setClockOut(staff.id, e.target.value)}
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono bg-slate-50"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${statusTone(status)}`}>
+                        {status || 'UNMARKED'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {STAFF_CODES.map((code) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => markStaff(staff.id, code)}
+                          className={`px-2 py-1 font-bold text-[11px] rounded-lg cursor-pointer ${
+                            status.toUpperCase() === code
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {code.replaceAll('_', ' ')}
+                        </button>
+                      ))}
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <PaginationBar
         page={pagination.page}
@@ -530,27 +612,27 @@ export function AttendanceManager({
   ]
 
   return (
-    <div className="space-y-6 pb-12 font-sans">
+    <div className="space-y-4 sm:space-y-6 pb-12 font-sans">
       {/* Sub-menu Navigation Bar (same layout & experience as Class Teacher AttendanceHub) */}
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 sm:gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-              <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse shrink-0" />
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
                 Attendance Intelligence &amp; Reports
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
                 All Classes Access
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               School-wide &amp; class-by-class roll call register, daily highlighted signals, monthly 1..31 calendar grid, termly broadsheets, and staff attendance.
             </p>
           </div>
 
           {/* Sub-menu Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto no-scrollbar scroll-smooth w-full xl:w-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -558,13 +640,13 @@ export function AttendanceManager({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 active:scale-95 ${
                     isActive
                       ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                  <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
                   <span>{tab.label}</span>
                   {tab.badge && (
                     <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">

@@ -39,6 +39,10 @@ import {
 } from '@/components/ui/table'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
+import {
+  BrandedReportCardPreview,
+  SchoolReportBranding,
+} from '../shared/branded-report-card-preview'
 
 type ReportCardTab = 'generate' | 'ai-comments' | 'psychomotor' | 'affective' | 'history'
 
@@ -94,7 +98,10 @@ interface StudentReportPreview {
   admissionNo: string
   registerNo: string | null
   className: string
+  sectionName?: string | null
   gender: string
+  photo?: string | null
+  birthday?: string | null
   usesScores?: boolean
   isCommentBased?: boolean
   totalMarks?: number | null
@@ -108,6 +115,8 @@ interface StudentReportPreview {
   totalAttendanceDays: number
   teacherComment: string
   principalComment: string
+  resumptionDate?: string | null
+  nextTermFees?: string | null
   commentStatus: string
   isAiGenerated: boolean
   psychomotor: {
@@ -146,6 +155,8 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [loadingClasses, setLoadingClasses] = useState(true)
   const [loadingStudents, setLoadingStudents] = useState(false)
   const [students, setStudents] = useState<StudentReportPreview[]>([])
+  const [schoolBranding, setSchoolBranding] = useState<Partial<SchoolReportBranding> | null>(null)
+  const [previewStudent, setPreviewStudent] = useState<StudentReportPreview | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Batch Generation State
@@ -300,7 +311,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     }
   }
 
-  // Listen to Top Bar Context Switcher
+  // Listen to Top Bar Context Switcher & Real-Time Score/Settings Updates
   useEffect(() => {
     const handleContextSwitch = (e: any) => {
       const ctx = e.detail
@@ -310,9 +321,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         setSelectedSectionId(ctx.sectionId)
       }
     }
+    const handleRealtimeRefresh = () => {
+      if (selectedClassId && selectedSectionId) {
+        fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined, assessmentStage, selectedTermId)
+      }
+    }
     window.addEventListener('ugbekun-context-changed', handleContextSwitch)
-    return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
-  }, [])
+    window.addEventListener('ugbekun-marks-updated', handleRealtimeRefresh)
+    window.addEventListener('branch-settings-updated', handleRealtimeRefresh)
+    return () => {
+      window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
+      window.removeEventListener('ugbekun-marks-updated', handleRealtimeRefresh)
+      window.removeEventListener('branch-settings-updated', handleRealtimeRefresh)
+    }
+  }, [selectedClassId, selectedSectionId, selectedSessionId, assessmentStage, selectedTermId])
 
   // Fetch Students when selected class/section/session/stage/term changes
   useEffect(() => {
@@ -435,6 +457,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         isEcd: boolean
         isPublished?: boolean
         publication?: any
+        schoolBranding?: Partial<SchoolReportBranding>
         totalStudents: number
         students: StudentReportPreview[]
       }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId, stage, termId))
@@ -443,7 +466,14 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         if (res.sessionId && !selectedSessionId) {
           setSelectedSessionId(res.sessionId)
         }
+        if (res.schoolBranding) {
+          setSchoolBranding(res.schoolBranding)
+        }
         setStudents(res.students)
+        if (previewStudent) {
+          const updatedPreview = res.students.find(s => s.id === previewStudent.id)
+          if (updatedPreview) setPreviewStudent(updatedPreview)
+        }
         if (res.isPublished !== undefined) {
           setIsPublished(res.isPublished)
         }
@@ -1197,12 +1227,24 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                       key={st.id}
                       className="p-5 rounded-2xl border border-slate-200 bg-white space-y-4 shadow-sm hover:shadow-md transition"
                     >
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div>
-                          <h4 className="font-bold text-sm text-slate-900">{st.studentName}</h4>
-                          <p className="text-[11px] font-mono text-slate-400">
-                            {st.admissionNo} • {st.className}
-                          </p>
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0 flex items-center justify-center font-black text-xs text-white"
+                            style={{ backgroundColor: schoolBranding?.primaryColor || '#0f172a' }}
+                          >
+                            {st.photo ? (
+                              <img src={st.photo} alt={st.studentName} className="w-full h-full object-cover" />
+                            ) : (
+                              (st.firstName?.[0] || st.studentName?.[0] || 'S').toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm text-slate-900 truncate">{st.studentName}</h4>
+                            <p className="text-[11px] font-mono text-slate-400 truncate">
+                              {st.admissionNo} • {st.className}
+                            </p>
+                          </div>
                         </div>
                         {isCommentBased ? (
                           <span className="px-2.5 py-0.5 rounded text-xs font-black border bg-emerald-100 text-emerald-800 border-emerald-200">
@@ -1297,22 +1339,34 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                           <span className="font-mono font-semibold text-slate-800">{st.attendanceDays}</span>
                         </p>
                         <p className="truncate text-slate-500">
-                          <strong className="text-slate-700">Remarks:</strong> {st.teacherComment || 'Pending assessment remarks.'}
+                          <strong className="text-slate-700">Teacher:</strong> {st.teacherComment || 'Pending assessment remarks.'}
                         </p>
+                        {st.principalComment && (
+                          <p className="truncate text-slate-500">
+                            <strong className="text-slate-700">Principal:</strong> {st.principalComment}
+                          </p>
+                        )}
                       </div>
 
-                      <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                      <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewStudent(st)}
+                          className="py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                        >
+                          <Eye size={13} /> Preview & Edit
+                        </button>
                         <button
                           onClick={() => handleDownloadSinglePdf(st)}
                           disabled={downloadingStudentId === st.id}
-                          className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                          className="py-2.5 px-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                         >
                           {downloadingStudentId === st.id ? (
                             <Loader2 size={13} className="animate-spin" />
                           ) : (
                             <Download size={13} />
                           )}
-                          {isCommentBased ? '1-Click Developmental PDF' : assessmentStage === 'FULL' ? '1-Click PDF Report' : `1-Click ${assessmentStage} Slip`}
+                          {isCommentBased ? 'PDF Report' : assessmentStage === 'FULL' ? 'PDF Report' : `${assessmentStage} PDF`}
                         </button>
                       </div>
                     </div>
@@ -2207,6 +2261,53 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE BRANDED REPORT CARD PREVIEW & INLINE EDITOR MODAL */}
+      {previewStudent && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/75 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
+          <div className="w-full max-w-4xl my-4">
+            <BrandedReportCardPreview
+              student={previewStudent}
+              branding={schoolBranding}
+              onClose={() => setPreviewStudent(null)}
+              onDownloadPdf={() => handleDownloadSinglePdf(previewStudent)}
+              isDownloadingPdf={downloadingStudentId === previewStudent.id}
+              editable
+              editorRole="admin"
+              onSaveRemarksAndSettings={async (payload) => {
+                if (!selectedClassId || !selectedSectionId) return
+                const res = await apiSlice.post<{ success: boolean; message: string }>(
+                  endpoints.admin.reportCards.commentary,
+                  {
+                    studentId: payload.studentId,
+                    classId: selectedClassId,
+                    sectionId: selectedSectionId,
+                    sessionId: selectedSessionId || undefined,
+                    remark: payload.teacherComment,
+                    principalRemark: payload.principalComment,
+                    resumptionDate: payload.resumptionDate,
+                    nextTermFees: payload.nextTermFees,
+                    teacherSignatureUrl: payload.teacherSignatureUrl,
+                    principalSignatureUrl: payload.principalSignatureUrl,
+                    principalName: payload.principalName,
+                    status: 'PRINCIPAL_SIGNED_OFF',
+                  }
+                )
+                if (res.success) {
+                  toast.success('Report card comments, resumption date, next term fees & signatures updated!')
+                  await fetchStudents(
+                    selectedClassId,
+                    selectedSectionId,
+                    selectedSessionId || undefined,
+                    assessmentStage,
+                    selectedTermId
+                  )
+                }
+              }}
+            />
           </div>
         </div>
       )}

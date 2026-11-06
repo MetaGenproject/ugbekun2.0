@@ -980,8 +980,8 @@ export default function AttendanceRegister({
       </div>
 
       {/* Summary Metrics Badges matching Admin Attendance Manager */}
-      <div className="print:hidden bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+      <div className="print:hidden bg-white border border-slate-200/80 rounded-2xl p-2.5 sm:p-3.5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10.5px] sm:text-[11px] font-bold">
           <span className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200">{summary.total} on roll</span>
           <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{summary.present} present</span>
           <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">{summary.absent} absent</span>
@@ -1185,9 +1185,19 @@ export default function AttendanceRegister({
                       </div>
 
                       {/* Touch-Friendly Quick Mark Action Strip */}
-                      <div className="mt-3 flex gap-1.5">
+                      <div className="mt-3 grid grid-cols-5 gap-1.5">
                         {ATTENDANCE_CODES.map((item) => {
                           const isSelected = (status || "").toUpperCase() === item.code.toUpperCase()
+                          const activeColor =
+                            item.code === 'Present'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20'
+                              : item.code === 'Absent'
+                                ? 'bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-500/20'
+                                : item.code === 'Late'
+                                  ? 'bg-amber-500 text-white border-amber-500 shadow-xs ring-2 ring-amber-500/20'
+                                  : item.code === 'Excused'
+                                    ? 'bg-sky-600 text-white border-sky-600 shadow-xs ring-2 ring-sky-500/20'
+                                    : 'bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20'
                           return (
                             <button
                               key={item.code}
@@ -1197,13 +1207,15 @@ export default function AttendanceRegister({
                                 e.stopPropagation()
                                 setStudentStatus(student.id, item.code)
                               }}
-                              className={`flex-1 py-2 text-xs font-bold rounded-xl border text-center transition cursor-pointer disabled:opacity-40 active:scale-95 ${
+                              className={`py-2 text-xs font-bold rounded-xl border text-center transition cursor-pointer disabled:opacity-40 active:scale-95 flex items-center justify-center gap-1 ${
                                 isSelected
-                                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                  ? activeColor
+                                  : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100"
                               }`}
+                              title={item.code}
                             >
-                              {item.code}
+                              <span className="font-black text-xs">{item.key}</span>
+                              <span className="hidden min-[420px]:inline text-[10.5px] font-semibold">{item.code}</span>
                             </button>
                           )
                         })}
@@ -1343,8 +1355,8 @@ export default function AttendanceRegister({
             )}
 
             {/* Bottom Sticky Action Bar */}
-            <div className="p-4 sm:p-6 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white sticky bottom-0 z-10">
-              <p className="text-[11px] font-semibold text-slate-500">
+            <div className="p-3.5 sm:p-6 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/95 backdrop-blur-md sticky bottom-0 z-20 shadow-lg sm:shadow-none">
+              <p className="text-[11px] font-semibold text-slate-500 leading-normal">
                 {isTrulyLocked
                   ? "Locked register — print a copy for the office file."
                   : isSubmitted && !isEditingSubmitted
@@ -1357,7 +1369,7 @@ export default function AttendanceRegister({
                         ? `${summary.unmarked} unmarked · ${summary.present} present · ${summary.absent} absent · ${summary.late} late`
                         : "All students coded. You can submit this register."}
                 {canEdit && (isEditingSubmitted || !isSubmitted) && (
-                  <span className="ml-2 font-bold">
+                  <span className="ml-2 font-bold inline-block">
                     {autosaveState === "saving" && <span className="text-blue-600">Saving draft…</span>}
                     {autosaveState === "saved" && <span className="text-emerald-600">✓ Draft saved</span>}
                     {autosaveState === "error" && <span className="text-rose-600">⚠ Draft save failed</span>}
@@ -1365,11 +1377,11 @@ export default function AttendanceRegister({
                   </span>
                 )}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer active:scale-95 transition"
                 >
                   <Printer size={14} />
                   Print
@@ -1388,7 +1400,7 @@ export default function AttendanceRegister({
                   <button
                     type="button"
                     onClick={() => setIsEditingSubmitted(true)}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition cursor-pointer"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition cursor-pointer active:scale-95"
                   >
                     <Edit3 size={14} />
                     Edit Register
@@ -1403,7 +1415,7 @@ export default function AttendanceRegister({
                         setError(null)
                       }}
                       disabled={saving}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer active:scale-95 transition"
                     >
                       Cancel
                     </button>
@@ -1411,12 +1423,12 @@ export default function AttendanceRegister({
                       type="button"
                       onClick={handleSubmit}
                       disabled={saving}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 rounded-xl shadow-xs transition cursor-pointer"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 rounded-xl shadow-xs transition cursor-pointer active:scale-95"
                     >
                       {saving ? (
                         <>
                           <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                          Saving changes…
+                          Saving…
                         </>
                       ) : (
                         <>
@@ -1431,7 +1443,7 @@ export default function AttendanceRegister({
                     type="button"
                     onClick={handleSubmit}
                     disabled={saving}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl shadow-xs transition cursor-pointer"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl shadow-xs transition cursor-pointer active:scale-95"
                   >
                     {saving ? (
                       <>

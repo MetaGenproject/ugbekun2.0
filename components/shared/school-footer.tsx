@@ -151,10 +151,12 @@ export function SchoolFooter() {
         </div>
 
         <div className="border-t border-white/10 pt-2 flex flex-col sm:flex-row items-center justify-between text-[11px] font-medium text-slate-400 gap-1.5">
-          <p>© {new Date().getFullYear()} {branding.schoolName}. All rights reserved.</p>
-          <p className="font-extrabold text-cyan-400">
-            Powered by Ugbekun 2.0 Management System
-          </p>
+          <p>© {new Date().getFullYear()} {effectiveBranding.schoolName}. All rights reserved.</p>
+          {isSuperAdmin && (
+            <p className="font-extrabold text-cyan-400">
+              Ugbekun Educational Platform
+            </p>
+          )}
         </div>
       </div>
     </footer>

@@ -872,9 +872,15 @@ export function TeacherMatrixMarksEntry() {
       )
 
       if (res.success) {
-        toast.success(res.message || 'All student scores saved successfully.')
+        toast.success(
+          res.message ||
+            'All student scores saved & official report cards updated immediately!'
+        )
         setHasUnsavedChanges(false)
         setInitialRowsState(JSON.stringify(studentRows))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ugbekun-marks-updated'))
+        }
 
         // Clear offline buffer on successful save
         try {

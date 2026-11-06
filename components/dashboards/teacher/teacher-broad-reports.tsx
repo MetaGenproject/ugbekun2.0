@@ -31,6 +31,11 @@ import {
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
+import {
+  BrandedReportCardPreview,
+  SchoolReportBranding,
+  BrandedReportCardStudentData,
+} from '../shared/branded-report-card-preview'
 
 interface AssignedClass {
   id: number
@@ -90,6 +95,8 @@ interface TabulationRow {
   registerNo: string
   rollNo?: number
   gender: string
+  photo?: string | null
+  birthday?: string | null
   sectionName: string
   subjectScores: Record<number, number>
   subjectBreakdowns?: Record<number, Record<string, number>>
@@ -103,6 +110,9 @@ interface TabulationRow {
   gradeColor?: string
   position: number
   attendanceRate: number
+  attendanceSummary?: { present: number; absent: number; total: number; rate: number }
+  teacherComment?: string
+  principalComment?: string
   // Login Details
   studentUsername?: string
   studentPassword?: string
@@ -130,6 +140,7 @@ interface SessionItem {
 }
 
 interface ClassReportsData {
+  schoolBranding?: Partial<SchoolReportBranding>
   classSummary: {
     classId: number
     className: string
@@ -210,6 +221,8 @@ export function TeacherBroadReports() {
   const [visiblePasswords, setVisiblePasswords] = useState<Record<number, boolean>>({})
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [previewStudentRow, setPreviewStudentRow] = useState<TabulationRow | null>(null)
+  const [downloadingStudentPdfId, setDownloadingStudentPdfId] = useState<number | null>(null)
 
   // 1. Initial Load: Teacher's assigned classes
   useEffect(() => {
@@ -334,6 +347,86 @@ export function TeacherBroadReports() {
     }
   }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId])
 
+  useEffect(() => {
+    const handleRealtimeRefresh = () => {
+      if (selectedClassId) {
+        fetchReports()
+      }
+    }
+    window.addEventListener('ugbekun-marks-updated', handleRealtimeRefresh)
+    window.addEventListener('branch-settings-updated', handleRealtimeRefresh)
+    return () => {
+      window.removeEventListener('ugbekun-marks-updated', handleRealtimeRefresh)
+      window.removeEventListener('branch-settings-updated', handleRealtimeRefresh)
+    }
+  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId])
+
+  const handleDownloadStudentReportCardPdf = async (row: TabulationRow) => {
+    try {
+      setDownloadingStudentPdfId(row.studentId)
+      const url = endpoints.teacher.exportReportCardPdf(
+        row.studentId,
+        selectedExamId ? Number(selectedExamId) : undefined
+      )
+      const safeName = (row.name || 'Student').replace(/\s+/g, '_')
+      await apiSlice.download(url, `Report_Card_${safeName}.pdf`)
+      toast.success(`Report card PDF downloaded for ${row.name}`)
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download report card PDF.')
+    } finally {
+      setDownloadingStudentPdfId(null)
+    }
+  }
+
+  const buildStudentPreviewData = (row: TabulationRow): BrandedReportCardStudentData => {
+    const subjectRows = (reportsData?.offeredSubjects || []).map((sub) => {
+      const score = row.subjectScores[sub.id] ?? 0
+      const bd = row.subjectBreakdowns?.[sub.id] || {}
+      const gr = row.subjectGrades?.[sub.id]
+      const stat = reportsData?.performance?.subjectStats.find((s) => s.subjectId === sub.id)
+      return {
+        id: sub.id,
+        subjectId: sub.id,
+        subjectName: sub.name,
+        subjectCode: sub.subjectCode || sub.code,
+        cbtMark: bd.caTotal !== undefined ? String(bd.caTotal) : null,
+        theoryMark: bd.examScore !== undefined ? String(bd.examScore) : null,
+        mark: String(score),
+        classAverage: stat?.average ?? null,
+        grade: gr?.grade,
+        remark: gr?.remark,
+      }
+    })
+    return {
+      id: row.studentId,
+      studentName: row.name,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      registerNo: row.registerNo,
+      admissionNo: row.registerNo,
+      className: classSummary.className || 'Class',
+      sectionName: row.sectionName,
+      gender: row.gender,
+      photo: row.photo || null,
+      birthday: row.birthday || null,
+      totalMarks: row.totalScore,
+      average: row.averageScore,
+      grade: row.grade,
+      position: `#${row.position} of ${classSummary.totalStudents || reportsData?.tabulation.length || 1}`,
+      rank: row.position,
+      totalClassStudents: classSummary.totalStudents,
+      presentCount: row.attendanceSummary?.present ?? 0,
+      absentCount: row.attendanceSummary?.absent ?? 0,
+      totalAttendanceDays: row.attendanceSummary?.total ?? 0,
+      attendanceRate: row.attendanceRate,
+      teacherComment: row.teacherComment || '',
+      principalComment: row.principalComment || '',
+      resumptionDate: reportsData?.schoolBranding?.resumptionDate || null,
+      nextTermFees: reportsData?.schoolBranding?.nextTermFees || null,
+      reportCard: subjectRows,
+    }
+  }
+
   // Print Tabulation Sheet
   const handlePrint = () => {
     window.print()
@@ -418,14 +511,14 @@ export function TeacherBroadReports() {
     reportsData?.assessmentComponents && reportsData.assessmentComponents.length > 0
       ? reportsData.assessmentComponents
       : reportsData?.evaluationMatrix?.components && reportsData.evaluationMatrix.components.length > 0
-      ? reportsData.evaluationMatrix.components.map((c, idx) => ({
+        ? reportsData.evaluationMatrix.components.map((c, idx) => ({
           key: String(c.key || c.code || idx + 1),
           code: String(c.code || c.key || `CA${idx + 1}`).toUpperCase(),
           name: c.name || `Component ${idx + 1}`,
           maxMarks: c.maxMarks || 20,
           category: ((c.code || c.name || '').toLowerCase().includes('exam') ? 'EXAM' : 'CA') as 'CA' | 'EXAM',
         }))
-      : [
+        : [
           { key: 'CA1', code: 'CA1', name: 'Continuous Assessment 1', maxMarks: 20, category: 'CA' },
           { key: 'CA2', code: 'CA2', name: 'Continuous Assessment 2', maxMarks: 20, category: 'CA' },
           { key: 'EXAM', code: 'EXAM', name: 'Terminal Examination', maxMarks: 60, category: 'EXAM' },
@@ -442,19 +535,19 @@ export function TeacherBroadReports() {
   const classAvgCA =
     reportsData?.tabulation && reportsData.tabulation.length > 0
       ? Math.round(
-          (reportsData.tabulation.reduce((sum, r) => sum + (r.totalCA || 0), 0) /
-            reportsData.tabulation.length) *
-            10
-        ) / 10
+        (reportsData.tabulation.reduce((sum, r) => sum + (r.totalCA || 0), 0) /
+          reportsData.tabulation.length) *
+        10
+      ) / 10
       : 0
 
   const classAvgExam =
     reportsData?.tabulation && reportsData.tabulation.length > 0
       ? Math.round(
-          (reportsData.tabulation.reduce((sum, r) => sum + (r.totalExam || 0), 0) /
-            reportsData.tabulation.length) *
-            10
-        ) / 10
+        (reportsData.tabulation.reduce((sum, r) => sum + (r.totalExam || 0), 0) /
+          reportsData.tabulation.length) *
+        10
+      ) / 10
       : 0
 
   return (
@@ -697,11 +790,10 @@ export function TeacherBroadReports() {
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 print:hidden overflow-x-auto">
         <button
           onClick={() => setActiveTab('tabulation')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'tabulation'
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${activeTab === 'tabulation'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-          }`}
+            }`}
         >
           <Table size={14} />
           <span>Tabulation Sheet</span>
@@ -709,11 +801,10 @@ export function TeacherBroadReports() {
 
         <button
           onClick={() => setActiveTab('performance')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'performance'
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${activeTab === 'performance'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-          }`}
+            }`}
         >
           <TrendingUp size={14} />
           <span>Student Performance & Analytics</span>
@@ -721,11 +812,10 @@ export function TeacherBroadReports() {
 
         <button
           onClick={() => setActiveTab('credentials')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'credentials'
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${activeTab === 'credentials'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-          }`}
+            }`}
         >
           <Key size={14} />
           <span>Student Login Credentials</span>
@@ -733,11 +823,10 @@ export function TeacherBroadReports() {
 
         <button
           onClick={() => setActiveTab('attendance')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'attendance'
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${activeTab === 'attendance'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-          }`}
+            }`}
         >
           <Calendar size={14} />
           <span>Attendance Intelligence</span>
@@ -745,11 +834,10 @@ export function TeacherBroadReports() {
 
         <button
           onClick={() => setActiveTab('totalSummary')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'totalSummary'
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${activeTab === 'totalSummary'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-          }`}
+            }`}
         >
           <Calculator size={14} />
           <span>Total Score Summary</span>
@@ -850,12 +938,13 @@ export function TeacherBroadReports() {
                       <th className="p-3 text-center font-black bg-blue-50 text-blue-800">Total</th>
                       <th className="p-3 text-center font-black bg-blue-50 text-blue-800">Average %</th>
                       <th className="p-3 text-center font-black bg-indigo-50 text-indigo-800">Grade</th>
+                      <th className="p-3 text-center font-black bg-emerald-50 text-emerald-800 print:hidden">Report Card</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-sans">
                     {filteredTabulation.length === 0 ? (
                       <tr>
-                        <td colSpan={reportsData.offeredSubjects.length + 6} className="py-12 px-6 text-center text-slate-400 text-xs">
+                        <td colSpan={reportsData.offeredSubjects.length + 7} className="py-12 px-6 text-center text-slate-400 text-xs">
                           <Users size={28} className="mx-auto mb-2 opacity-40 text-slate-400" />
                           <p className="font-bold text-slate-600">No active students enrolled in this class for the selected session.</p>
                           <p className="text-[11px] text-slate-400 mt-1">If students were enrolled in another academic session, please switch the Academic Session selector above.</p>
@@ -866,21 +955,27 @@ export function TeacherBroadReports() {
                         <tr key={`tab-row-${row.studentId}`} className="hover:bg-slate-50 transition">
                           <td className="p-3 text-center font-black">
                             <span
-                              className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
-                                row.position === 1
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${row.position === 1
                                   ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-300'
                                   : row.position === 2
-                                  ? 'bg-slate-200 text-slate-800 ring-1 ring-slate-300'
-                                  : row.position === 3
-                                  ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
-                                  : 'text-slate-500 font-normal'
-                              }`}
+                                    ? 'bg-slate-200 text-slate-800 ring-1 ring-slate-300'
+                                    : row.position === 3
+                                      ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
+                                      : 'text-slate-500 font-normal'
+                                }`}
                             >
                               {row.position}
                             </span>
                           </td>
                           <td className="p-3 font-bold text-slate-900">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-900 text-white text-[10px] font-black flex items-center justify-center shrink-0 border border-slate-200">
+                                {row.photo ? (
+                                  <img src={row.photo} alt={row.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  (row.name?.[0] || 'S').toUpperCase()
+                                )}
+                              </div>
                               <span>{row.name}</span>
                               {row.position <= 3 && (
                                 <Award size={13} className={row.position === 1 ? 'text-amber-500' : 'text-slate-400'} />
@@ -902,23 +997,22 @@ export function TeacherBroadReports() {
                                 title={
                                   breakdown && Object.keys(breakdown).length > 0
                                     ? Object.entries(breakdown)
-                                        .map(([k, v]) => `${k}: ${v}`)
-                                        .join(' | ')
+                                      .map(([k, v]) => `${k}: ${v}`)
+                                      .join(' | ')
                                     : undefined
                                 }
                               >
                                 {score !== undefined ? (
                                   showScoresAsGrades ? (
                                     <span
-                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                        gradeObj?.color === 'emerald'
+                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${gradeObj?.color === 'emerald'
                                           ? 'bg-emerald-50 text-emerald-700'
                                           : gradeObj?.color === 'blue'
-                                          ? 'bg-blue-50 text-blue-700'
-                                          : gradeObj?.color === 'rose'
-                                          ? 'bg-rose-50 text-rose-700'
-                                          : 'bg-slate-100 text-slate-700'
-                                      }`}
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : gradeObj?.color === 'rose'
+                                              ? 'bg-rose-50 text-rose-700'
+                                              : 'bg-slate-100 text-slate-700'
+                                        }`}
                                     >
                                       {gradeObj?.grade || '-'}
                                     </span>
@@ -928,8 +1022,8 @@ export function TeacherBroadReports() {
                                         score >= 70
                                           ? 'text-emerald-700 font-bold'
                                           : score >= 50
-                                          ? 'text-slate-800 font-semibold'
-                                          : 'text-rose-600 font-bold'
+                                            ? 'text-slate-800 font-semibold'
+                                            : 'text-rose-600 font-bold'
                                       }
                                     >
                                       {score}
@@ -950,20 +1044,44 @@ export function TeacherBroadReports() {
                           </td>
                           <td className="p-3 text-center bg-indigo-50/30">
                             <span
-                              className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-black ${
-                                row.grade === 'A'
+                              className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-black ${row.grade === 'A'
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : row.grade === 'B'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : row.grade === 'C'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : row.grade === 'D'
-                                  ? 'bg-orange-100 text-orange-800'
-                                  : 'bg-rose-100 text-rose-800'
-                              }`}
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : row.grade === 'C'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : row.grade === 'D'
+                                        ? 'bg-orange-100 text-orange-800'
+                                        : 'bg-rose-100 text-rose-800'
+                                }`}
                             >
                               {row.grade || '—'}
                             </span>
+                          </td>
+                          <td className="p-3 text-center bg-emerald-50/20 print:hidden">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewStudentRow(row)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                title="Preview Branded Report Card & Add Teacher Remark / Signature"
+                              >
+                                <Eye size={12} /> Report Card
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadStudentReportCardPdf(row)}
+                                disabled={downloadingStudentPdfId === row.studentId}
+                                className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition disabled:opacity-50"
+                                title="Download Official Branded PDF Report Card"
+                              >
+                                {downloadingStudentPdfId === row.studentId ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Download size={12} />
+                                )}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1016,24 +1134,22 @@ export function TeacherBroadReports() {
                     {reportsData.performance.topPerformers.map((top, idx) => (
                       <div
                         key={`podium-${top.studentId}`}
-                        className={`p-5 rounded-2xl border transition relative overflow-hidden ${
-                          top.position === 1
+                        className={`p-5 rounded-2xl border transition relative overflow-hidden ${top.position === 1
                             ? 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 border-amber-200 shadow-xs'
                             : top.position === 2
-                            ? 'bg-gradient-to-br from-slate-50 via-white to-slate-100/50 border-slate-200'
-                            : 'bg-gradient-to-br from-orange-50/50 via-white to-amber-50/20 border-orange-200'
-                        }`}
+                              ? 'bg-gradient-to-br from-slate-50 via-white to-slate-100/50 border-slate-200'
+                              : 'bg-gradient-to-br from-orange-50/50 via-white to-amber-50/20 border-orange-200'
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div>
                             <span
-                              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-black mb-2 ${
-                                top.position === 1
+                              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-black mb-2 ${top.position === 1
                                   ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300'
                                   : top.position === 2
-                                  ? 'bg-slate-200 text-slate-800'
-                                  : 'bg-orange-100 text-orange-900'
-                              }`}
+                                    ? 'bg-slate-200 text-slate-800'
+                                    : 'bg-orange-100 text-orange-900'
+                                }`}
                             >
                               Rank #{top.position}
                             </span>
@@ -1050,11 +1166,10 @@ export function TeacherBroadReports() {
                         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold">
                           <span className="text-slate-500">Letter Grade</span>
                           <span
-                            className={`px-2 py-0.5 rounded-md ${
-                              top.grade === 'A'
+                            className={`px-2 py-0.5 rounded-md ${top.grade === 'A'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-blue-100 text-blue-800'
-                            }`}
+                              }`}
                           >
                             Grade {top.grade}
                           </span>
@@ -1460,19 +1575,18 @@ export function TeacherBroadReports() {
                           </td>
                           <td className="p-3 text-center">
                             <span
-                              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                row.attendanceRate >= 85
+                              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${row.attendanceRate >= 85
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : row.attendanceRate >= 70
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-rose-100 text-rose-800'
-                              }`}
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}
                             >
                               {row.attendanceRate >= 85
                                 ? 'Regular'
                                 : row.attendanceRate >= 70
-                                ? 'Moderate'
-                                : 'Chronic Absence'}
+                                  ? 'Moderate'
+                                  : 'Chronic Absence'}
                             </span>
                           </td>
                         </tr>
@@ -1543,11 +1657,10 @@ export function TeacherBroadReports() {
                       {totalSummaryComponents.map((comp) => (
                         <span
                           key={`sum-comp-${comp.key}`}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs flex items-center gap-1.5 ${
-                            comp.category === 'EXAM'
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs flex items-center gap-1.5 ${comp.category === 'EXAM'
                               ? 'bg-blue-50/70 border-blue-200 text-blue-900'
                               : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
-                          }`}
+                            }`}
                         >
                           <span>{comp.name}</span>
                           <span className={comp.category === 'EXAM' ? 'text-blue-600 font-mono' : 'text-indigo-600 font-mono'}>
@@ -1646,21 +1759,19 @@ export function TeacherBroadReports() {
                   <div className="inline-flex p-1 bg-slate-100 rounded-xl">
                     <button
                       onClick={() => setSummaryViewMode('breakdown')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        summaryViewMode === 'breakdown'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${summaryViewMode === 'breakdown'
                           ? 'bg-white text-blue-700 shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Detailed Breakdown
                     </button>
                     <button
                       onClick={() => setSummaryViewMode('compact')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        summaryViewMode === 'compact'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${summaryViewMode === 'compact'
                           ? 'bg-white text-blue-700 shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Compact Total
                     </button>
@@ -1774,8 +1885,8 @@ export function TeacherBroadReports() {
                                             Number(compVal) >= comp.maxMarks * 0.7
                                               ? 'text-emerald-700 font-bold'
                                               : Number(compVal) >= comp.maxMarks * 0.5
-                                              ? 'text-slate-800'
-                                              : 'text-rose-600 font-bold'
+                                                ? 'text-slate-800'
+                                                : 'text-rose-600 font-bold'
                                           }
                                         >
                                           {compVal}
@@ -1792,15 +1903,14 @@ export function TeacherBroadReports() {
                                 </td>
                                 <td className="p-3 text-center">
                                   <span
-                                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      subGrade?.color === 'emerald'
+                                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${subGrade?.color === 'emerald'
                                         ? 'bg-emerald-50 text-emerald-700'
                                         : subGrade?.color === 'blue'
-                                        ? 'bg-blue-50 text-blue-700'
-                                        : subGrade?.color === 'rose'
-                                        ? 'bg-rose-50 text-rose-700'
-                                        : 'bg-slate-100 text-slate-700'
-                                    }`}
+                                          ? 'bg-blue-50 text-blue-700'
+                                          : subGrade?.color === 'rose'
+                                            ? 'bg-rose-50 text-rose-700'
+                                            : 'bg-slate-100 text-slate-700'
+                                      }`}
                                   >
                                     {subGrade?.grade || '-'}
                                   </span>
@@ -1846,15 +1956,14 @@ export function TeacherBroadReports() {
                               </td>
                               <td className="p-3 text-center">
                                 <span
-                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    row.gradeColor === 'emerald'
+                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${row.gradeColor === 'emerald'
                                       ? 'bg-emerald-50 text-emerald-700'
                                       : row.gradeColor === 'blue'
-                                      ? 'bg-blue-50 text-blue-700'
-                                      : row.gradeColor === 'rose'
-                                      ? 'bg-rose-50 text-rose-700'
-                                      : 'bg-slate-100 text-slate-700'
-                                  }`}
+                                        ? 'bg-blue-50 text-blue-700'
+                                        : row.gradeColor === 'rose'
+                                          ? 'bg-rose-50 text-rose-700'
+                                          : 'bg-slate-100 text-slate-700'
+                                    }`}
                                 >
                                   {row.grade || '—'}
                                 </span>
@@ -1873,6 +1982,54 @@ export function TeacherBroadReports() {
             </div>
           )}
         </>
+      )}
+
+      {/* LIVE BRANDED REPORT CARD PREVIEW & TEACHER COMMENT/SIGNATURE MODAL */}
+      {previewStudentRow && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/75 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto print:static print:bg-transparent print:p-0">
+          <div className="w-full max-w-4xl my-4">
+            <BrandedReportCardPreview
+              student={buildStudentPreviewData(previewStudentRow)}
+              branding={reportsData?.schoolBranding}
+              onClose={() => setPreviewStudentRow(null)}
+              onDownloadPdf={() => handleDownloadStudentReportCardPdf(previewStudentRow)}
+              isDownloadingPdf={downloadingStudentPdfId === previewStudentRow.studentId}
+              editable
+              editorRole="teacher"
+              onSaveRemarksAndSettings={async (payload) => {
+                if (!selectedClassId) return
+                const secId =
+                  selectedSectionId ||
+                  String(currentSections[0]?.id || classSummary.sectionId || 1)
+                const res = await apiSlice.post<{ success: boolean; message?: string }>(
+                  endpoints.teacher.saveCommentary,
+                  {
+                    studentId: payload.studentId,
+                    classId: Number(selectedClassId),
+                    sectionId: Number(secId),
+                    remark: payload.teacherComment,
+                    principalRemark: payload.principalComment,
+                    teacherSignatureUrl: payload.teacherSignatureUrl,
+                    status: 'SUBMITTED_TO_PRINCIPAL',
+                  }
+                )
+                if (res.success) {
+                  toast.success("Teacher's comment & signature saved to report card immediately!")
+                  await fetchReports()
+                  setPreviewStudentRow((prev) =>
+                    prev
+                      ? {
+                        ...prev,
+                        teacherComment: payload.teacherComment,
+                        principalComment: payload.principalComment,
+                      }
+                      : null
+                  )
+                }
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

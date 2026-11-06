@@ -74,11 +74,17 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [youtubeUrl, setYoutubeUrl] = useState('')
 
-  // Branding Form States
+  // Branding & Report Card Form States
   const [logoUrl, setLogoUrl] = useState('')
   const [logoBase64, setLogoBase64] = useState('')
+  const [principalName, setPrincipalName] = useState('')
   const [principalSignatureUrl, setPrincipalSignatureUrl] = useState('')
   const [signatureBase64, setSignatureBase64] = useState('')
+  const [defaultTeacherSignatureUrl, setDefaultTeacherSignatureUrl] = useState('')
+  const [teacherSignatureBase64, setTeacherSignatureBase64] = useState('')
+  const [resumptionDate, setResumptionDate] = useState('')
+  const [nextTermFees, setNextTermFees] = useState('')
+  const [autoPublishReportCards, setAutoPublishReportCards] = useState(true)
   const [primaryColor, setPrimaryColor] = useState('#0f172a')
   const [secondaryColor, setSecondaryColor] = useState('#0284c7')
   const [idCardTheme, setIdCardTheme] = useState('EMERALD_MODERN')
@@ -106,7 +112,14 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         setYoutubeUrl(res.data.youtubeUrl || '')
 
         setLogoUrl(res.data.logoUrl || '')
+        setPrincipalName(res.data.principalName || '')
         setPrincipalSignatureUrl(res.data.principalSignatureUrl || '')
+        setDefaultTeacherSignatureUrl(res.data.defaultTeacherSignatureUrl || '')
+        setResumptionDate(res.data.resumptionDate || '')
+        setNextTermFees(res.data.nextTermFees || '')
+        setAutoPublishReportCards(
+          res.data.autoPublishReportCards !== undefined ? Boolean(res.data.autoPublishReportCards) : true
+        )
         setPrimaryColor(res.data.primaryColor || '#0f172a')
         setSecondaryColor(res.data.secondaryColor || '#0284c7')
         setIdCardTheme(res.data.idCardTheme || 'EMERALD_MODERN')
@@ -142,6 +155,16 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
     reader.readAsDataURL(file)
   }
 
+  const handleTeacherSignatureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setTeacherSignatureBase64(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     setIsSaving(true)
@@ -161,8 +184,14 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         youtubeUrl,
         logoUrl,
         logoBase64,
+        principalName,
         principalSignatureUrl,
         signatureBase64,
+        defaultTeacherSignatureUrl,
+        teacherSignatureBase64,
+        resumptionDate,
+        nextTermFees,
+        autoPublishReportCards,
         primaryColor,
         secondaryColor,
         idCardTheme,
@@ -172,6 +201,7 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
       }
       setLogoBase64('')
       setSignatureBase64('')
+      setTeacherSignatureBase64('')
       await loadSettings()
       alert('System Settings saved & synchronized successfully!')
     } catch (err) {
@@ -513,6 +543,62 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
               </div>
             </div>
 
+            {/* Section D: Official Report Card Settings (Resumption Date, Next Term Payment & Immediate Reflection) */}
+            <div className="space-y-4 bg-emerald-50/50 p-4 rounded-xl border border-emerald-200/70">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                    <FileText size={14} className="text-emerald-700" /> Report Card Resumption Date, Next Term Payment & Signatures
+                  </h4>
+                  <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
+                    These values appear automatically on all student report cards (web preview and official PDF).
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs font-bold text-emerald-950 cursor-pointer shadow-2xs">
+                  <input
+                    type="checkbox"
+                    checked={autoPublishReportCards}
+                    onChange={e => setAutoPublishReportCards(e.target.checked)}
+                    className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-600"
+                  />
+                  Immediate Effect After Score Entry
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Next Term Resumption Date</label>
+                  <input
+                    type="text"
+                    value={resumptionDate}
+                    onChange={e => setResumptionDate(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
+                    placeholder="e.g. Monday, 12th Jan 2026"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Next Term Payment / Fees</label>
+                  <input
+                    type="text"
+                    value={nextTermFees}
+                    onChange={e => setNextTermFees(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
+                    placeholder="e.g. ₦85,000"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">Principal / Head of School Name</label>
+                  <input
+                    type="text"
+                    value={principalName}
+                    onChange={e => setPrincipalName(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
+                    placeholder="e.g. Dr. (Mrs.) A. Okafor"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="submit"
@@ -610,11 +696,11 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                 </div>
               </div>
 
-              {/* Asset B: Principal / Director Signature */}
-              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/60 space-y-3">
+              {/* Asset B: Principal / Director Signature & Default Teacher Signature */}
+              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/60 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <FileText size={14} className="text-emerald-600" /> Principal Signature PNG
+                    <FileText size={14} className="text-emerald-600" /> Principal & Teacher Signatures (Report Card)
                   </h4>
                   {(signatureBase64 || principalSignatureUrl) && (
                     <button
@@ -623,9 +709,20 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                       disabled={isResetting}
                       className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 transition cursor-pointer"
                     >
-                      <Trash2 size={12} /> Remove Signature
+                      <Trash2 size={12} /> Remove Principal Signature
                     </button>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Principal / Head of School Name</label>
+                  <input
+                    type="text"
+                    value={principalName}
+                    onChange={e => setPrincipalName(e.target.value)}
+                    placeholder="e.g. Dr. (Mrs.) A. Okafor"
+                    className="w-full p-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800"
+                  />
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -633,7 +730,7 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                     {signatureBase64 || principalSignatureUrl ? (
                       <img
                         src={signatureBase64 || principalSignatureUrl}
-                        alt="Signature Preview"
+                        alt="Principal Signature Preview"
                         className="max-w-full max-h-full object-contain filter contrast-125"
                       />
                     ) : (
@@ -645,14 +742,43 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                   </div>
 
                   <div className="flex-1 space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-700">Upload Official Signature</label>
+                    <label className="block text-xs font-bold text-slate-700">Upload Principal Signature</label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleSignatureFileChange}
                       className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
                     />
-                    <p className="text-[10px] text-slate-500 font-medium">Used for automatic report card & certificate endorsement.</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Endorses all official student report cards & transcripts.</p>
+                  </div>
+                </div>
+
+                {/* Default Class Teacher Signature */}
+                <div className="pt-3 border-t border-slate-200/70 flex items-center gap-4">
+                  <div className="w-24 h-16 rounded-xl border-2 border-slate-200 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-white flex items-center justify-center overflow-hidden p-1 shrink-0 shadow-xs relative">
+                    {teacherSignatureBase64 || defaultTeacherSignatureUrl ? (
+                      <img
+                        src={teacherSignatureBase64 || defaultTeacherSignatureUrl}
+                        alt="Teacher Signature Preview"
+                        className="max-w-full max-h-full object-contain filter contrast-125"
+                      />
+                    ) : (
+                      <div className="text-center p-1">
+                        <FileText size={18} className="mx-auto text-slate-300" />
+                        <span className="text-[9px] font-bold text-slate-400 block mt-0.5">No Signature</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">Upload Default Class Teacher Signature</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleTeacherSignatureFileChange}
+                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-500 font-medium">Used when a class teacher has not uploaded an individual signature.</p>
                   </div>
                 </div>
               </div>
