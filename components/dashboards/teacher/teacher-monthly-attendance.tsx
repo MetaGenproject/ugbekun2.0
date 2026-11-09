@@ -35,6 +35,8 @@ interface DayItem {
   day: number
   dateKey: string
   isWeekend: boolean
+  isHoliday?: boolean
+  holidayTitle?: string | null
   isSchoolDayHeld: boolean
   totals: {
     present: number
@@ -673,7 +675,7 @@ export default function TeacherMonthlyAttendance({
                           <div className="grid grid-cols-7 min-[400px]:grid-cols-10 gap-1 text-center">
                             {reportData?.days.map((dayItem) => {
                               const status = student.days[String(dayItem.day)] || '—'
-                              const isWeekend = dayItem.isWeekend
+                              const isHolidayOrWeekend = dayItem.isWeekend || Boolean(dayItem.isHoliday)
                               return (
                                 <div
                                   key={`exp-${student.studentId}-${dayItem.day}`}
@@ -688,13 +690,13 @@ export default function TeacherMonthlyAttendance({
                                         ? 'bg-rose-500 text-white shadow-2xs'
                                         : status === 'L'
                                         ? 'bg-amber-500 text-white shadow-2xs'
-                                        : status === 'H' || isWeekend
+                                        : status === 'H' || isHolidayOrWeekend
                                         ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300'
                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
                                     }`}
-                                    title={`Day ${dayItem.day}: ${status === 'P' ? 'Present' : status === 'A' ? 'Absent' : status === 'L' ? 'Late' : isWeekend ? 'Weekend/Holiday' : 'No record'}`}
+                                    title={`Day ${dayItem.day}: ${status === 'P' ? 'Present' : status === 'A' ? 'Absent' : status === 'L' ? 'Late' : isHolidayOrWeekend ? dayItem.holidayTitle || 'Weekend / Holiday' : 'No record'}`}
                                   >
-                                    {status === 'P' ? 'P' : status === 'A' ? 'A' : status === 'L' ? 'L' : isWeekend ? 'H' : '—'}
+                                    {status === 'P' ? 'P' : status === 'A' ? 'A' : status === 'L' ? 'L' : isHolidayOrWeekend ? 'H' : '—'}
                                   </div>
                                 </div>
                               )
@@ -726,11 +728,13 @@ export default function TeacherMonthlyAttendance({
                 {/* Days 1..31 */}
                 {reportData?.days.map((dayItem) => {
                   const weekdayShort = getWeekdayShort(dayItem.dateKey)
+                  const isHolidayOrWeekend = dayItem.isWeekend || Boolean(dayItem.isHoliday)
                   return (
                     <th
                       key={`th-day-${dayItem.day}`}
+                      title={dayItem.holidayTitle || (dayItem.isWeekend ? 'Weekend' : `Day ${dayItem.day}`)}
                       className={`text-center font-bold py-2 px-1 border-r border-slate-200/80 dark:border-slate-700/80 min-w-[34px] sm:min-w-[38px] ${
-                        dayItem.isWeekend
+                        isHolidayOrWeekend
                           ? 'bg-purple-100/50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300'
                           : 'hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                       }`}
@@ -770,19 +774,23 @@ export default function TeacherMonthlyAttendance({
                 {/* Day column totals */}
                 {reportData?.days.map((dayItem) => {
                   const t = dayItem.totals
+                  const isHolidayOrWeekend = dayItem.isWeekend || Boolean(dayItem.isHoliday)
                   const hasActivity = t.present > 0 || t.absent > 0 || t.late > 0
 
                   return (
                     <th
                       key={`th-total-${dayItem.day}`}
                       className={`text-center py-1.5 px-0.5 border-r border-slate-200 dark:border-slate-700 ${
-                        dayItem.isWeekend
+                        isHolidayOrWeekend
                           ? 'bg-purple-50/50 dark:bg-purple-950/20'
                           : ''
                       }`}
                     >
-                      {dayItem.isWeekend ? (
-                        <span className="inline-block text-[8.5px] font-bold text-purple-600 dark:text-purple-400">
+                      {isHolidayOrWeekend ? (
+                        <span
+                          className="inline-block text-[8.5px] font-bold text-purple-600 dark:text-purple-400"
+                          title={dayItem.holidayTitle || 'Holiday / Weekend'}
+                        >
                           HOL
                         </span>
                       ) : hasActivity ? (
@@ -886,12 +894,13 @@ export default function TeacherMonthlyAttendance({
                       {/* Day Boxes (1..31) */}
                       {reportData?.days.map((dayItem) => {
                         const status = student.days[String(dayItem.day)] || '—'
+                        const isHolidayOrWeekend = dayItem.isWeekend || Boolean(dayItem.isHoliday)
 
                         return (
                           <td
                             key={`td-${student.studentId}-${dayItem.day}`}
                             className={`p-1 text-center border-r border-slate-100 dark:border-slate-800/80 ${
-                              dayItem.isWeekend ? 'bg-purple-50/20 dark:bg-purple-950/10' : ''
+                              isHolidayOrWeekend ? 'bg-purple-50/20 dark:bg-purple-950/10' : ''
                             }`}
                           >
                             {status === 'P' ? (
@@ -915,10 +924,10 @@ export default function TeacherMonthlyAttendance({
                               >
                                 L
                               </div>
-                            ) : status === 'H' ? (
+                            ) : status === 'H' || isHolidayOrWeekend ? (
                               <div
                                 className="w-5 h-5 sm:w-6 sm:h-6 mx-auto rounded-md bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 font-bold text-[9.5px] sm:text-[10px] flex items-center justify-center border border-purple-200 dark:border-purple-800/50"
-                                title={`Day ${dayItem.day} (${dayItem.dateKey}): Weekend / Holiday`}
+                                title={`Day ${dayItem.day} (${dayItem.dateKey}): ${dayItem.holidayTitle || 'Weekend / Holiday'}`}
                               >
                                 H
                               </div>

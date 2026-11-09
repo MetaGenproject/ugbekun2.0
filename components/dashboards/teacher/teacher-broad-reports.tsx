@@ -69,6 +69,8 @@ interface GradeRange {
   grade: string
   minScore: number
   maxScore: number
+  minPercentage?: number
+  maxPercentage?: number
   remark: string
   color: string
 }
@@ -85,6 +87,7 @@ interface ExamItem {
   displayName?: string
   termId?: number | null
   sessionId?: number
+  examCategory?: string | null
 }
 
 interface TabulationRow {
@@ -105,6 +108,7 @@ interface TabulationRow {
   totalCA?: number
   totalExam?: number
   averageScore: number
+  rawAverageScore?: number
   grade?: string
   gradeRemark?: string
   gradeColor?: string
@@ -129,8 +133,10 @@ interface AssessmentComponentItem {
   key: string
   code: string
   name: string
+  label?: string
   maxMarks: number
-  category: 'CA' | 'EXAM'
+  passMarks?: number
+  category: 'CA' | 'PRACTICAL' | 'EXAM' | string
 }
 
 interface SessionItem {
@@ -141,6 +147,12 @@ interface SessionItem {
 
 interface ClassReportsData {
   schoolBranding?: Partial<SchoolReportBranding>
+  stage?: string
+  isCaOnlyStage?: boolean
+  subjectMaxMarks?: number
+  caMaxMarks?: number
+  fullMaxMarks?: number
+  examMaxMarks?: number
   classSummary: {
     classId: number
     className: string
@@ -155,6 +167,9 @@ interface ClassReportsData {
     lowestScore: number
     passRate?: number
     passCount?: number
+    subjectMaxMarks?: number
+    stage?: string
+    isCaOnlyStage?: boolean
   }
   sessionId?: number
   termId?: number
@@ -163,6 +178,7 @@ interface ClassReportsData {
   selectedExamId?: number | null
   exams?: ExamItem[]
   assessmentComponents?: AssessmentComponentItem[]
+  allMatrixColumns?: AssessmentComponentItem[]
   evaluationMatrix?: EvaluationMatrixInfo | null
   gradingScale?: GradingScaleInfo | null
   offeredSubjects: SubjectItem[]
@@ -207,6 +223,7 @@ export function TeacherBroadReports() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [selectedTermId, setSelectedTermId] = useState<string>('1')
   const [selectedExamId, setSelectedExamId] = useState<string>('')
+  const [selectedStage, setSelectedStage] = useState<string>('FULL')
   const [availableSessions, setAvailableSessions] = useState<SessionItem[]>([])
   const [activeTab, setActiveTab] = useState<'tabulation' | 'performance' | 'credentials' | 'attendance' | 'totalSummary'>('tabulation')
   const [summarySubjectFilter, setSummarySubjectFilter] = useState<string>('')
@@ -284,13 +301,14 @@ export function TeacherBroadReports() {
     return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
   }, [])
 
-  // 2. Fetch Class Reports when selected class, section, session, term, or exam changes
+  // 2. Fetch Class Reports when selected class, section, session, term, exam, or stage changes
   const fetchReports = async (
     overrideClassId?: string,
     overrideSectionId?: string,
     overrideSessionId?: string,
     overrideTermId?: string,
-    overrideExamId?: string
+    overrideExamId?: string,
+    overrideStage?: string
   ) => {
     const classToFetch = overrideClassId !== undefined ? overrideClassId : selectedClassId
     if (!classToFetch) return
@@ -310,6 +328,9 @@ export function TeacherBroadReports() {
 
       const examToFetch = overrideExamId !== undefined ? overrideExamId : selectedExamId
       if (examToFetch) params.append('examId', examToFetch)
+
+      const stageToFetch = overrideStage !== undefined ? overrideStage : selectedStage
+      if (stageToFetch) params.append('stage', stageToFetch)
 
       const res = await apiSlice.get<{ success: boolean } & ClassReportsData>(
         endpoints.teacher.classReports(params.toString())
@@ -345,7 +366,7 @@ export function TeacherBroadReports() {
     if (selectedClassId) {
       fetchReports()
     }
-  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId])
+  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId, selectedStage])
 
   useEffect(() => {
     const handleRealtimeRefresh = () => {
@@ -359,14 +380,23 @@ export function TeacherBroadReports() {
       window.removeEventListener('ugbekun-marks-updated', handleRealtimeRefresh)
       window.removeEventListener('branch-settings-updated', handleRealtimeRefresh)
     }
-  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId])
+  }, [selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId, selectedStage])
 
   const handleDownloadStudentReportCardPdf = async (row: TabulationRow) => {
     try {
       setDownloadingStudentPdfId(row.studentId)
+      const secId =
+        selectedSectionId ||
+        String(currentSections[0]?.id || classSummary.sectionId || 1)
       const url = endpoints.teacher.exportReportCardPdf(
         row.studentId,
-        selectedExamId ? Number(selectedExamId) : undefined
+        selectedExamId ? Number(selectedExamId) : undefined,
+        {
+          classId: selectedClassId,
+          sectionId: secId,
+          stage: reportsData?.stage || selectedStage,
+          sessionId: selectedSessionId || reportsData?.sessionId,
+        }
       )
       const safeName = (row.name || 'Student').replace(/\s+/g, '_')
       await apiSlice.download(url, `Report_Card_${safeName}.pdf`)
@@ -379,19 +409,24 @@ export function TeacherBroadReports() {
   }
 
   const buildStudentPreviewData = (row: TabulationRow): BrandedReportCardStudentData => {
+    const subMax = reportsData?.subjectMaxMarks || reportsData?.fullMaxMarks || reportsData?.evaluationMatrix?.totalMarks || 0
     const subjectRows = (reportsData?.offeredSubjects || []).map((sub) => {
       const score = row.subjectScores[sub.id] ?? 0
       const bd = row.subjectBreakdowns?.[sub.id] || {}
       const gr = row.subjectGrades?.[sub.id]
       const stat = reportsData?.performance?.subjectStats.find((s) => s.subjectId === sub.id)
+      const resolvedMark = bd.totalScore !== undefined ? bd.totalScore : score
       return {
         id: sub.id,
         subjectId: sub.id,
         subjectName: sub.name,
         subjectCode: sub.subjectCode || sub.code,
         cbtMark: bd.caTotal !== undefined ? String(bd.caTotal) : null,
-        theoryMark: bd.examScore !== undefined ? String(bd.examScore) : null,
-        mark: String(score),
+        theoryMark: reportsData?.isCaOnlyStage ? null : (bd.examScore !== undefined ? String(bd.examScore) : null),
+        mark: String(resolvedMark),
+        stageScore: String(resolvedMark),
+        maxMarks: subMax,
+        componentScores: bd,
         classAverage: stat?.average ?? null,
         grade: gr?.grade,
         remark: gr?.remark,
@@ -411,9 +446,11 @@ export function TeacherBroadReports() {
       birthday: row.birthday || null,
       totalMarks: row.totalScore,
       average: row.averageScore,
+      rawAverage: row.rawAverageScore,
+      maxMarksPerSubject: subMax,
       grade: row.grade,
-      position: `#${row.position} of ${classSummary.totalStudents || reportsData?.tabulation.length || 1}`,
-      rank: row.position,
+      position: reportsData?.isCaOnlyStage ? null : `#${row.position} of ${classSummary.totalStudents || reportsData?.tabulation.length || 1}`,
+      rank: reportsData?.isCaOnlyStage ? null : row.position,
       totalClassStudents: classSummary.totalStudents,
       presentCount: row.attendanceSummary?.present ?? 0,
       absentCount: row.attendanceSummary?.absent ?? 0,
@@ -513,18 +550,18 @@ export function TeacherBroadReports() {
       : reportsData?.evaluationMatrix?.components && reportsData.evaluationMatrix.components.length > 0
         ? reportsData.evaluationMatrix.components.map((c, idx) => ({
           key: String(c.key || c.code || idx + 1),
-          code: String(c.code || c.key || `CA${idx + 1}`).toUpperCase(),
+          code: String(c.code || c.key || `COMP_${idx + 1}`).toUpperCase(),
           name: c.name || `Component ${idx + 1}`,
-          maxMarks: c.maxMarks || 20,
+          maxMarks: c.maxMarks || 0,
           category: ((c.code || c.name || '').toLowerCase().includes('exam') ? 'EXAM' : 'CA') as 'CA' | 'EXAM',
         }))
-        : [
-          { key: 'CA1', code: 'CA1', name: 'Continuous Assessment 1', maxMarks: 20, category: 'CA' },
-          { key: 'CA2', code: 'CA2', name: 'Continuous Assessment 2', maxMarks: 20, category: 'CA' },
-          { key: 'EXAM', code: 'EXAM', name: 'Terminal Examination', maxMarks: 60, category: 'EXAM' },
-        ]
+        : []
 
-  const totalSummaryMaxMarks = totalSummaryComponents.reduce((acc, c) => acc + (c.maxMarks || 0), 0) || 100
+  const totalSummaryMaxMarks =
+    reportsData?.subjectMaxMarks ||
+    totalSummaryComponents.reduce((acc, c) => acc + (c.maxMarks || 0), 0) ||
+    reportsData?.evaluationMatrix?.totalMarks ||
+    0
 
   // Selected subject for subject-specific continuous assessment view
   const selectedSummarySubject = summarySubjectFilter
@@ -649,7 +686,7 @@ export function TeacherBroadReports() {
           </div>
 
           {/* 3. Class Select */}
-          <div className="lg:col-span-3 sm:col-span-1">
+          <div className="lg:col-span-2 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
               Assigned Class <span className="text-rose-500">*</span>
             </label>
@@ -659,7 +696,7 @@ export function TeacherBroadReports() {
                 const newClass = e.target.value
                 setSelectedClassId(newClass)
                 setSelectedSectionId('')
-                fetchReports(newClass, '', selectedSessionId, selectedTermId, selectedExamId)
+                fetchReports(newClass, '', selectedSessionId, selectedTermId, selectedExamId, selectedStage)
               }}
               className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -681,7 +718,7 @@ export function TeacherBroadReports() {
               onChange={(e) => {
                 const newSec = e.target.value
                 setSelectedSectionId(newSec)
-                fetchReports(selectedClassId, newSec, selectedSessionId, selectedTermId, selectedExamId)
+                fetchReports(selectedClassId, newSec, selectedSessionId, selectedTermId, selectedExamId, selectedStage)
               }}
               className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -695,17 +732,17 @@ export function TeacherBroadReports() {
           </div>
 
           {/* 5. Exam Select (Examination Matrix Tabulation) */}
-          <div className="lg:col-span-2 sm:col-span-2">
+          <div className="lg:col-span-2 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Examination Matrix</span>
-              <span className="text-[10px] text-blue-600 font-bold lowercase">matrix</span>
+              <span>Examination</span>
+              <span className="text-[10px] text-blue-600 font-bold lowercase">exam</span>
             </label>
             <select
               value={selectedExamId}
               onChange={(e) => {
                 const newExam = e.target.value
                 setSelectedExamId(newExam)
-                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, newExam)
+                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, newExam, selectedStage)
               }}
               className="w-full h-11 px-3 bg-blue-50/50 border border-blue-200 rounded-xl text-xs font-bold text-blue-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -716,8 +753,42 @@ export function TeacherBroadReports() {
                   </option>
                 ))
               ) : (
-                <option value="">Select Examination Matrix</option>
+                <option value="">Select Examination</option>
               )}
+            </select>
+          </div>
+
+          {/* 6. Report Stage Select (Full vs Only CA from DB Matrix) */}
+          <div className="lg:col-span-2 sm:col-span-1">
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Report Stage</span>
+              <span className="text-[10px] text-emerald-600 font-bold lowercase">scope</span>
+            </label>
+            <select
+              value={selectedStage}
+              onChange={(e) => {
+                const newStage = e.target.value
+                setSelectedStage(newStage)
+                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId, newStage)
+              }}
+              className="w-full h-11 px-3 bg-emerald-50/50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="FULL">
+                Full Report{reportsData?.fullMaxMarks ? ` (${reportsData.fullMaxMarks})` : ''}
+              </option>
+              <option value="COMBINED_CA">
+                Only CA{reportsData?.caMaxMarks ? ` (${reportsData.caMaxMarks})` : ''}
+              </option>
+              {(reportsData?.allMatrixColumns || [])
+                .filter((c) => c.category === 'CA')
+                .length > 1 &&
+                (reportsData?.allMatrixColumns || [])
+                  .filter((c) => c.category === 'CA')
+                  .map((col) => (
+                    <option key={`stg-${col.code}`} value={col.code}>
+                      {col.label || col.name || col.code} ({col.maxMarks})
+                    </option>
+                  ))}
             </select>
           </div>
         </div>
@@ -1991,6 +2062,15 @@ export function TeacherBroadReports() {
             <BrandedReportCardPreview
               student={buildStudentPreviewData(previewStudentRow)}
               branding={reportsData?.schoolBranding}
+              assessmentComponents={reportsData?.assessmentComponents}
+              maxTotal={reportsData?.subjectMaxMarks}
+              stage={reportsData?.stage || selectedStage}
+              gradingRanges={(reportsData?.gradingScale?.ranges || []).map((r) => ({
+                grade: r.grade,
+                minPercentage: r.minPercentage ?? r.minScore,
+                maxPercentage: r.maxPercentage ?? r.maxScore,
+                remark: r.remark,
+              }))}
               onClose={() => setPreviewStudentRow(null)}
               onDownloadPdf={() => handleDownloadStudentReportCardPdf(previewStudentRow)}
               isDownloadingPdf={downloadingStudentPdfId === previewStudentRow.studentId}

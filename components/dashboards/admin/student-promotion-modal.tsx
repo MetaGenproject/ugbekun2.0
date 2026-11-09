@@ -96,14 +96,19 @@ export function StudentPromotionModal({
           const rawClasses = clsRes.classes
           setClasses(rawClasses)
 
-          // If currentClass is known, try to pre-suggest next class
-          if (currentClass) {
-            const curIdx = rawClasses.findIndex((c: any) => c.name?.toLowerCase() === currentClass?.toLowerCase())
-            if (curIdx !== -1 && curIdx + 1 < rawClasses.length) {
-              setTargetClassId(String(rawClasses[curIdx + 1].id))
-            } else if (rawClasses.length > 0) {
-              setTargetClassId(String(rawClasses[0].id))
-            }
+          // Match current class by sourceClassId first, then by exact or prefix match on currentClass
+          const curIdx = rawClasses.findIndex((c: any) => {
+            if (sourceClassId && Number(c.id) === Number(sourceClassId)) return true
+            if (!currentClass || !c.name) return false
+            const cName = String(c.name).trim().toLowerCase()
+            const curLabel = String(currentClass).trim().toLowerCase()
+            return cName === curLabel || curLabel.startsWith(`${cName} -`) || curLabel.startsWith(`${cName} (`)
+          })
+
+          if (curIdx !== -1 && curIdx + 1 < rawClasses.length) {
+            setTargetClassId(String(rawClasses[curIdx + 1].id))
+          } else if (curIdx !== -1) {
+            setTargetClassId(String(rawClasses[curIdx].id))
           } else if (rawClasses.length > 0) {
             setTargetClassId(String(rawClasses[0].id))
           }
@@ -160,7 +165,14 @@ export function StudentPromotionModal({
   // Load entire class cohort if user toggles whole class scope
   useEffect(() => {
     async function loadWholeClass() {
-      const resolvedClassId = sourceClassId || classes.find(c => c.name?.toLowerCase() === currentClass?.toLowerCase())?.id
+      const resolvedClassId =
+        sourceClassId ||
+        classes.find((c) => {
+          if (!currentClass || !c.name) return false
+          const cName = String(c.name).trim().toLowerCase()
+          const curLabel = String(currentClass).trim().toLowerCase()
+          return cName === curLabel || curLabel.startsWith(`${cName} -`) || curLabel.startsWith(`${cName} (`)
+        })?.id
       if (isWholeClassScope && resolvedClassId) {
         setIsLoadingCohort(true)
         try {
@@ -183,6 +195,24 @@ export function StudentPromotionModal({
     }
     loadWholeClass()
   }, [isWholeClassScope, sourceClassId, classes, currentClass])
+
+  // Sync targetClassId when switching between PROMOTE and REPEAT
+  useEffect(() => {
+    if (classes.length === 0) return
+    const curIdx = classes.findIndex((c) => {
+      if (sourceClassId && Number(c.id) === Number(sourceClassId)) return true
+      if (!currentClass || !c.name) return false
+      const cName = String(c.name).trim().toLowerCase()
+      const curLabel = String(currentClass).trim().toLowerCase()
+      return cName === curLabel || curLabel.startsWith(`${cName} -`) || curLabel.startsWith(`${cName} (`)
+    })
+    if (curIdx === -1) return
+    if (promotionAction === 'REPEAT') {
+      setTargetClassId(String(classes[curIdx].id))
+    } else if (curIdx + 1 < classes.length) {
+      setTargetClassId(String(classes[curIdx + 1].id))
+    }
+  }, [promotionAction, classes, sourceClassId, currentClass])
 
   // Effective students to promote
   const effectiveStudents: ModalStudentItem[] = isWholeClassScope && classCohortStudents.length > 0

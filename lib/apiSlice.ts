@@ -478,6 +478,7 @@ export const endpoints = {
       return `${BASE_URL}/teacher/attendance/termly-report?${q.toString()}`
     },
     commentary: `${BASE_URL}/teacher/commentary`,
+    saveCommentary: `${BASE_URL}/teacher/commentary`,
     generateAiCommentary: `${BASE_URL}/teacher/commentary/generate-ai`,
     batchGenerateAiCommentary: `${BASE_URL}/teacher/commentary/batch-generate-ai`,
     batchSaveCommentary: `${BASE_URL}/teacher/commentary/batch-save`,
@@ -508,10 +509,23 @@ export const endpoints = {
     onlineExamSubmissions: (examId: number) => `${BASE_URL}/teacher/online-exams/${examId}/submissions`,
     gradeHomework: (submissionId: number) => `${BASE_URL}/teacher/homeworks/submissions/${submissionId}/grade`,
     gradeOnlineExam: (submissionId: number) => `${BASE_URL}/teacher/online-exams/submissions/${submissionId}/grade`,
-    exportPdf: (studentId: number, classId: number, sectionId: number, rankingType: string, rankingLimit?: number) =>
-      `${BASE_URL}/teacher/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
-    exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3) =>
-      `${BASE_URL}/teacher/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}`,
+    exportPdf: (studentId: number, classId: number, sectionId: number, rankingType: string, rankingLimit?: number, stage?: string, sessionId?: number) =>
+      `${BASE_URL}/teacher/report-cards/export-pdf?studentId=${studentId}&classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}${stage ? `&stage=${encodeURIComponent(stage)}` : ''}${sessionId ? `&sessionId=${sessionId}` : ''}`,
+    exportReportCardPdf: (
+      studentId: number,
+      examId?: number,
+      extra?: { classId?: number | string; sectionId?: number | string; stage?: string; sessionId?: number | string }
+    ) => {
+      const p = new URLSearchParams({ studentId: String(studentId), rankingType: 'full' })
+      if (examId) p.set('examId', String(examId))
+      if (extra?.classId) p.set('classId', String(extra.classId))
+      if (extra?.sectionId) p.set('sectionId', String(extra.sectionId))
+      if (extra?.stage) p.set('stage', String(extra.stage))
+      if (extra?.sessionId) p.set('sessionId', String(extra.sessionId))
+      return `${BASE_URL}/teacher/report-cards/export-pdf?${p.toString()}`
+    },
+    exportBatchPdf: (classId: number, sectionId: number, rankingType = 'full', rankingLimit = 3, stage?: string, sessionId?: number) =>
+      `${BASE_URL}/teacher/report-cards/export-batch-pdf?classId=${classId}&sectionId=${sectionId}&rankingType=${rankingType}&rankingLimit=${rankingLimit}${stage ? `&stage=${encodeURIComponent(stage)}` : ''}${sessionId ? `&sessionId=${sessionId}` : ''}`,
     gradebookSheet: `${BASE_URL}/teacher/gradebook/sheet`,
     gradebookSaveSingle: `${BASE_URL}/teacher/gradebook/save-single`,
     gradebookBatchSave: `${BASE_URL}/teacher/gradebook/batch-save`,

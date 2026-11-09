@@ -46,6 +46,17 @@ export interface SchoolReportBranding {
   branchCode: string
 }
 
+export interface EvaluationMatrixComponent {
+  key?: string
+  code: string
+  name?: string
+  label?: string
+  maxMarks: number
+  passMarks?: number
+  category?: 'CA' | 'PRACTICAL' | 'EXAM' | string
+  displayOrder?: number
+}
+
 export interface BrandedReportSubjectRow {
   id?: number
   subjectId?: number
@@ -58,6 +69,9 @@ export interface BrandedReportSubjectRow {
   examScore?: string | number | null
   mark?: string | number | null
   totalScore?: string | number | null
+  stageScore?: string | number | null
+  maxMarks?: number | null
+  componentScores?: Record<string, number | string | null>
   absent?: boolean
   classAverage?: number | null
   grade?: string
@@ -88,6 +102,8 @@ export interface BrandedReportCardStudentData {
   birthday?: string | null
   totalMarks?: number | null
   average?: number | null
+  rawAverage?: number | null
+  maxMarksPerSubject?: number | null
   grade?: string | null
   position?: string | null
   rank?: number | null
@@ -109,9 +125,20 @@ export interface BrandedReportCardStudentData {
   affective?: Record<string, string>
 }
 
+export interface GradingRangeItem {
+  grade: string
+  minPercentage: number
+  maxPercentage: number
+  remark?: string
+}
+
 interface BrandedReportCardPreviewProps {
   student: BrandedReportCardStudentData
   branding?: Partial<SchoolReportBranding> | null
+  assessmentComponents?: EvaluationMatrixComponent[] | null
+  maxTotal?: number | null
+  stage?: string
+  gradingRanges?: GradingRangeItem[] | null
   onClose?: () => void
   onDownloadPdf?: () => void
   isDownloadingPdf?: boolean
@@ -129,17 +156,45 @@ interface BrandedReportCardPreviewProps {
   }) => Promise<void>
 }
 
-function getLetterGradeAndRemark(score: number): { grade: string; remark: string; color: string } {
-  if (score >= 75) return { grade: 'A', remark: 'Excellent', color: '#059669' }
-  if (score >= 65) return { grade: 'B', remark: 'Very Good', color: '#0284c7' }
-  if (score >= 50) return { grade: 'C', remark: 'Credit', color: '#4f46e5' }
-  if (score >= 40) return { grade: 'D', remark: 'Pass', color: '#d97706' }
+function getGradeBadgeColor(grade: string): string {
+  const g = String(grade || '').toUpperCase()
+  if (g.startsWith('A')) return '#059669'
+  if (g.startsWith('B')) return '#0284c7'
+  if (g.startsWith('C')) return '#4f46e5'
+  if (g.startsWith('D') || g.startsWith('E')) return '#d97706'
+  return '#dc2626'
+}
+
+function getLetterGradeAndRemark(
+  normalizedPercentage: number,
+  gradingRanges?: GradingRangeItem[] | null
+): { grade: string; remark: string; color: string } {
+  const rounded = Math.round(normalizedPercentage)
+  if (Array.isArray(gradingRanges) && gradingRanges.length > 0) {
+    for (const r of gradingRanges) {
+      if (rounded >= Number(r.minPercentage) && rounded <= Number(r.maxPercentage)) {
+        return {
+          grade: r.grade,
+          remark: r.remark || r.grade,
+          color: getGradeBadgeColor(r.grade),
+        }
+      }
+    }
+  }
+  if (normalizedPercentage >= 75) return { grade: 'A', remark: 'Excellent', color: '#059669' }
+  if (normalizedPercentage >= 65) return { grade: 'B', remark: 'Very Good', color: '#0284c7' }
+  if (normalizedPercentage >= 50) return { grade: 'C', remark: 'Credit', color: '#4f46e5' }
+  if (normalizedPercentage >= 40) return { grade: 'D', remark: 'Pass', color: '#d97706' }
   return { grade: 'F', remark: 'Needs Improvement', color: '#dc2626' }
 }
 
 export function BrandedReportCardPreview({
   student,
   branding,
+  assessmentComponents,
+  maxTotal,
+  stage = 'FULL',
+  gradingRanges,
   onClose,
   onDownloadPdf,
   isDownloadingPdf = false,
@@ -235,13 +290,63 @@ export function BrandedReportCardPreview({
   }
 
   const rows = student.reportCard || []
+  const resolvedComponents: EvaluationMatrixComponent[] =
+    Array.isArray(assessmentComponents) && assessmentComponents.length > 0
+      ? assessmentComponents
+      : []
+
+  const resolvedMaxTotal =
+    typeof maxTotal === 'number' && maxTotal > 0
+      ? maxTotal
+      : student.maxMarksPerSubject && student.maxMarksPerSubject > 0
+        ? student.maxMarksPerSubject
+        : resolvedComponents.length > 0
+          ? resolvedComponents.reduce((sum, c) => sum + (Number(c.maxMarks) || 0), 0)
+          : Number(rows[0]?.maxMarks) || 0
+
+  const isCaStage = stage && stage.toUpperCase() !== 'FULL'
+
+  const getComponentScoreValue = (
+    row: BrandedReportSubjectRow,
+    comp: EvaluationMatrixComponent,
+    compIdx: number
+  ): string | number => {
+    if (row.absent) return 'ABS'
+    const map = row.componentScores || {}
+    const candidates = [comp.code, comp.key, comp.label, comp.name].filter(Boolean) as string[]
+    for (const cand of candidates) {
+      if (map[cand] !== undefined && map[cand] !== null) {
+        return map[cand] as string | number
+      }
+      const upper = cand.toUpperCase()
+      for (const [k, v] of Object.entries(map)) {
+        if (k.toUpperCase() === upper && v !== undefined && v !== null) {
+          return v as string | number
+        }
+      }
+    }
+    const cat = String(comp.category || '').toUpperCase()
+    if (cat === 'EXAM' && (row.theoryMark !== undefined || row.examScore !== undefined)) {
+      return row.theoryMark ?? row.examScore ?? '—'
+    }
+    if (cat === 'CA' && compIdx === 0 && (row.cbtMark !== undefined || row.caScore !== undefined)) {
+      return row.cbtMark ?? row.caScore ?? '—'
+    }
+    return '—'
+  }
+
   const computedTotal =
     student.totalMarks ??
-    rows.reduce((acc, r) => acc + (Number(r.mark ?? r.totalScore ?? 0) || 0), 0)
+    rows.reduce((acc, r) => acc + (Number(r.stageScore ?? r.mark ?? r.totalScore ?? 0) || 0), 0)
+  const rawAvg =
+    student.rawAverage ??
+    (rows.length > 0 ? Number((computedTotal / rows.length).toFixed(1)) : 0)
   const computedAvg =
     student.average ??
-    (rows.length > 0 ? Number((computedTotal / rows.length).toFixed(1)) : 0)
-  const overallGradeInfo = getLetterGradeAndRemark(Number(computedAvg || 0))
+    (rows.length > 0 && resolvedMaxTotal > 0
+      ? Number((((computedTotal / rows.length) / resolvedMaxTotal) * 100).toFixed(1))
+      : rawAvg)
+  const overallGradeInfo = getLetterGradeAndRemark(Number(computedAvg || 0), gradingRanges)
   const finalGrade = student.grade || overallGradeInfo.grade
 
   const presentDays = student.presentCount ?? 0
@@ -538,7 +643,7 @@ export function BrandedReportCardPreview({
                 className="inline-block px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-white shadow-xs"
                 style={{ backgroundColor: secondaryColor }}
               >
-                Official Terminal Report
+                {isCaStage ? 'Continuous Assessment Report' : 'Official Terminal Report'}
               </span>
               <p className="text-xs font-bold text-white/90 mt-1.5">
                 {branding?.academicSession || 'Current Academic Session'}
@@ -673,7 +778,9 @@ export function BrandedReportCardPreview({
               <div className="text-[11px] font-bold text-slate-500 mt-0.5">
                 {student.isCommentBased
                   ? 'Developmental Evaluation'
-                  : `Total Score: ${computedTotal} | Grade: ${finalGrade}`}
+                  : resolvedMaxTotal > 0
+                    ? `Total: ${computedTotal}/${rows.length * resolvedMaxTotal} • Avg: ${rawAvg}/${resolvedMaxTotal} | Grade: ${finalGrade}`
+                    : `Total Score: ${computedTotal} | Grade: ${finalGrade}`}
               </div>
             </div>
 
@@ -761,10 +868,19 @@ export function BrandedReportCardPreview({
                     style={{ backgroundColor: `${secondaryColor}15`, color: primaryColor }}
                   >
                     <th className="py-2.5 px-3">Subject</th>
-                    <th className="py-2.5 px-3 text-center">CA / Test</th>
-                    <th className="py-2.5 px-3 text-center">Exam</th>
-                    <th className="py-2.5 px-3 text-center">Total (100)</th>
-                    <th className="py-2.5 px-3 text-center">Class Avg</th>
+                    {resolvedComponents.map((comp) => (
+                      <th
+                        key={comp.code || comp.key}
+                        className="py-2.5 px-3 text-center whitespace-nowrap"
+                      >
+                        {comp.label || comp.name || comp.code}
+                        {comp.maxMarks ? ` (${comp.maxMarks})` : ''}
+                      </th>
+                    ))}
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">
+                      {resolvedMaxTotal > 0 ? `Total (${resolvedMaxTotal})` : 'Total'}
+                    </th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Class Avg</th>
                     <th className="py-2.5 px-3 text-center">Grade</th>
                     <th className="py-2.5 px-3">Remark</th>
                   </tr>
@@ -772,18 +888,22 @@ export function BrandedReportCardPreview({
                 <tbody className="divide-y divide-slate-200">
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                      <td
+                        colSpan={5 + resolvedComponents.length}
+                        className="py-8 text-center text-slate-400 font-medium"
+                      >
                         No subject scores recorded for this student yet.
                       </td>
                     </tr>
                   ) : (
                     rows.map((r, idx) => {
-                      const ca = r.cbtMark ?? r.caScore ?? '—'
-                      const ex = r.theoryMark ?? r.examScore ?? '—'
-                      const totNum = Number(r.mark ?? r.totalScore ?? 0)
-                      const gradeInfo = getLetterGradeAndRemark(totNum)
-                      const rowGrade = r.grade || gradeInfo.grade
-                      const rowRemark = r.remark || gradeInfo.remark
+                      const totNum = Number(r.stageScore ?? r.mark ?? r.totalScore ?? 0)
+                      const rowMax = Number(r.maxMarks) || resolvedMaxTotal
+                      const normalizedPct = rowMax > 0 ? (totNum / rowMax) * 100 : totNum
+                      const gradeInfo = getLetterGradeAndRemark(normalizedPct, gradingRanges)
+                      const rowGrade = r.grade && r.grade !== '-' ? r.grade : gradeInfo.grade
+                      const rowRemark = r.remark && r.remark !== '-' ? r.remark : gradeInfo.remark
+                      const badgeColor = getGradeBadgeColor(rowGrade)
                       return (
                         <tr
                           key={r.id || idx}
@@ -797,14 +917,19 @@ export function BrandedReportCardPreview({
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {r.absent ? 'ABS' : ca}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {r.absent ? 'ABS' : ex}
-                          </td>
+                          {resolvedComponents.map((comp, compIdx) => {
+                            const compVal = getComponentScoreValue(r, comp, compIdx)
+                            return (
+                              <td
+                                key={comp.code || comp.key || compIdx}
+                                className="py-2.5 px-3 text-center font-semibold text-slate-700"
+                              >
+                                {compVal}
+                              </td>
+                            )
+                          })}
                           <td className="py-2.5 px-3 text-center font-black text-slate-900">
-                            {r.absent ? 'ABS' : r.mark ?? r.totalScore ?? totNum}
+                            {r.absent ? 'ABS' : (r.stageScore ?? r.mark ?? r.totalScore ?? totNum)}
                           </td>
                           <td className="py-2.5 px-3 text-center font-medium text-slate-500">
                             {r.classAverage !== undefined && r.classAverage !== null
@@ -813,13 +938,15 @@ export function BrandedReportCardPreview({
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             <span
-                              className="inline-block w-6 py-0.5 rounded font-black text-[11px] text-white"
-                              style={{ backgroundColor: gradeInfo.color }}
+                              className="inline-block min-w-6 px-1.5 py-0.5 rounded font-black text-[11px] text-white"
+                              style={{ backgroundColor: badgeColor }}
                             >
-                              {rowGrade}
+                              {r.absent ? 'ABS' : rowGrade}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-700">{rowRemark}</td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-700">
+                            {r.absent ? 'Absent' : rowRemark}
+                          </td>
                         </tr>
                       )
                     })

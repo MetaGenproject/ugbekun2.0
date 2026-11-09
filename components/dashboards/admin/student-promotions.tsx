@@ -74,11 +74,7 @@ export function StudentPromotions() {
   // Dropdown options
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [sections, setSections] = useState<SectionItem[]>([])
-  const [sessions, setSessions] = useState<AcademicSessionItem[]>([
-    { id: 4, name: '2025/2026 Academic Session' },
-    { id: 5, name: '2026/2027 Academic Session (Current)' },
-    { id: 6, name: '2027/2028 Academic Session' },
-  ])
+  const [sessions, setSessions] = useState<AcademicSessionItem[]>([])
 
   // Step 1 & 2: Source selection & students
   const [sourceSessionId, setSourceSessionId] = useState<string>('')
@@ -91,7 +87,7 @@ export function StudentPromotions() {
 
   // Step 3: Target destination
   const [promotionAction, setPromotionAction] = useState<'PROMOTE' | 'REPEAT'>('PROMOTE')
-  const [targetSessionId, setTargetSessionId] = useState<string>('5')
+  const [targetSessionId, setTargetSessionId] = useState<string>('')
   const [targetClassId, setTargetClassId] = useState<string>('')
   const [targetSectionId, setTargetSectionId] = useState<string>('')
 
@@ -113,11 +109,19 @@ export function StudentPromotions() {
   useEffect(() => {
     if (sourceClassId) {
       fetchClassStudents()
+      if (promotionAction === 'REPEAT') {
+        setTargetClassId(sourceClassId)
+      } else if (classes.length > 0) {
+        const curIdx = classes.findIndex((c) => String(c.id) === String(sourceClassId))
+        if (curIdx !== -1 && curIdx + 1 < classes.length) {
+          setTargetClassId(String(classes[curIdx + 1].id))
+        }
+      }
     } else {
       setStudents([])
       setSelectedStudentIds([])
     }
-  }, [sourceClassId, sourceSectionId, sourceSessionId])
+  }, [sourceClassId, sourceSectionId, sourceSessionId, promotionAction])
 
   const fetchClassesAndSections = async () => {
     try {
@@ -150,22 +154,17 @@ export function StudentPromotions() {
         sessions: { id: number; name: string; isCurrent: boolean }[]
       }>(endpoints.admin.academicSessions)
       if (sessRes.success && sessRes.sessions && sessRes.sessions.length > 0) {
-        const sorted = [...sessRes.sessions].sort((a, b) => a.id - b.id)
+        const sorted = [...sessRes.sessions].sort((a, b) => b.id - a.id)
         setSessions(
           sorted.map((s) => ({
             id: s.id,
-            name: `${s.name} Academic Session${s.isCurrent ? ' (Current)' : ''}`,
+            name: `${s.name.includes('Session') ? s.name : `${s.name} Academic Session`}${s.isCurrent ? ' (Current)' : ''}`,
           }))
         )
-        const current = sessRes.sessions.find((s) => s.isCurrent)
+        const current = sessRes.sessions.find((s) => s.isCurrent) || sorted[0]
         if (current) {
           setTargetSessionId(String(current.id))
-          const curIdx = sorted.findIndex((s) => s.id === current.id)
-          if (curIdx > 0) {
-            setSourceSessionId(String(sorted[curIdx - 1].id))
-          } else {
-            setSourceSessionId(String(current.id))
-          }
+          setSourceSessionId(String(current.id))
         }
       }
     } catch (sessErr) {

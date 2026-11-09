@@ -42,6 +42,8 @@ import { toast } from 'sonner'
 import {
   BrandedReportCardPreview,
   SchoolReportBranding,
+  EvaluationMatrixComponent,
+  GradingRangeItem,
 } from '../shared/branded-report-card-preview'
 
 type ReportCardTab = 'generate' | 'ai-comments' | 'psychomotor' | 'affective' | 'history'
@@ -76,6 +78,11 @@ interface SubjectScoreItem {
   cbtMark: string | null
   theoryMark: string | null
   mark: string | null
+  stageScore?: number
+  maxMarks?: number
+  componentScores?: Record<string, number | string | null>
+  grade?: string
+  remark?: string
   absent: boolean
   classAverage?: number
 }
@@ -106,6 +113,8 @@ interface StudentReportPreview {
   isCommentBased?: boolean
   totalMarks?: number | null
   average?: number | null
+  rawAverage?: number | null
+  maxMarksPerSubject?: number | null
   grade?: string | null
   position?: string | null
   rank?: number | null
@@ -164,8 +173,14 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [downloadingStudentId, setDownloadingStudentId] = useState<number | null>(null)
 
   // Assessment Stage Filter & Term Selection
-  const [assessmentStage, setAssessmentStage] = useState<'FULL' | 'COMBINED_CA' | 'CA1' | 'CA2' | 'EXAM'>('FULL')
+  const [assessmentStage, setAssessmentStage] = useState<string>('FULL')
   const [selectedTermId, setSelectedTermId] = useState<number>(1)
+  const [assessmentComponents, setAssessmentComponents] = useState<EvaluationMatrixComponent[]>([])
+  const [allMatrixColumns, setAllMatrixColumns] = useState<EvaluationMatrixComponent[]>([])
+  const [maxTotal, setMaxTotal] = useState<number | null>(null)
+  const [caMaxMarks, setCaMaxMarks] = useState<number | null>(null)
+  const [fullMaxMarks, setFullMaxMarks] = useState<number | null>(null)
+  const [gradingRanges, setGradingRanges] = useState<GradingRangeItem[]>([])
 
   // Report Card Granular Publication State
   const [isPublished, setIsPublished] = useState<boolean>(false)
@@ -454,6 +469,12 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         className: string
         stage?: string
         termId?: number
+        maxTotal?: number | null
+        caMaxMarks?: number | null
+        fullMaxMarks?: number | null
+        assessmentComponents?: EvaluationMatrixComponent[]
+        allMatrixColumns?: EvaluationMatrixComponent[]
+        gradingScale?: { ranges?: GradingRangeItem[] }
         isEcd: boolean
         isPublished?: boolean
         publication?: any
@@ -468,6 +489,24 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         }
         if (res.schoolBranding) {
           setSchoolBranding(res.schoolBranding)
+        }
+        if (Array.isArray(res.assessmentComponents)) {
+          setAssessmentComponents(res.assessmentComponents)
+        }
+        if (Array.isArray(res.allMatrixColumns)) {
+          setAllMatrixColumns(res.allMatrixColumns)
+        }
+        if (res.maxTotal !== undefined) {
+          setMaxTotal(res.maxTotal)
+        }
+        if (res.caMaxMarks !== undefined) {
+          setCaMaxMarks(res.caMaxMarks)
+        }
+        if (res.fullMaxMarks !== undefined) {
+          setFullMaxMarks(res.fullMaxMarks)
+        }
+        if (Array.isArray(res.gradingScale?.ranges)) {
+          setGradingRanges(res.gradingScale!.ranges!)
         }
         setStudents(res.students)
         if (previewStudent) {
@@ -1078,19 +1117,33 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             </select>
           </div>
 
-          {/* Assessment Stage Filter */}
+          {/* Assessment Stage Filter (100% DB Matrix Driven) */}
           <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
             <span className="text-xs font-bold text-slate-500">Stage:</span>
             <select
               value={assessmentStage}
-              onChange={e => setAssessmentStage(e.target.value as any)}
+              onChange={e => setAssessmentStage(e.target.value)}
               className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-xs font-bold bg-rose-50/60 text-rose-900"
             >
-              <option value="FULL">Full Terminal Report (Out of 100)</option>
-              <option value="COMBINED_CA">Combined CA Only (CA1 + CA2 — Out of 40)</option>
-              <option value="CA1">CA1 Progress Slip (Out of 20)</option>
-              <option value="CA2">CA2 Progress Slip (Out of 20)</option>
-              <option value="EXAM">Terminal Exam Only</option>
+              <option value="FULL">
+                Full Terminal Report{fullMaxMarks ? ` (Out of ${fullMaxMarks})` : ''}
+              </option>
+              <option value="COMBINED_CA">
+                Only CA{caMaxMarks ? ` (Out of ${caMaxMarks})` : ''}
+              </option>
+              {allMatrixColumns
+                .filter(col => col.category === 'CA')
+                .length > 1 &&
+                allMatrixColumns
+                  .filter(col => col.category === 'CA')
+                  .map(col => (
+                    <option key={col.code || col.key} value={col.code}>
+                      {col.label || col.name || col.code} Progress Slip (Out of {col.maxMarks})
+                    </option>
+                  ))}
+              {allMatrixColumns.some(col => col.category === 'EXAM') && (
+                <option value="EXAM">Terminal Exam Only</option>
+              )}
             </select>
           </div>
 
@@ -1199,7 +1252,9 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                         ? 'Zero-Score Montessori'
                         : currentClass?.isEcd
                         ? 'Montessori ECD'
-                        : 'Standard 100-Point'}
+                        : maxTotal
+                        ? `${maxTotal}-Point Matrix`
+                        : 'Matrix Standard'}
                     </span>
                     <GraduationCap size={18} className="text-indigo-500" />
                   </div>
@@ -1296,10 +1351,16 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
-                              {assessmentStage === 'COMBINED_CA' ? 'COMBINED CA (/40)' : (assessmentStage === 'FULL' ? 'AVERAGE SCORE' : `${assessmentStage} STAGE AVG`)}
+                              {assessmentStage === 'COMBINED_CA'
+                                ? `CA SCORE${maxTotal ? ` (/${maxTotal})` : ''}`
+                                : assessmentStage === 'FULL'
+                                ? 'AVERAGE SCORE'
+                                : `${assessmentStage} STAGE AVG`}
                             </span>
                             <span className="font-mono font-black text-slate-900 text-sm">
-                              {assessmentStage === 'COMBINED_CA' ? `${st.totalMarks !== null && st.totalMarks !== undefined ? st.totalMarks : '-'} / 40` : `${st.average}%`}
+                              {assessmentStage === 'COMBINED_CA'
+                                ? `${st.rawAverage ?? st.average ?? '-'}${maxTotal ? ` / ${maxTotal}` : ''}`
+                                : `${st.average}%`}
                             </span>
                           </div>
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
@@ -2272,6 +2333,10 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             <BrandedReportCardPreview
               student={previewStudent}
               branding={schoolBranding}
+              assessmentComponents={assessmentComponents}
+              maxTotal={maxTotal}
+              stage={assessmentStage}
+              gradingRanges={gradingRanges}
               onClose={() => setPreviewStudent(null)}
               onDownloadPdf={() => handleDownloadSinglePdf(previewStudent)}
               isDownloadingPdf={downloadingStudentId === previewStudent.id}
