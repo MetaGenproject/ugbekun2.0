@@ -347,9 +347,14 @@ export function TeacherBroadReports() {
         if (!termToFetch && res.termId) {
           setSelectedTermId(String(res.termId))
         }
-        // Auto-sync selectedExamId from backend response if none selected or if explicit override provided
+        // Auto-sync selectedExamId from backend response if none selected or if current option is invalid for this class
         if (overrideExamId !== undefined && overrideExamId) {
           setSelectedExamId(String(overrideExamId))
+        } else if (res.exams && res.exams.length > 0) {
+          const exists = res.exams.some((ex) => String(ex.id) === String(selectedExamId))
+          if (!exists) {
+            setSelectedExamId(String(res.selectedExamId || res.exams[0].id || 'FULL'))
+          }
         } else if (!selectedExamId && res.selectedExamId) {
           setSelectedExamId(String(res.selectedExamId))
         }
@@ -390,11 +395,11 @@ export function TeacherBroadReports() {
         String(currentSections[0]?.id || classSummary.sectionId || 1)
       const url = endpoints.teacher.exportReportCardPdf(
         row.studentId,
-        selectedExamId ? Number(selectedExamId) : undefined,
+        selectedExamId && !isNaN(Number(selectedExamId)) ? Number(selectedExamId) : undefined,
         {
           classId: selectedClassId,
           sectionId: secId,
-          stage: reportsData?.stage || selectedStage,
+          stage: reportsData?.stage || selectedStage || selectedExamId,
           sessionId: selectedSessionId || reportsData?.sessionId,
         }
       )
@@ -626,7 +631,7 @@ export function TeacherBroadReports() {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-5 space-y-4 print:hidden">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
           {/* 1. Academic Session */}
-          <div className="lg:col-span-3 sm:col-span-1">
+          <div className="lg:col-span-2 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span>Academic Session <span className="text-rose-500">*</span></span>
               <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200">
@@ -640,8 +645,9 @@ export function TeacherBroadReports() {
                 onChange={(e) => {
                   const newSession = e.target.value
                   setSelectedSessionId(newSession)
-                  setSelectedExamId('')
-                  fetchReports(undefined, undefined, newSession, selectedTermId, '')
+                  setSelectedExamId('FULL')
+                  setSelectedStage('FULL')
+                  fetchReports(undefined, undefined, newSession, selectedTermId, 'FULL', 'FULL')
                 }}
                 className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
               >
@@ -673,8 +679,9 @@ export function TeacherBroadReports() {
                 onChange={(e) => {
                   const newTerm = e.target.value
                   setSelectedTermId(newTerm)
-                  setSelectedExamId('')
-                  fetchReports(undefined, undefined, selectedSessionId, newTerm, '')
+                  setSelectedExamId('FULL')
+                  setSelectedStage('FULL')
+                  fetchReports(undefined, undefined, selectedSessionId, newTerm, 'FULL', 'FULL')
                 }}
                 className="bg-transparent text-xs font-bold text-slate-900 outline-none w-full cursor-pointer"
               >
@@ -686,7 +693,7 @@ export function TeacherBroadReports() {
           </div>
 
           {/* 3. Class Select */}
-          <div className="lg:col-span-2 sm:col-span-1">
+          <div className="lg:col-span-3 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
               Assigned Class <span className="text-rose-500">*</span>
             </label>
@@ -696,7 +703,9 @@ export function TeacherBroadReports() {
                 const newClass = e.target.value
                 setSelectedClassId(newClass)
                 setSelectedSectionId('')
-                fetchReports(newClass, '', selectedSessionId, selectedTermId, selectedExamId, selectedStage)
+                setSelectedExamId('FULL')
+                setSelectedStage('FULL')
+                fetchReports(newClass, '', selectedSessionId, selectedTermId, 'FULL', 'FULL')
               }}
               className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -731,18 +740,19 @@ export function TeacherBroadReports() {
             </select>
           </div>
 
-          {/* 5. Exam Select (Examination Matrix Tabulation) */}
-          <div className="lg:col-span-2 sm:col-span-1">
+          {/* 5. Exam Select (Evaluation Matrix Tabulation) */}
+          <div className="lg:col-span-3 sm:col-span-1">
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span>Examination</span>
-              <span className="text-[10px] text-blue-600 font-bold lowercase">exam</span>
+              <span className="text-[10px] text-blue-600 font-bold lowercase">matrix</span>
             </label>
             <select
-              value={selectedExamId}
+              value={selectedExamId || 'FULL'}
               onChange={(e) => {
                 const newExam = e.target.value
                 setSelectedExamId(newExam)
-                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, newExam, selectedStage)
+                setSelectedStage(newExam)
+                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, newExam, newExam)
               }}
               className="w-full h-11 px-3 bg-blue-50/50 border border-blue-200 rounded-xl text-xs font-bold text-blue-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
@@ -753,42 +763,8 @@ export function TeacherBroadReports() {
                   </option>
                 ))
               ) : (
-                <option value="">Select Examination</option>
+                <option value="FULL">Tabulation Sheet (Full Report)</option>
               )}
-            </select>
-          </div>
-
-          {/* 6. Report Stage Select (Full vs Only CA from DB Matrix) */}
-          <div className="lg:col-span-2 sm:col-span-1">
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-              <span>Report Stage</span>
-              <span className="text-[10px] text-emerald-600 font-bold lowercase">scope</span>
-            </label>
-            <select
-              value={selectedStage}
-              onChange={(e) => {
-                const newStage = e.target.value
-                setSelectedStage(newStage)
-                fetchReports(selectedClassId, selectedSectionId, selectedSessionId, selectedTermId, selectedExamId, newStage)
-              }}
-              className="w-full h-11 px-3 bg-emerald-50/50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-            >
-              <option value="FULL">
-                Full Report{reportsData?.fullMaxMarks ? ` (${reportsData.fullMaxMarks})` : ''}
-              </option>
-              <option value="COMBINED_CA">
-                Only CA{reportsData?.caMaxMarks ? ` (${reportsData.caMaxMarks})` : ''}
-              </option>
-              {(reportsData?.allMatrixColumns || [])
-                .filter((c) => c.category === 'CA')
-                .length > 1 &&
-                (reportsData?.allMatrixColumns || [])
-                  .filter((c) => c.category === 'CA')
-                  .map((col) => (
-                    <option key={`stg-${col.code}`} value={col.code}>
-                      {col.label || col.name || col.code} ({col.maxMarks})
-                    </option>
-                  ))}
             </select>
           </div>
         </div>
