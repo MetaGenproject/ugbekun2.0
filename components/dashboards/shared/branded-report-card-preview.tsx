@@ -994,7 +994,7 @@ export function BrandedReportCardPreview({
                 Next Term School Fees / Payment
               </span>
               <span className="text-sm font-black text-slate-900">
-                {nextTermFeesVal || 'Contact Bursary Office'}
+                {nextTermFeesVal || '—'}
               </span>
             </div>
           </div>

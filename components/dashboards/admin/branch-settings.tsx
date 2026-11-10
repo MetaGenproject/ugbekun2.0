@@ -25,7 +25,16 @@ import {
   Twitter,
   Linkedin,
   Youtube,
-  Trash2
+  Trash2,
+  Plus,
+  Check,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Search,
+  Coins,
+  Info,
 } from 'lucide-react'
 import {
   Table,
@@ -45,6 +54,7 @@ import { apiSlice, endpoints } from '@/lib/apiSlice'
 
 type SettingsTab = 
   | 'school-info' 
+  | 'next-term-fees'
   | 'branding' 
   | 'domain-cms'
   | 'academic-session' 
@@ -84,6 +94,18 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
   const [teacherSignatureBase64, setTeacherSignatureBase64] = useState('')
   const [resumptionDate, setResumptionDate] = useState('')
   const [nextTermFees, setNextTermFees] = useState('')
+  const [defaultNextTermFee, setDefaultNextTermFee] = useState('')
+  const [availableClasses, setAvailableClasses] = useState<Array<{ id: number; name: string }>>([])
+  const [classFeeGroups, setClassFeeGroups] = useState<Array<{
+    id: string
+    name: string
+    amount: string
+    classIds: number[]
+  }>>([])
+  const [feeMode, setFeeMode] = useState<'uniform' | 'class-specific'>('uniform')
+  const [openDropdownGroupId, setOpenDropdownGroupId] = useState<string | null>(null)
+  const [classMatrixSearch, setClassMatrixSearch] = useState('')
+  const [showClassMatrix, setShowClassMatrix] = useState(false)
   const [autoPublishReportCards, setAutoPublishReportCards] = useState(true)
   const [primaryColor, setPrimaryColor] = useState('#0f172a')
   const [secondaryColor, setSecondaryColor] = useState('#0284c7')
@@ -96,7 +118,15 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
   const loadSettings = async () => {
     setIsLoading(true)
     try {
-      const res = await apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.systemSettings)
+      const [res, clsRes] = await Promise.all([
+        apiSlice.get<{ success: boolean; data: any }>(endpoints.admin.systemSettings),
+        apiSlice.get<{ success: boolean; classes: Array<{ id: number; name: string }> }>(endpoints.admin.classes).catch(() => ({ success: false, classes: [] })),
+      ])
+
+      if (clsRes?.success && Array.isArray(clsRes.classes)) {
+        setAvailableClasses(clsRes.classes)
+      }
+
       if (res?.data) {
         setSchoolName(res.data.schoolName || '')
         setTagline(res.data.tagline || '')
@@ -116,7 +146,56 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         setPrincipalSignatureUrl(res.data.principalSignatureUrl || '')
         setDefaultTeacherSignatureUrl(res.data.defaultTeacherSignatureUrl || '')
         setResumptionDate(res.data.resumptionDate || '')
-        setNextTermFees(res.data.nextTermFees || '')
+
+        const rawFees = res.data.nextTermFees || ''
+        setNextTermFees(rawFees)
+        if (rawFees.startsWith('{') && rawFees.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(rawFees)
+            const defAmt = parsed.default || ''
+            setDefaultNextTermFee(defAmt)
+            if (Array.isArray(parsed.groups) && parsed.groups.length > 0) {
+              setClassFeeGroups(
+                parsed.groups.map((g: any, idx: number) => ({
+                  id: g.id || `group-${Date.now()}-${idx}`,
+                  name: g.name || `Fee Tier ${idx + 1}`,
+                  amount: String(g.amount || ''),
+                  classIds: Array.isArray(g.classIds) ? g.classIds.map(Number) : [],
+                }))
+              )
+              setFeeMode('class-specific')
+            } else if (parsed.byClass && typeof parsed.byClass === 'object' && Object.keys(parsed.byClass).length > 0) {
+              const feeToClasses: Record<string, number[]> = {}
+              for (const [cId, amt] of Object.entries(parsed.byClass)) {
+                const amtStr = String(amt || '').trim()
+                if (amtStr) {
+                  if (!feeToClasses[amtStr]) feeToClasses[amtStr] = []
+                  feeToClasses[amtStr].push(Number(cId))
+                }
+              }
+              const reconstructed = Object.entries(feeToClasses).map(([amt, ids], idx) => ({
+                id: `group-${Date.now()}-${idx}`,
+                name: `Fee Tier ${idx + 1}`,
+                amount: amt,
+                classIds: ids,
+              }))
+              setClassFeeGroups(reconstructed)
+              setFeeMode('class-specific')
+            } else {
+              setClassFeeGroups([])
+              setFeeMode('uniform')
+            }
+          } catch {
+            setDefaultNextTermFee(rawFees)
+            setClassFeeGroups([])
+            setFeeMode('uniform')
+          }
+        } else {
+          setDefaultNextTermFee(rawFees)
+          setClassFeeGroups([])
+          setFeeMode('uniform')
+        }
+
         setAutoPublishReportCards(
           res.data.autoPublishReportCards !== undefined ? Boolean(res.data.autoPublishReportCards) : true
         )
@@ -165,10 +244,131 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
     reader.readAsDataURL(file)
   }
 
+  const handleAddFeeGroup = () => {
+    const newGroupNum = classFeeGroups.length + 1
+    const newGroup = {
+      id: `group-${Date.now()}`,
+      name: `Fee Tier ${newGroupNum}`,
+      amount: '',
+      classIds: [],
+    }
+    setClassFeeGroups((prev) => [...prev, newGroup])
+    setFeeMode('class-specific')
+    setOpenDropdownGroupId(newGroup.id)
+  }
+
+  const handleRemoveFeeGroup = (groupId: string) => {
+    setClassFeeGroups((prev) => prev.filter((g) => g.id !== groupId))
+  }
+
+  const handleUpdateGroup = (groupId: string, field: 'name' | 'amount', value: string) => {
+    setClassFeeGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, [field]: value } : g))
+    )
+  }
+
+  const handleToggleClassInGroup = (groupId: string, classId: number) => {
+    setClassFeeGroups((prev) =>
+      prev.map((g) => {
+        if (g.id === groupId) {
+          const isPresent = g.classIds.includes(classId)
+          return {
+            ...g,
+            classIds: isPresent ? g.classIds.filter((id) => id !== classId) : [...g.classIds, classId],
+          }
+        } else {
+          return {
+            ...g,
+            classIds: g.classIds.filter((id) => id !== classId),
+          }
+        }
+      })
+    )
+  }
+
+  const handleBulkSelectClasses = (
+    groupId: string,
+    type: 'all' | 'nursery' | 'primary' | 'secondary' | 'clear'
+  ) => {
+    if (type === 'clear') {
+      setClassFeeGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, classIds: [] } : g))
+      )
+      return
+    }
+
+    let targetClassIds: number[] = []
+    if (type === 'all') {
+      targetClassIds = availableClasses.map((c) => c.id)
+    } else if (type === 'nursery') {
+      targetClassIds = availableClasses
+        .filter((c) =>
+          /nursery|reception|creche|ecd|kg|playgroup|pre-nursery/i.test(c.name)
+        )
+        .map((c) => c.id)
+    } else if (type === 'primary') {
+      targetClassIds = availableClasses
+        .filter((c) => /primary|pry|basic|grade/i.test(c.name))
+        .map((c) => c.id)
+    } else if (type === 'secondary') {
+      targetClassIds = availableClasses
+        .filter((c) => /jss|sss|js|ss|year\s*(?:7|8|9|10|11|12)/i.test(c.name))
+        .map((c) => c.id)
+    }
+
+    setClassFeeGroups((prev) =>
+      prev.map((g) => {
+        if (g.id === groupId) {
+          const merged = Array.from(new Set([...g.classIds, ...targetClassIds]))
+          return { ...g, classIds: merged }
+        } else {
+          return {
+            ...g,
+            classIds: g.classIds.filter((id) => !targetClassIds.includes(id)),
+          }
+        }
+      })
+    )
+  }
+
+  const getEffectiveClassFee = (classId: number): { amount: string; source: string; isGroup: boolean } => {
+    if (feeMode === 'class-specific') {
+      for (const g of classFeeGroups) {
+        if (g.classIds.includes(classId) && g.amount.trim()) {
+          return { amount: g.amount.trim(), source: g.name || 'Shared Group', isGroup: true }
+        }
+      }
+    }
+    return {
+      amount: defaultNextTermFee.trim(),
+      source: defaultNextTermFee.trim() ? 'Default School Fee' : 'Not Set (Blank)',
+      isGroup: false,
+    }
+  }
+
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     setIsSaving(true)
     try {
+      // Compile nextTermFees payload: simple string or structured JSON with class groups
+      let payloadNextTermFees = defaultNextTermFee.trim()
+      if (feeMode === 'class-specific' && classFeeGroups.length > 0) {
+        const computedByClass: Record<string, string> = {}
+        classFeeGroups.forEach((group) => {
+          const cleanAmount = group.amount.trim()
+          if (cleanAmount) {
+            group.classIds.forEach((cId) => {
+              computedByClass[String(cId)] = cleanAmount
+            })
+          }
+        })
+        payloadNextTermFees = JSON.stringify({
+          default: defaultNextTermFee.trim(),
+          groups: classFeeGroups,
+          byClass: computedByClass,
+        })
+      }
+
       await apiSlice.post(endpoints.admin.systemSettings, {
         schoolName,
         tagline,
@@ -190,7 +390,7 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         defaultTeacherSignatureUrl,
         teacherSignatureBase64,
         resumptionDate,
-        nextTermFees,
+        nextTermFees: payloadNextTermFees,
         autoPublishReportCards,
         primaryColor,
         secondaryColor,
@@ -266,6 +466,414 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
       setIsResetting(false)
     }
   }
+
+  const renderNextTermFeesSection = () => (
+    <div className="space-y-5 bg-emerald-50/50 p-5 rounded-2xl border border-emerald-200/70">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
+        <div>
+          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+            <FileText size={16} className="text-emerald-700" /> Report Card Resumption Date, Next Term Payment & Signatures
+          </h4>
+          <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
+            These values appear automatically on all student report cards (web preview, official PDF and Parent Dashboard).
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs font-bold text-emerald-950 cursor-pointer shadow-2xs hover:bg-emerald-50 transition">
+          <input
+            type="checkbox"
+            checked={autoPublishReportCards}
+            onChange={e => setAutoPublishReportCards(e.target.checked)}
+            className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-600"
+          />
+          Immediate Effect After Score Entry
+        </label>
+      </div>
+
+      {/* Basic Fields: Resumption Date, Principal Name, Default Fee */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+            <span>Next Term Resumption Date</span>
+            <span className="text-[10px] text-slate-400 font-normal">calendar</span>
+          </label>
+          <input
+            type="text"
+            value={resumptionDate}
+            onChange={e => setResumptionDate(e.target.value)}
+            className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none shadow-2xs"
+            placeholder="e.g. Monday, 12th Jan 2026"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+            <span>Principal / Head of School Name</span>
+            <span className="text-[10px] text-slate-400 font-normal">signatory</span>
+          </label>
+          <input
+            type="text"
+            value={principalName}
+            onChange={e => setPrincipalName(e.target.value)}
+            className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none shadow-2xs"
+            placeholder="e.g. Dr. (Mrs.) A. Okafor"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+            <span>Default Next Term Payment</span>
+            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/60 px-1.5 py-0.5 rounded">default</span>
+          </label>
+          <input
+            type="text"
+            value={defaultNextTermFee}
+            onChange={e => {
+              setDefaultNextTermFee(e.target.value)
+              setNextTermFees(e.target.value)
+            }}
+            className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none shadow-2xs"
+            placeholder="e.g. ₦85,000"
+          />
+          <p className="text-[10px] text-slate-500 mt-1">
+            Applied to any class not explicitly grouped into a custom fee tier below.
+          </p>
+        </div>
+      </div>
+
+      {/* Class Payment Mode & Shared Fee Groups */}
+      <div className="bg-white p-4 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
+              <Coins size={16} />
+            </div>
+            <div>
+              <h5 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                Class Payment Structure (Per Classes & Shared Fees)
+              </h5>
+              <p className="text-[11px] text-slate-500">
+                Easily group classes that share the same fee using the class select box, or use uniform fee.
+              </p>
+            </div>
+          </div>
+
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setFeeMode('uniform')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                feeMode === 'uniform'
+                  ? 'bg-white text-emerald-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Same Fee For All Classes
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFeeMode('class-specific')
+                if (classFeeGroups.length === 0) {
+                  handleAddFeeGroup()
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                feeMode === 'class-specific'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>Class Shared Fee Groups</span>
+              {classFeeGroups.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+                  {classFeeGroups.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {feeMode === 'uniform' ? (
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center gap-3">
+            <Info size={18} className="text-emerald-600 shrink-0" />
+            <div>
+              <p className="font-bold text-slate-800">
+                Uniform Next Term Payment is active: <span className="text-emerald-700">{defaultNextTermFee ? defaultNextTermFee : <span className="text-slate-400 font-normal italic">Blank (No fee set)</span>}</span>
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                All student report cards will show this single fee. If some classes (e.g. Nursery vs Primary vs Secondary) have different payments, switch to "Class Shared Fee Groups" above.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Groups List */}
+            <div className="space-y-3">
+              {classFeeGroups.map((group, gIdx) => {
+                const isOpen = openDropdownGroupId === group.id
+                return (
+                  <div
+                    key={group.id}
+                    className="p-4 rounded-xl border border-emerald-200/90 bg-slate-50/70 space-y-3 transition hover:border-emerald-300"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-black">
+                          {gIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={group.name}
+                          onChange={e => handleUpdateGroup(group.id, 'name', e.target.value)}
+                          placeholder="e.g. Primary Section Fee"
+                          className="font-bold text-xs text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-emerald-600 outline-none px-1 py-0.5"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1 focus-within:ring-2 focus-within:ring-emerald-500">
+                          <span className="text-xs font-bold text-slate-400">Amount:</span>
+                          <input
+                            type="text"
+                            value={group.amount}
+                            onChange={e => handleUpdateGroup(group.id, 'amount', e.target.value)}
+                            placeholder="e.g. ₦80,000"
+                            className="text-xs font-black text-emerald-900 outline-none w-28 bg-transparent"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFeeGroup(group.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                          title="Remove this fee group"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* SELECT BOX: Classes Using Same Fee */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Classes Using This Fee</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            {group.classIds.length} classes selected
+                          </span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">
+                          Click dropdown to select classes sharing this fee
+                        </span>
+                      </div>
+
+                      {/* Interactive Select Box Button */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setOpenDropdownGroupId(isOpen ? null : group.id)}
+                          className="w-full min-h-[42px] p-2 bg-white border border-slate-200 hover:border-emerald-500 rounded-xl flex items-center justify-between gap-2 text-xs transition cursor-pointer"
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5 text-left flex-1">
+                            {group.classIds.length === 0 ? (
+                              <span className="text-slate-400 italic">
+                                Click here to select classes that use this fee...
+                              </span>
+                            ) : (
+                              group.classIds.map(cId => {
+                                const cls = availableClasses.find(c => c.id === cId)
+                                return (
+                                  <span
+                                    key={`badge-${group.id}-${cId}`}
+                                    className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-md text-[11px]"
+                                  >
+                                    {cls?.name || `Class #${cId}`}
+                                    <span
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleToggleClassInGroup(group.id, cId)
+                                      }}
+                                      className="hover:text-rose-600 cursor-pointer ml-0.5"
+                                    >
+                                      ✕
+                                    </span>
+                                  </span>
+                                )
+                              })
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-slate-400 shrink-0">
+                            {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </div>
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {isOpen && (
+                          <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100">
+                            {/* Fast Select Presets */}
+                            <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                                Quick Group:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkSelectClasses(group.id, 'nursery')}
+                                className="px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200 transition cursor-pointer"
+                              >
+                                + All Nursery
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkSelectClasses(group.id, 'primary')}
+                                className="px-2 py-0.5 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-800 text-[10px] font-bold border border-blue-200 transition cursor-pointer"
+                              >
+                                + All Primary
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkSelectClasses(group.id, 'secondary')}
+                                className="px-2 py-0.5 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-800 text-[10px] font-bold border border-purple-200 transition cursor-pointer"
+                              >
+                                + All Secondary
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkSelectClasses(group.id, 'all')}
+                                className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold transition cursor-pointer"
+                              >
+                                + Select All
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkSelectClasses(group.id, 'clear')}
+                                className="px-2 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold transition cursor-pointer ml-auto"
+                              >
+                                Clear
+                              </button>
+                            </div>
+
+                            {/* Class Checkbox Grid */}
+                            <div className="max-h-48 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1">
+                              {availableClasses.map(cls => {
+                                const isSelectedInThisGroup = group.classIds.includes(cls.id)
+                                const otherGroup = classFeeGroups.find(
+                                  g => g.id !== group.id && g.classIds.includes(cls.id)
+                                )
+
+                                return (
+                                  <label
+                                    key={`cls-${group.id}-${cls.id}`}
+                                    className={`flex items-center gap-2 p-2 rounded-xl text-xs font-semibold cursor-pointer border transition ${
+                                      isSelectedInThisGroup
+                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold'
+                                        : otherGroup
+                                        ? 'bg-slate-50 border-slate-200 text-slate-400'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelectedInThisGroup}
+                                      onChange={() => handleToggleClassInGroup(group.id, cls.id)}
+                                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="truncate flex-1">{cls.name}</span>
+                                    {otherGroup && !isSelectedInThisGroup && (
+                                      <span className="text-[9px] text-slate-400 italic">
+                                        ({otherGroup.name})
+                                      </span>
+                                    )}
+                                  </label>
+                                )
+                              })}
+                            </div>
+
+                            <div className="flex justify-end pt-1 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => setOpenDropdownGroupId(null)}
+                                className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 cursor-pointer"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Add Fee Group Button */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleAddFeeGroup}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Plus size={14} /> Add Another Shared Fee Tier
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowClassMatrix(!showClassMatrix)}
+                className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 cursor-pointer"
+              >
+                <Layers size={13} /> {showClassMatrix ? 'Hide All Class Fees Matrix' : 'View All Class Fees Matrix'}
+              </button>
+            </div>
+
+            {/* Live Class Fees Matrix */}
+            {showClassMatrix && (
+              <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h6 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                    Active Next Term Fee Per Class
+                  </h6>
+                  <div className="relative w-full sm:w-56">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                    <input
+                      type="text"
+                      value={classMatrixSearch}
+                      onChange={e => setClassMatrixSearch(e.target.value)}
+                      placeholder="Search class..."
+                      className="w-full pl-7 pr-3 py-1 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                  {availableClasses
+                    .filter(c => c.name.toLowerCase().includes(classMatrixSearch.toLowerCase()))
+                    .map(c => {
+                      const feeInfo = getEffectiveClassFee(c.id)
+                      return (
+                        <div
+                          key={`mat-${c.id}`}
+                          className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs font-bold"
+                        >
+                          <span className="text-slate-800 truncate mr-2">{c.name}</span>
+                          <div className="text-right shrink-0">
+                            <span className="text-emerald-700 block font-black">
+                              {feeInfo.amount ? feeInfo.amount : <span className="text-slate-400 font-normal italic">Blank</span>}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {feeInfo.source}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -543,61 +1151,27 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
               </div>
             </div>
 
-            {/* Section D: Official Report Card Settings (Resumption Date, Next Term Payment & Immediate Reflection) */}
-            <div className="space-y-4 bg-emerald-50/50 p-4 rounded-xl border border-emerald-200/70">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
-                    <FileText size={14} className="text-emerald-700" /> Report Card Resumption Date, Next Term Payment & Signatures
-                  </h4>
-                  <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
-                    These values appear automatically on all student report cards (web preview and official PDF).
-                  </p>
-                </div>
-                <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 text-xs font-bold text-emerald-950 cursor-pointer shadow-2xs">
-                  <input
-                    type="checkbox"
-                    checked={autoPublishReportCards}
-                    onChange={e => setAutoPublishReportCards(e.target.checked)}
-                    className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-600"
-                  />
-                  Immediate Effect After Score Entry
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Next Term Resumption Date</label>
-                  <input
-                    type="text"
-                    value={resumptionDate}
-                    onChange={e => setResumptionDate(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
-                    placeholder="e.g. Monday, 12th Jan 2026"
-                  />
+            {/* Quick jump to Next Term Fees tab */}
+            <div
+              onClick={() => setActiveTab('next-term-fees')}
+              className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/80 rounded-2xl flex items-center justify-between cursor-pointer transition shadow-2xs group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs group-hover:scale-105 transition">
+                  <Coins size={18} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Next Term Payment / Fees</label>
-                  <input
-                    type="text"
-                    value={nextTermFees}
-                    onChange={e => setNextTermFees(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
-                    placeholder="e.g. ₦85,000"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 mb-1 block">Principal / Head of School Name</label>
-                  <input
-                    type="text"
-                    value={principalName}
-                    onChange={e => setPrincipalName(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-600 outline-none"
-                    placeholder="e.g. Dr. (Mrs.) A. Okafor"
-                  />
+                  <span className="text-xs font-black text-emerald-950 block">Next Term Payments & Shared Class Fees</span>
+                  <span className="text-[11px] text-emerald-800/80 font-medium">Click to manage fee mode, group classes by fee, and set resumption dates</span>
                 </div>
               </div>
+              <span className="text-xs font-bold text-emerald-900 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs group-hover:bg-emerald-50 transition shrink-0">
+                Open Dedicated Tab &rarr;
+              </span>
             </div>
+
+            {/* Section D: Official Report Card Settings (Resumption Date, Next Term Payment & Immediate Reflection) */}
+            {renderNextTermFeesSection()}
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
@@ -609,6 +1183,54 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* 2. NEXT TERM FEES TAB */}
+      {activeTab === 'next-term-fees' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm max-w-4xl mx-auto space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                <Coins className="text-emerald-600" size={20} /> Next Term Payment & Resumption Setup
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Set per-class next term fees, group classes sharing identical fees, and configure resumption dates for report cards & parent portals.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={loadSettings}
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                title="Reload from Database"
+              >
+                <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Reload
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveSettings()}
+                disabled={isSaving}
+                className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition cursor-pointer"
+              >
+                {isSaving ? <Loader2 size={13} className="animate-spin text-white" /> : <Save size={13} />} Save Fee Settings
+              </button>
+            </div>
+          </div>
+
+          {renderNextTermFeesSection()}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => handleSaveSettings()}
+              disabled={isSaving}
+              className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer"
+            >
+              {isSaving ? <Loader2 size={15} className="animate-spin text-amber-300" /> : <Save size={15} />} Save Next Term Fees
+            </button>
+          </div>
         </div>
       )}
 
