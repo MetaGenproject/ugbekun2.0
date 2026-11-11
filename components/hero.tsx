@@ -140,9 +140,9 @@ export function Hero() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
-                      {/* Live Glowing Pulse Dot */}
-                      <circle cx="246" cy="10" r="8" fill="#F43F5E" opacity="0.35" className="animate-ping" />
-                      <circle cx="246" cy="10" r="4.5" fill="#F43F5E" stroke="#FFFFFF" strokeWidth="2" className="shadow-xs" />
+                      {/* Live Glowing Anchor Dot - stationary breathing pulse (zero position shift) */}
+                      <circle cx="246" cy="10" r="8" fill="#F43F5E" opacity="0.25" className="animate-pulse" />
+                      <circle cx="246" cy="10" r="4.5" fill="#F43F5E" stroke="#FFFFFF" strokeWidth="2" />
                     </svg>
                   </div>
 
