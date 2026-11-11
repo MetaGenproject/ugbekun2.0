@@ -364,6 +364,7 @@ export const endpoints = {
     reportStaffAttendanceAudit: (query = '') => `${BASE_URL}/admin/reports/staff-attendance-audit${query}`,
     reportExportCsv: (type: string) => `${BASE_URL}/admin/reports/export-csv?type=${type}`,
     systemSettings: `${BASE_URL}/admin/settings`,
+    classTeacherSignatures: `${BASE_URL}/admin/settings/class-signatures`,
     academicSessions: `${BASE_URL}/admin/sessions`,
     academicSession: (id: number | string) => `${BASE_URL}/admin/sessions/${id}`,
     setCurrentAcademicSession: (id: number | string) => `${BASE_URL}/admin/sessions/${id}/current`,

@@ -88,44 +88,71 @@ export function Hero() {
               </div>
 
               {/* Floating Stat Overlay Card */}
-              <div className="absolute -bottom-6 -left-4 sm:-left-8 bg-white/95 backdrop-blur-md border border-white/50 text-gray-900 rounded-2xl p-4 sm:p-5 shadow-2xl max-w-[280px] sm:max-w-[310px] animate-in fade-in slide-in-from-bottom-5 duration-700">
+              <div className="absolute -bottom-6 -left-4 sm:-left-8 bg-white/95 backdrop-blur-md border border-white/60 text-gray-900 rounded-2xl p-4 sm:p-5 shadow-2xl max-w-[285px] sm:max-w-[320px] animate-in fade-in slide-in-from-bottom-5 duration-700">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 shadow-2xs">
                     <Users size={20} className="text-blue-600" />
                   </div>
-                  <div>
-                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
-                      Trusted by
-                    </span>
-                    <div className="text-sm font-extrabold text-gray-900 leading-tight">
-                      500+ Schools <span className="font-semibold text-gray-600 block text-xs">Across Nigeria and Growing</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest block">
+                        Trusted by
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full shrink-0">
+                        <TrendingUp size={10} className="text-emerald-600" /> +38% MoM
+                      </span>
                     </div>
+                    <div className="text-base font-black text-gray-950 leading-tight mt-0.5">
+                      500+ Schools
+                    </div>
+                    <span className="font-semibold text-gray-600 block text-xs mt-0.5">
+                      Across Nigeria &amp; Growing
+                    </span>
                   </div>
                 </div>
+
                 {/* Sparkline chart SVG */}
-                <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
-                  <svg className="w-full h-9 text-rose-500 overflow-visible" viewBox="0 0 200 40">
-                    <path
-                      d="M0 32 Q 30 25, 60 28 T 120 15 T 180 5 L 200 2"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M0 32 Q 30 25, 60 28 T 120 15 T 180 5 L 200 2 L 200 40 L 0 40 Z"
-                      fill="url(#gradient-chart)"
-                      opacity="0.2"
-                    />
-                    <defs>
-                      <linearGradient id="gradient-chart" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#EF4444" />
-                        <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="200" cy="2" r="4" fill="#EF4444" className="animate-ping" />
-                    <circle cx="200" cy="2" r="4" fill="#EF4444" />
-                  </svg>
+                <div className="mt-3.5 pt-2.5 border-t border-gray-100">
+                  <div className="relative w-full h-11">
+                    <svg
+                      className="w-full h-full overflow-visible"
+                      viewBox="0 0 260 52"
+                      preserveAspectRatio="none"
+                    >
+                      <defs>
+                        <linearGradient id="hero-stat-sparkline" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#F43F5E" stopOpacity="0.30" />
+                          <stop offset="70%" stopColor="#F43F5E" stopOpacity="0.05" />
+                          <stop offset="100%" stopColor="#F43F5E" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+                      {/* Gradient Fill under path */}
+                      <path
+                        d="M 8 38 C 45 38, 72 32, 105 30 C 138 28, 168 20, 200 14 C 215 11, 230 10, 246 10 L 246 48 L 8 48 Z"
+                        fill="url(#hero-stat-sparkline)"
+                      />
+                      {/* Stroke Path */}
+                      <path
+                        d="M 8 38 C 45 38, 72 32, 105 30 C 138 28, 168 20, 200 14 C 215 11, 230 10, 246 10"
+                        fill="none"
+                        stroke="#F43F5E"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      {/* Live Glowing Pulse Dot */}
+                      <circle cx="246" cy="10" r="8" fill="#F43F5E" opacity="0.35" className="animate-ping" />
+                      <circle cx="246" cy="10" r="4.5" fill="#F43F5E" stroke="#FFFFFF" strokeWidth="2" className="shadow-xs" />
+                    </svg>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 font-medium mt-1">
+                    <span className="flex items-center gap-1.5 text-gray-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                      Active Adoption
+                    </span>
+                    <span className="font-semibold text-gray-700">36 States Covered</span>
+                  </div>
                 </div>
               </div>
             </div>

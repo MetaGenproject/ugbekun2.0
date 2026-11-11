@@ -60,7 +60,14 @@ export function TrustedBySection() {
           ))}
 
           {/* And 500+ more schools button */}
-          <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition">
+          <button 
+            type="button"
+            onClick={() => {
+              const target = document.getElementById('why-us')
+              target?.scrollIntoView({ behavior: 'smooth' })
+            }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition cursor-pointer"
+          >
             <span>And 500+ more schools</span>
             <ChevronRight size={14} />
           </button>

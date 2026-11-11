@@ -35,6 +35,12 @@ import {
   Search,
   Coins,
   Info,
+  UserCheck,
+  Upload,
+  XCircle,
+  AlertCircle,
+  Eye,
+  FileSignature,
 } from 'lucide-react'
 import {
   Table,
@@ -111,6 +117,21 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
   const [secondaryColor, setSecondaryColor] = useState('#0284c7')
   const [idCardTheme, setIdCardTheme] = useState('EMERALD_MODERN')
 
+  // Class-specific Teacher Signatures
+  interface ClassSignatureItem {
+    classId: number
+    className: string
+    allocatedTeacher: { id: number; name: string } | null
+    customSignatureUrl: string | null
+    isUnavailable: boolean
+    effectiveSignatureUrl: string | null
+    source: 'CLASS_CUSTOM' | 'GENERAL' | 'TEACHER_PROFILE' | 'UNAVAILABLE' | 'NONE'
+  }
+  const [classSignatures, setClassSignatures] = useState<ClassSignatureItem[]>([])
+  const [isLoadingSignatures, setIsLoadingSignatures] = useState(false)
+  const [signatureSearchQuery, setSignatureSearchQuery] = useState('')
+  const [uploadingClassId, setUploadingClassId] = useState<number | null>(null)
+
   // PWA Settings
   const [pwaAppName, setPwaAppName] = useState('Ugbekun Portal')
   const [pwaShortName, setPwaShortName] = useState('Ugbekun')
@@ -144,7 +165,19 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         setLogoUrl(res.data.logoUrl || '')
         setPrincipalName(res.data.principalName || '')
         setPrincipalSignatureUrl(res.data.principalSignatureUrl || '')
-        setDefaultTeacherSignatureUrl(res.data.defaultTeacherSignatureUrl || '')
+        
+        const rawTeacherSig = res.data.defaultTeacherSignatureUrl || ''
+        if (rawTeacherSig.startsWith('{') && rawTeacherSig.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(rawTeacherSig)
+            setDefaultTeacherSignatureUrl(parsed.general || '')
+          } catch {
+            setDefaultTeacherSignatureUrl(rawTeacherSig)
+          }
+        } else {
+          setDefaultTeacherSignatureUrl(rawTeacherSig)
+        }
+
         setResumptionDate(res.data.resumptionDate || '')
 
         const rawFees = res.data.nextTermFees || ''
@@ -203,10 +236,79 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
         setSecondaryColor(res.data.secondaryColor || '#0284c7')
         setIdCardTheme(res.data.idCardTheme || 'EMERALD_MODERN')
       }
+      await loadClassSignatures()
     } catch (err) {
       console.error('Failed to load settings:', err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadClassSignatures = async () => {
+    setIsLoadingSignatures(true)
+    try {
+      const res = await apiSlice.get<{
+        success: boolean
+        generalSignatureUrl?: string | null
+        classes?: ClassSignatureItem[]
+        data?: ClassSignatureItem[]
+      }>(endpoints.admin.classTeacherSignatures)
+      if (res?.success) {
+        const list = res.classes || res.data || []
+        setClassSignatures(list)
+        if (res.generalSignatureUrl && !defaultTeacherSignatureUrl) {
+          setDefaultTeacherSignatureUrl(res.generalSignatureUrl)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load class signatures:', err)
+    } finally {
+      setIsLoadingSignatures(false)
+    }
+  }
+
+  const handleUploadClassSignature = (classId: number, file: File) => {
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+      const base64 = reader.result as string
+      setUploadingClassId(classId)
+      try {
+        await apiSlice.post(endpoints.admin.classTeacherSignatures, {
+          classId,
+          action: 'UPLOAD',
+          signatureBase64: base64,
+        })
+        await loadClassSignatures()
+        alert('Class teacher signature updated successfully!')
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Failed to upload class signature')
+      } finally {
+        setUploadingClassId(null)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleUpdateClassSignatureStatus = async (
+    classId: number,
+    action: 'MARK_UNAVAILABLE' | 'REMOVE_TO_GENERAL'
+  ) => {
+    const actionLabel =
+      action === 'MARK_UNAVAILABLE'
+        ? 'mark this class teacher as unavailable (report cards will be printed unsigned)'
+        : 'revert this class to the school general signature'
+    if (!confirm(`Are you sure you want to ${actionLabel}?`)) {
+      return
+    }
+    try {
+      await apiSlice.post(endpoints.admin.classTeacherSignatures, {
+        classId,
+        action,
+      })
+      await loadClassSignatures()
+      alert('Class signature status updated successfully!')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update signature status')
     }
   }
 
@@ -411,8 +513,15 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
     }
   }
 
-  const handleDeleteBrandingAsset = async (assetType: 'logo' | 'signature' | 'colors') => {
-    const label = assetType === 'logo' ? 'School Logo' : assetType === 'signature' ? 'Principal Signature' : 'Theme Colors'
+  const handleDeleteBrandingAsset = async (assetType: 'logo' | 'signature' | 'teacher-signature' | 'colors') => {
+    const label =
+      assetType === 'logo'
+        ? 'School Logo'
+        : assetType === 'signature'
+        ? 'Principal Signature'
+        : assetType === 'teacher-signature'
+        ? 'General Teacher Signature'
+        : 'Theme Colors'
     if (!confirm(`Are you sure you want to remove/reset ${label}?`)) {
       return
     }
@@ -425,6 +534,10 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
       } else if (assetType === 'signature') {
         setPrincipalSignatureUrl('')
         setSignatureBase64('')
+      } else if (assetType === 'teacher-signature') {
+        setDefaultTeacherSignatureUrl('')
+        setTeacherSignatureBase64('')
+        await loadClassSignatures()
       } else if (assetType === 'colors') {
         setPrimaryColor('#0f172a')
         setSecondaryColor('#0284c7')
@@ -1375,32 +1488,52 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                   </div>
                 </div>
 
-                {/* Default Class Teacher Signature */}
-                <div className="pt-3 border-t border-slate-200/70 flex items-center gap-4">
-                  <div className="w-24 h-16 rounded-xl border-2 border-slate-200 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-white flex items-center justify-center overflow-hidden p-1 shrink-0 shadow-xs relative">
-                    {teacherSignatureBase64 || defaultTeacherSignatureUrl ? (
-                      <img
-                        src={teacherSignatureBase64 || defaultTeacherSignatureUrl}
-                        alt="Teacher Signature Preview"
-                        className="max-w-full max-h-full object-contain filter contrast-125"
-                      />
-                    ) : (
-                      <div className="text-center p-1">
-                        <FileText size={18} className="mx-auto text-slate-300" />
-                        <span className="text-[9px] font-bold text-slate-400 block mt-0.5">No Signature</span>
-                      </div>
+                {/* General Class Teacher Signature */}
+                <div className="pt-3 border-t border-slate-200/70 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700">General Class Teacher Signature</label>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        School-wide signature fallback. Applies to any class that has no custom signature.
+                      </p>
+                    </div>
+                    {(teacherSignatureBase64 || defaultTeacherSignatureUrl) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBrandingAsset('teacher-signature')}
+                        disabled={isResetting}
+                        className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Trash2 size={12} /> Remove General Signature
+                      </button>
                     )}
                   </div>
 
-                  <div className="flex-1 space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-700">Upload Default Class Teacher Signature</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleTeacherSignatureFileChange}
-                      className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
-                    />
-                    <p className="text-[10px] text-slate-500 font-medium">Used when a class teacher has not uploaded an individual signature.</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-24 h-16 rounded-xl border-2 border-slate-200 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-white flex items-center justify-center overflow-hidden p-1 shrink-0 shadow-xs relative">
+                      {teacherSignatureBase64 || defaultTeacherSignatureUrl ? (
+                        <img
+                          src={teacherSignatureBase64 || defaultTeacherSignatureUrl}
+                          alt="General Teacher Signature Preview"
+                          className="max-w-full max-h-full object-contain filter contrast-125"
+                        />
+                      ) : (
+                        <div className="text-center p-1">
+                          <FileText size={18} className="mx-auto text-slate-300" />
+                          <span className="text-[9px] font-bold text-slate-400 block mt-0.5">No Signature</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleTeacherSignatureFileChange}
+                        className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
+                      />
+                      <p className="text-[10px] text-slate-500 font-medium">If your school uses only one signature for all teachers, upload it here. Or customize by class in the manager below.</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1574,6 +1707,216 @@ export function BranchSettings({ user }: { user?: { id?: number; username?: stri
                 >
                   {isSaving ? <Loader2 size={16} className="animate-spin text-amber-400" /> : <Save size={16} />} Save All Branding Changes
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Full-width Section: Class-Specific Teacher Signatures Manager */}
+          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+              <div className="space-y-0.5">
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <FileSignature size={18} className="text-emerald-600" />
+                  Class-Specific Teacher Signatures (By Class)
+                </h4>
+                <p className="text-xs text-slate-500 font-medium">
+                  Upload distinct signatures for each class teacher, or mark a teacher as unavailable so report cards for that class print without an unauthorized signature.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                  <input
+                    type="text"
+                    value={signatureSearchQuery}
+                    onChange={e => setSignatureSearchQuery(e.target.value)}
+                    placeholder="Search class or teacher..."
+                    className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={loadClassSignatures}
+                  disabled={isLoadingSignatures}
+                  className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  title="Refresh Class Signatures"
+                >
+                  <RefreshCw size={14} className={isLoadingSignatures ? 'animate-spin' : ''} />
+                </button>
+              </div>
+            </div>
+
+            {/* Status explanation pills */}
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 pt-1">
+              <span className="text-slate-400 font-medium">Signature Status:</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Class Custom
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> School General
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Teacher Profile
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200" title="Signature explicitly omitted on report cards">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Marked Unavailable (Omitted)
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> None
+              </span>
+            </div>
+
+            {/* Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-3">Class</th>
+                      <th className="py-2.5 px-3">Assigned Class Teacher</th>
+                      <th className="py-2.5 px-3 text-center">Active Signature</th>
+                      <th className="py-2.5 px-3">Resolution Source</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {isLoadingSignatures ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
+                          <Loader2 size={18} className="animate-spin mx-auto mb-1 text-slate-400" />
+                          Loading class signature configurations...
+                        </td>
+                      </tr>
+                    ) : classSignatures.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-400 font-medium">
+                          No classes found for this branch.
+                        </td>
+                      </tr>
+                    ) : (
+                      classSignatures
+                        .filter(c =>
+                          c.className.toLowerCase().includes(signatureSearchQuery.toLowerCase()) ||
+                          (c.allocatedTeacher?.name || '').toLowerCase().includes(signatureSearchQuery.toLowerCase())
+                        )
+                        .map(c => {
+                          const isUploading = uploadingClassId === c.classId
+                          return (
+                            <tr key={`cls-sig-${c.classId}`} className="hover:bg-slate-50/70 transition">
+                              <td className="py-2.5 px-3 font-bold text-slate-900">
+                                {c.className}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 font-medium">
+                                {c.allocatedTeacher ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <UserCheck size={13} className="text-emerald-600 shrink-0" />
+                                    {c.allocatedTeacher.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 italic">No teacher assigned</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <div className="inline-flex items-center justify-center w-20 h-10 rounded-lg border border-slate-200 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:6px_6px] bg-white p-0.5 overflow-hidden">
+                                  {c.effectiveSignatureUrl ? (
+                                    <img
+                                      src={c.effectiveSignatureUrl}
+                                      alt={`${c.className} signature`}
+                                      className="max-h-full max-w-full object-contain filter contrast-125"
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">None</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {c.source === 'CLASS_CUSTOM' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Class Custom
+                                  </span>
+                                )}
+                                {c.source === 'GENERAL' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> School General
+                                  </span>
+                                )}
+                                {c.source === 'TEACHER_PROFILE' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Teacher Profile
+                                  </span>
+                                )}
+                                {c.source === 'UNAVAILABLE' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Signature explicitly omitted on report cards">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Unavailable (Omitted)
+                                  </span>
+                                )}
+                                {c.source === 'NONE' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> No Signature
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Upload Button */}
+                                  <label
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1 cursor-pointer ${
+                                      isUploading
+                                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs'
+                                    }`}
+                                    title="Upload custom signature for this class"
+                                  >
+                                    {isUploading ? (
+                                      <Loader2 size={11} className="animate-spin text-slate-500" />
+                                    ) : (
+                                      <Upload size={11} className="text-emerald-600" />
+                                    )}
+                                    <span>{c.customSignatureUrl ? 'Replace' : 'Upload'}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      disabled={isUploading}
+                                      className="hidden"
+                                      onChange={e => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleUploadClassSignature(c.classId, file)
+                                        e.target.value = ''
+                                      }}
+                                    />
+                                  </label>
+
+                                  {/* Mark Unavailable Button */}
+                                  {c.source !== 'UNAVAILABLE' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateClassSignatureStatus(c.classId, 'MARK_UNAVAILABLE')}
+                                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                      title="Teacher is absent or unavailable - omit signature from report cards"
+                                    >
+                                      <AlertCircle size={11} /> Mark Unavailable
+                                    </button>
+                                  )}
+
+                                  {/* Revert / Remove Override Button */}
+                                  {(c.source === 'CLASS_CUSTOM' || c.source === 'UNAVAILABLE') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateClassSignatureStatus(c.classId, 'REMOVE_TO_GENERAL')}
+                                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                      title="Revert to school general signature"
+                                    >
+                                      <RotateCcw size={11} className="text-slate-500" /> Revert to General
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
