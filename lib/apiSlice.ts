@@ -377,8 +377,13 @@ export const endpoints = {
     inventorySale: `${BASE_URL}/admin/inventory/sale`,
     inventoryItemDelete: (id: number) => `${BASE_URL}/admin/inventory/items/${id}`,
     reportCards: {
-      classes: (sessionId?: number) =>
-        `${BASE_URL}/admin/report-cards/classes${sessionId ? `?sessionId=${sessionId}` : ''}`,
+      classes: (sessionId?: number, termId?: number) => {
+        const params = new URLSearchParams()
+        if (sessionId) params.append('sessionId', String(sessionId))
+        if (termId) params.append('termId', String(termId))
+        const qs = params.toString()
+        return `${BASE_URL}/admin/report-cards/classes${qs ? `?${qs}` : ''}`
+      },
       students: (classId: number, sectionId: number, sessionId?: number, stage?: string, termId?: number) => {
         const params = new URLSearchParams({ classId: String(classId), sectionId: String(sectionId) })
         if (sessionId) params.append('sessionId', String(sessionId))

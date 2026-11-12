@@ -27,7 +27,8 @@ import {
   Users,
   Calendar,
   EyeOff,
-  Globe
+  Globe,
+  ShieldOff,
 } from 'lucide-react'
 import {
   Table,
@@ -212,11 +213,12 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
   const openPublishModal = () => {
     setPublishScope('class')
-    setModalReleaseCa1(Boolean(pubDetails.releaseCa1))
-    setModalReleaseCa2(Boolean(pubDetails.releaseCa2))
-    setModalReleaseCombinedCa(Boolean(pubDetails.releaseCombinedCa))
-    setModalReleaseExam(Boolean(pubDetails.releaseExam))
-    setModalReleaseFull(Boolean(pubDetails.releaseFull))
+    const isLive = Boolean(isPublished && pubDetails.isPublished)
+    setModalReleaseCa1(isLive ? Boolean(pubDetails.releaseCa1) : false)
+    setModalReleaseCa2(isLive ? Boolean(pubDetails.releaseCa2) : false)
+    setModalReleaseCombinedCa(isLive ? Boolean(pubDetails.releaseCombinedCa) : false)
+    setModalReleaseExam(isLive ? Boolean(pubDetails.releaseExam) : false)
+    setModalReleaseFull(isLive ? Boolean(pubDetails.releaseFull) : false)
     setShowPublishConfirmModal(true)
   }
 
@@ -257,7 +259,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
     fetchClasses()
   }, [])
 
-  const fetchClasses = async (sessionId?: number) => {
+  const fetchClasses = async (sessionId?: number, targetTermId: number = selectedTermId) => {
     setLoadingClasses(true)
     try {
       const res = await apiSlice.get<{
@@ -265,7 +267,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         sessionId?: number
         sessions?: SessionItem[]
         classes: ClassItem[]
-      }>(endpoints.admin.reportCards.classes(sessionId))
+      }>(endpoints.admin.reportCards.classes(sessionId, targetTermId))
 
       if (res.success && res.classes) {
         if (res.sessions && res.sessions.length > 0) {
@@ -278,7 +280,6 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           ? res.classes.filter(c => allowedClassIds.includes(c.id))
           : res.classes;
         setClasses(availableClasses)
-        fetchPublishStatus(sessionId || res.sessionId)
 
         // Read active context from localStorage if available
         let targetClassId: number | null = null
@@ -314,6 +315,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           } else {
             setSelectedSectionId(null)
           }
+          fetchPublishStatus(sessionId || res.sessionId, activeCls.id, targetTermId)
         } else {
           setSelectedClassId(null)
           setSelectedSectionId(null)
@@ -439,10 +441,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           releaseFull: res.releaseFull,
           termId: res.termId,
         })
+        setShowPublishConfirmModal(false)
+
+        // Refresh classrooms and student preview records in parallel
         if (selectedSessionId) {
-          fetchClasses(selectedSessionId)
+          await fetchClasses(selectedSessionId, selectedTermId)
         } else {
-          fetchClasses()
+          await fetchClasses(undefined, selectedTermId)
+        }
+        if (selectedClassId && selectedSectionId) {
+          await fetchStudents(selectedClassId, selectedSectionId, selectedSessionId || undefined, assessmentStage, selectedTermId)
+          await fetchPublishStatus(selectedSessionId || undefined, selectedClassId, selectedTermId)
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('branch-settings-updated'))
         }
         toast.success(res.message || 'Report card publication state updated successfully!')
       }
@@ -907,54 +919,72 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full xl:w-auto">
             {/* Live Publish Status Badge */}
-            <div className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
-              pubDetails.releaseFull
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : pubDetails.releaseExam
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
-                : (pubDetails.releaseCa1 || pubDetails.releaseCa2)
-                ? 'bg-amber-50 border-amber-200 text-amber-800'
-                : 'bg-slate-50 border-slate-200 text-slate-700'
+            <div className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center sm:justify-start gap-2 shadow-2xs transition-colors ${
+              isPublished && pubDetails.isPublished
+                ? pubDetails.releaseFull
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : pubDetails.releaseExam
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                  : pubDetails.releaseCombinedCa
+                  ? 'bg-purple-50 border-purple-200 text-purple-800'
+                  : (pubDetails.releaseCa1 || pubDetails.releaseCa2)
+                  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-rose-50 border-rose-200 text-rose-700'
             }`}>
-              {pubDetails.releaseFull ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <Globe size={14} className="text-emerald-600" />
-                  <span>{currentClass?.name || 'Class'}: Full Report Live</span>
-                </>
-              ) : pubDetails.releaseExam ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                  <Globe size={14} className="text-indigo-600" />
-                  <span>{currentClass?.name || 'Class'}: Exam Only Live</span>
-                </>
-              ) : (pubDetails.releaseCa1 || pubDetails.releaseCa2) ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <Globe size={14} className="text-amber-600" />
-                  <span>
-                    {currentClass?.name || 'Class'}: Mid-Term CA (
-                    {[pubDetails.releaseCa1 && 'CA1', pubDetails.releaseCa2 && 'CA2'].filter(Boolean).join(' + ')}
-                    ) Live
-                  </span>
-                </>
+              {isPublished && pubDetails.isPublished ? (
+                pubDetails.releaseFull ? (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <Globe size={14} className="text-emerald-600 shrink-0" />
+                    <span className="truncate">{currentClass?.name || 'Class'}: Full Report Live</span>
+                  </>
+                ) : pubDetails.releaseExam ? (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                    <Globe size={14} className="text-indigo-600 shrink-0" />
+                    <span className="truncate">{currentClass?.name || 'Class'}: Exam Only Live</span>
+                  </>
+                ) : pubDetails.releaseCombinedCa ? (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse shrink-0" />
+                    <Globe size={14} className="text-purple-600 shrink-0" />
+                    <span className="truncate">{currentClass?.name || 'Class'}: Combined CA Live</span>
+                  </>
+                ) : (pubDetails.releaseCa1 || pubDetails.releaseCa2) ? (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    <Globe size={14} className="text-amber-600 shrink-0" />
+                    <span className="truncate">
+                      {currentClass?.name || 'Class'}: Mid-Term CA (
+                      {[pubDetails.releaseCa1 && 'CA1', pubDetails.releaseCa2 && 'CA2'].filter(Boolean).join(' + ')}
+                      ) Live
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                    <ShieldOff size={14} className="text-rose-600 shrink-0" />
+                    <span className="truncate">{currentClass?.name || 'Class'}: Shielded (Draft / Unpublished)</span>
+                  </>
+                )
               ) : (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-slate-400" />
-                  <EyeOff size={14} className="text-slate-500" />
-                  <span>{currentClass?.name || 'Class'}: Hidden (Draft)</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                  <ShieldOff size={14} className="text-rose-600 shrink-0" />
+                  <span className="truncate">{currentClass?.name || 'Class'}: Shielded (Draft / Unpublished)</span>
                 </>
               )}
             </div>
 
-            {/* Toggle Publish Button */}
+            {/* Granular Release Engine Button */}
             <button
               onClick={openPublishModal}
               disabled={isTogglingPublish || !selectedClassId}
-              className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer disabled:opacity-50 ${
-                isPublished
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50 ${
+                isPublished && pubDetails.isPublished
                   ? 'bg-slate-900 hover:bg-slate-800 text-white'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
               }`}
@@ -969,14 +999,14 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
             <button
               onClick={() => setActiveTab('ai-comments')}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Sparkles size={15} className="text-amber-400" /> AI Comment Engine
             </button>
             <button
               onClick={handleDownloadBatchPdf}
               disabled={isBatchGeneratingPdf || students.length === 0}
-              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
             >
               {isBatchGeneratingPdf ? (
                 <Loader2 size={15} className="animate-spin" />
@@ -1843,15 +1873,16 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
       {/* Report Card Granular Publication Engine Modal */}
       {showPublishConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 space-y-5 font-sans">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150 font-sans my-auto">
+            {/* Sticky Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 sm:px-6 py-4 shrink-0 bg-white">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                  <Globe size={24} />
+                <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
+                  <Globe size={22} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
                     Granular Parent Release Engine
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
@@ -1862,298 +1893,303 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
               <button
                 type="button"
                 onClick={() => setShowPublishConfirmModal(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
 
-            {/* Scope Selection: Targeted Class vs All Classes */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 block">
-                Choose Publication Scope:
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setPublishScope('class')}
-                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                    publishScope === 'class'
-                      ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-900">
-                      {currentClass?.name || 'Selected Class'} Only
-                    </span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                      Targeted
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 leading-tight">
-                    Releases solely this class without altering other classes still in grading.
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPublishScope('all')}
-                  className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                    publishScope === 'all'
-                      ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-900">
-                      All Classes ({classes.length})
-                    </span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      Cohort Batch
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 leading-tight">
-                    Apply publication state across the entire school session in one click.
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Term Selection */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <span className="text-xs font-bold text-slate-700">Academic Term:</span>
-              <div className="flex items-center gap-1.5">
-                {[1, 2, 3].map(t => (
+            {/* Scrollable Body */}
+            <div className="overflow-y-auto px-5 sm:px-6 py-4 space-y-4 flex-1">
+              {/* Scope Selection: Targeted Class vs All Classes */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Choose Publication Scope:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
-                    key={t}
                     type="button"
-                    onClick={() => {
-                      setSelectedTermId(t)
-                      fetchPublishStatus(selectedSessionId || undefined, selectedClassId || undefined, t)
-                    }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
-                      selectedTermId === t
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    onClick={() => setPublishScope('class')}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                      publishScope === 'class'
+                        ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
-                    {t === 1 ? '1st Term' : t === 2 ? '2nd Term' : '3rd Term'}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900">
+                        {currentClass?.name || 'Selected Class'} Only
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                        Targeted
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 leading-tight">
+                      Releases solely this class without altering other classes still in grading.
+                    </span>
                   </button>
-                ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setPublishScope('all')}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                      publishScope === 'all'
+                        ? 'border-indigo-500 bg-indigo-50/60 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900">
+                        All Classes ({classes.length})
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                        Cohort Batch
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 leading-tight">
+                      Apply publication state across the entire school session in one click.
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Term Selection */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80 gap-2">
+                <span className="text-xs font-bold text-slate-700">Academic Term:</span>
+                <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                  {[1, 2, 3].map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTermId(t)
+                        fetchPublishStatus(selectedSessionId || undefined, selectedClassId || undefined, t)
+                      }}
+                      className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-bold transition text-center ${
+                        selectedTermId === t
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      {t === 1 ? '1st Term' : t === 2 ? '2nd Term' : '3rd Term'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5 Granular Stage Toggles */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Granular Stage Release Toggles:
+                </label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {/* Stage 1: CA1 */}
+                  <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                    modalReleaseCa1 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
+                  }`}>
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Stage 1: CA 1 Progress Slip</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                          Mid-Term
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Releases Continuous Assessment 1 scores & teacher progress notes to parent portal.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={modalReleaseCa1}
+                      onChange={e => setModalReleaseCa1(e.target.checked)}
+                      className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+
+                  {/* Stage 2: CA2 */}
+                  <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                    modalReleaseCa2 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
+                  }`}>
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Stage 2: CA 2 Progress Slip</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                          Mid-Term
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Releases Continuous Assessment 2 marks & progress slips to students/parents.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={modalReleaseCa2}
+                      onChange={e => setModalReleaseCa2(e.target.checked)}
+                      className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+
+                  {/* Stage: Combined CA */}
+                  <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                    modalReleaseCombinedCa ? 'bg-purple-50/60 border-purple-300' : 'bg-slate-50/50 border-slate-200'
+                  }`}>
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Combined CA (CA1 + CA2) Progress Report</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-purple-100 text-purple-800">
+                          Mid-Term Out of 40
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Releases Combined Continuous Assessment (CA1 + CA2 out of 40). Exam columns and class ranking are strictly hidden.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={modalReleaseCombinedCa}
+                      onChange={e => setModalReleaseCombinedCa(e.target.checked)}
+                      className="w-5 h-5 text-purple-600 rounded-md border-slate-300 focus:ring-purple-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+
+                  {/* Stage 3: Exam */}
+                  <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                    modalReleaseExam ? 'bg-indigo-50/60 border-indigo-300' : 'bg-slate-50/50 border-slate-200'
+                  }`}>
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Stage 3: Terminal Exam Marks</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-indigo-100 text-indigo-800">
+                          Exam Paper
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Releases terminal examination scores for individual subjects.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={modalReleaseExam}
+                      onChange={e => setModalReleaseExam(e.target.checked)}
+                      className="w-5 h-5 text-indigo-600 rounded-md border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+
+                  {/* Stage 4: Full */}
+                  <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
+                    modalReleaseFull ? 'bg-emerald-50/60 border-emerald-300' : 'bg-slate-50/50 border-slate-200'
+                  }`}>
+                    <div className="space-y-0.5 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Stage 4: Full Terminal Composite Report</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
+                          Complete
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Releases cumulative composite grade (100%), GPA, class positions, and final PDF downloads.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={modalReleaseFull}
+                      onChange={e => setModalReleaseFull(e.target.checked)}
+                      className="w-5 h-5 text-emerald-600 rounded-md border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Zero Data Leakage Info */}
+              <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200/80 text-xs text-blue-900 space-y-1">
+                <span className="font-bold flex items-center gap-1.5 text-blue-800 text-[11px]">
+                  🛡️ Zero Data Leakage Invariant Enforced
+                </span>
+                <p className="text-[11px] text-blue-800/90 leading-relaxed">
+                  When Exam or Full Report is unchecked, backend APIs strictly nullify examination marks, composite totals, GPA grades, and class rank from both parent JSON payloads and PDF downloads, guaranteeing zero exposure before official publication.
+                </p>
               </div>
             </div>
 
-            {/* 4 Granular Stage Toggles */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 block">
-                Granular Stage Release Toggles:
-              </label>
-              <div className="grid grid-cols-1 gap-2.5">
-                {/* Stage 1: CA1 */}
-                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                  modalReleaseCa1 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
-                }`}>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Stage 1: CA 1 Progress Slip</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
-                        Mid-Term
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Releases Continuous Assessment 1 scores & teacher progress notes to parent portal.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalReleaseCa1}
-                    onChange={e => setModalReleaseCa1(e.target.checked)}
-                    className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer"
-                  />
-                </label>
-
-                {/* Stage 2: CA2 */}
-                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                  modalReleaseCa2 ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-50/50 border-slate-200'
-                }`}>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Stage 2: CA 2 Progress Slip</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-100 text-amber-800">
-                        Mid-Term
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Releases Continuous Assessment 2 marks & progress slips to students/parents.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalReleaseCa2}
-                    onChange={e => setModalReleaseCa2(e.target.checked)}
-                    className="w-5 h-5 text-amber-600 rounded-md border-slate-300 focus:ring-amber-500 cursor-pointer"
-                  />
-                </label>
-
-                {/* Stage: Combined CA */}
-                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                  modalReleaseCombinedCa ? 'bg-purple-50/60 border-purple-300' : 'bg-slate-50/50 border-slate-200'
-                }`}>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Combined CA (CA1 + CA2) Progress Report</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-purple-100 text-purple-800">
-                        Mid-Term Out of 40
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Releases Combined Continuous Assessment (CA1 + CA2 out of 40). Exam columns and class ranking are strictly hidden.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalReleaseCombinedCa}
-                    onChange={e => setModalReleaseCombinedCa(e.target.checked)}
-                    className="w-5 h-5 text-purple-600 rounded-md border-slate-300 focus:ring-purple-500 cursor-pointer"
-                  />
-                </label>
-
-                {/* Stage 3: Exam */}
-                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                  modalReleaseExam ? 'bg-indigo-50/60 border-indigo-300' : 'bg-slate-50/50 border-slate-200'
-                }`}>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Stage 3: Terminal Exam Marks</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-indigo-100 text-indigo-800">
-                        Exam Paper
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Releases terminal examination scores for individual subjects.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalReleaseExam}
-                    onChange={e => setModalReleaseExam(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded-md border-slate-300 focus:ring-indigo-500 cursor-pointer"
-                  />
-                </label>
-
-                {/* Stage 4: Full */}
-                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                  modalReleaseFull ? 'bg-emerald-50/60 border-emerald-300' : 'bg-slate-50/50 border-slate-200'
-                }`}>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Stage 4: Full Terminal Composite Report</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
-                        Complete
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Releases cumulative composite grade (100%), GPA, class positions, and final PDF downloads.
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={modalReleaseFull}
-                    onChange={e => setModalReleaseFull(e.target.checked)}
-                    className="w-5 h-5 text-emerald-600 rounded-md border-slate-300 focus:ring-emerald-500 cursor-pointer"
-                  />
-                </label>
+            {/* Sticky Responsive Footer */}
+            <div className="px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 shrink-0 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalReleaseCa1(false)
+                    setModalReleaseCa2(false)
+                    setModalReleaseCombinedCa(false)
+                    setModalReleaseExam(false)
+                    setModalReleaseFull(false)
+                    handleTogglePublish({
+                      publish: false,
+                      releaseCa1: false,
+                      releaseCa2: false,
+                      releaseCombinedCa: false,
+                      releaseExam: false,
+                      releaseFull: false,
+                    })
+                  }}
+                  disabled={isTogglingPublish}
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                >
+                  <ShieldOff size={14} className="text-rose-600 shrink-0" />
+                  <span className="truncate">Unpublish / Shield All</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalReleaseCa1(true)
+                    setModalReleaseCa2(true)
+                    setModalReleaseCombinedCa(true)
+                    setModalReleaseExam(true)
+                    setModalReleaseFull(true)
+                    handleTogglePublish({
+                      publish: true,
+                      releaseCa1: true,
+                      releaseCa2: true,
+                      releaseCombinedCa: true,
+                      releaseExam: true,
+                      releaseFull: true,
+                    })
+                  }}
+                  disabled={isTogglingPublish}
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                >
+                  <Globe size={14} className="text-emerald-600 shrink-0" />
+                  <span className="truncate">Release Full Terminal</span>
+                </button>
               </div>
-            </div>
 
-            {/* Zero Data Leakage Info */}
-            <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200/80 text-xs text-blue-900 space-y-1">
-              <span className="font-bold flex items-center gap-1.5 text-blue-800 text-[11px]">
-                🛡️ Zero Data Leakage Invariant Enforced
-              </span>
-              <p className="text-[11px] text-blue-800/90 leading-relaxed">
-                When Exam or Full Report is unchecked, backend APIs strictly nullify examination marks, composite totals, GPA grades, and class rank from both parent JSON payloads and PDF downloads, guaranteeing zero exposure before official publication.
-              </p>
-            </div>
-
-            {/* Quick Actions & Confirm Buttons */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModalReleaseCa1(false)
-                      setModalReleaseCa2(false)
-                      setModalReleaseCombinedCa(false)
-                      setModalReleaseExam(false)
-                      setModalReleaseFull(false)
-                      handleTogglePublish({
-                        publish: false,
-                        releaseCa1: false,
-                        releaseCa2: false,
-                        releaseCombinedCa: false,
-                        releaseExam: false,
-                        releaseFull: false,
-                      })
-                    }}
-                    disabled={isTogglingPublish}
-                    className="px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition cursor-pointer"
-                  >
-                    Unpublish / Shield All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModalReleaseCa1(true)
-                      setModalReleaseCa2(true)
-                      setModalReleaseCombinedCa(true)
-                      setModalReleaseExam(true)
-                      setModalReleaseFull(true)
-                      handleTogglePublish({
-                        publish: true,
-                        releaseCa1: true,
-                        releaseCa2: true,
-                        releaseCombinedCa: true,
-                        releaseExam: true,
-                        releaseFull: true,
-                      })
-                    }}
-                    disabled={isTogglingPublish}
-                    className="px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition cursor-pointer"
-                  >
-                    Release Full Terminal
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setShowPublishConfirmModal(false)}
-                    disabled={isTogglingPublish}
-                    className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleTogglePublish({
-                        releaseCa1: modalReleaseCa1,
-                        releaseCa2: modalReleaseCa2,
-                        releaseCombinedCa: modalReleaseCombinedCa,
-                        releaseExam: modalReleaseExam,
-                        releaseFull: modalReleaseFull,
-                      })
-                    }
-                    disabled={isTogglingPublish}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm flex items-center gap-2 transition cursor-pointer"
-                  >
-                    {isTogglingPublish && <Loader2 size={14} className="animate-spin" />}
-                    <span>Save Granular Configuration</span>
-                  </button>
-                </div>
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200/60">
+                <button
+                  type="button"
+                  onClick={() => setShowPublishConfirmModal(false)}
+                  disabled={isTogglingPublish}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleTogglePublish({
+                      publish: modalReleaseCa1 || modalReleaseCa2 || modalReleaseCombinedCa || modalReleaseExam || modalReleaseFull,
+                      releaseCa1: modalReleaseCa1,
+                      releaseCa2: modalReleaseCa2,
+                      releaseCombinedCa: modalReleaseCombinedCa,
+                      releaseExam: modalReleaseExam,
+                      releaseFull: modalReleaseFull,
+                    })
+                  }
+                  disabled={isTogglingPublish}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                >
+                  {isTogglingPublish && <Loader2 size={14} className="animate-spin shrink-0" />}
+                  <span>Save Configuration</span>
+                </button>
               </div>
             </div>
           </div>
