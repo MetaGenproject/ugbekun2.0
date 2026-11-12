@@ -29,6 +29,7 @@ interface FormAllocation {
   className: string
   sectionId: number
   sectionName: string
+  sessionId?: number
 }
 
 interface DayItem {
@@ -136,7 +137,8 @@ export default function TeacherMonthlyAttendance({
       const url = endpoints.teacher.attendanceMonthlyReport(
         isAllClasses ? 'all' : activeForm!.classId,
         isAllClasses ? 'all' : activeForm!.sectionId,
-        selectedMonth
+        selectedMonth,
+        activeForm?.sessionId
       )
       const res = await apiSlice.get<MonthlyAttendanceData>(url)
       if (res.success) {

@@ -25,6 +25,7 @@ interface FormAllocation {
   className: string
   sectionId: number
   sectionName: string
+  sessionId?: number
 }
 
 interface StudentDailyRecord {
@@ -126,7 +127,8 @@ export default function TeacherDailyAttendance({
         : endpoints.teacher.attendanceDailyReport(
             activeForm!.classId,
             activeForm!.sectionId,
-            currentDate
+            currentDate,
+            activeForm?.sessionId
           )
       const res = await apiSlice.get<DailyAttendanceData>(url)
       if (res.success) {

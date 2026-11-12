@@ -384,6 +384,7 @@ export default function AttendanceRegister({
       }>(endpoints.teacher.attendanceRegisterEntries, {
         classId: activeForm.classId,
         sectionId: activeForm.sectionId,
+        sessionId: activeForm.sessionId,
         date: attendanceDate,
         entries,
       })
@@ -464,10 +465,10 @@ export default function AttendanceRegister({
           canEdit: boolean
           today: string
         }>(
-          `${endpoints.teacher.attendanceRegister}?classId=${form.classId}&sectionId=${form.sectionId}&date=${dateKey}`
+          `${endpoints.teacher.attendanceRegister}?classId=${form.classId}&sectionId=${form.sectionId}&date=${dateKey}${form.sessionId ? `&sessionId=${form.sessionId}` : ''}`
         ),
         apiSlice.get<{ success: boolean; days: WeekDay[] }>(
-          `${endpoints.teacher.attendanceWeek}?classId=${form.classId}&sectionId=${form.sectionId}&date=${dateKey}`
+          `${endpoints.teacher.attendanceWeek}?classId=${form.classId}&sectionId=${form.sectionId}&date=${dateKey}${form.sessionId ? `&sessionId=${form.sessionId}` : ''}`
         ).catch(() => ({ success: false, days: [] as WeekDay[] })),
       ])
 
@@ -659,6 +660,7 @@ export default function AttendanceRegister({
       }>(endpoints.teacher.attendanceRegisterSubmit, {
         classId: activeForm.classId,
         sectionId: activeForm.sectionId,
+        sessionId: activeForm.sessionId,
         date: attendanceDate,
         registerId: registerMeta?.id,
         expectedVersion: registerMeta?.version,

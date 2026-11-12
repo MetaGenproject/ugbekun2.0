@@ -466,10 +466,32 @@ export const endpoints = {
     attendanceRegisterEntries: `${BASE_URL}/teacher/attendance/register/entries`,
     attendanceRegisterSubmit: `${BASE_URL}/teacher/attendance/register/submit`,
     attendanceWeek: `${BASE_URL}/teacher/attendance/week`,
-    attendanceDailyReport: (classId: number | string, sectionId: number | string, date?: string) =>
-      `${BASE_URL}/teacher/attendance/daily-report?classId=${classId}&sectionId=${sectionId}${date ? `&date=${encodeURIComponent(date)}` : ''}`,
-    attendanceMonthlyReport: (classId: number | string, sectionId: number | string, month?: string) =>
-      `${BASE_URL}/teacher/attendance/monthly-report?classId=${classId}&sectionId=${sectionId}${month ? `&month=${encodeURIComponent(month)}` : ''}`,
+    attendanceDailyReport: (
+      classId: number | string,
+      sectionId: number | string,
+      date?: string,
+      sessionId?: number | string
+    ) => {
+      const q = new URLSearchParams()
+      q.set('classId', String(classId))
+      q.set('sectionId', String(sectionId))
+      if (date) q.set('date', date)
+      if (sessionId) q.set('sessionId', String(sessionId))
+      return `${BASE_URL}/teacher/attendance/daily-report?${q.toString()}`
+    },
+    attendanceMonthlyReport: (
+      classId: number | string,
+      sectionId: number | string,
+      month?: string,
+      sessionId?: number | string
+    ) => {
+      const q = new URLSearchParams()
+      q.set('classId', String(classId))
+      q.set('sectionId', String(sectionId))
+      if (month) q.set('month', month)
+      if (sessionId) q.set('sessionId', String(sessionId))
+      return `${BASE_URL}/teacher/attendance/monthly-report?${q.toString()}`
+    },
     attendanceTermlyReport: (
       classId: number | string,
       sectionId: number | string,
