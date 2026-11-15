@@ -88,6 +88,7 @@ import PointsHub from './points-hub'
 import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
 import { safeStorage } from '@/lib/safeStorage'
+import { BrandedReportCardPreview, type EvaluationMatrixComponent } from '../shared/branded-report-card-preview'
 
 interface DashboardProps {
   user: {
@@ -241,11 +242,25 @@ interface GradeData {
     cbtScale?: number | null
     theoryMark?: string | null
     mark: string | null
+    componentScores?: Record<string, number | string | null>
+    maxMarks?: number | null
     absent: boolean
     classAverage: number
   }>
   overallAverage: number
+  rawAverage?: number
+  maxTotal?: number
+  stage?: string
+  assessmentComponents?: EvaluationMatrixComponent[]
+  gradingScale?: { ranges?: Array<{ grade: string; minPercentage?: number; maxPercentage?: number; minScore?: number; maxScore?: number; remark?: string }> }
+  schoolBranding?: Record<string, any>
   commentary: string | null
+  teacherComment?: string | null
+  principalComment?: string | null
+  psychomotor?: Record<string, string>
+  affective?: Record<string, string>
+  resumptionDate?: string | null
+  nextTermFees?: string | null
   rank: number | null
   totalClassStudents: number | null
   isEcd?: boolean
@@ -2010,254 +2025,72 @@ function normalizeQuestions(raw: any): any[] {
               </div>
 
               {/* Modal Content Body */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 print:p-0 print:bg-white print:overflow-visible">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-slate-100/70 print:p-0 print:bg-white print:overflow-visible">
                 {previewTab === 'document' ? (
-                  <div id="printable-report-card" className="bg-white rounded-3xl border border-slate-200/90 shadow-lg p-6 sm:p-10 space-y-6 text-slate-800 font-sans max-w-4xl mx-auto print:shadow-none print:border-none print:p-4 print:m-0">
-                    
-                    {/* Institution Header */}
-                    <div className="border-b-2 border-slate-900/80 pb-6 text-center space-y-2">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center shrink-0">
-                          {branding?.logoUrl ? (
-                            <img src={branding.logoUrl} alt={branding.schoolName} className="w-full h-full object-contain rounded-xl" />
-                          ) : (
-                            <div className="w-full h-full rounded-xl bg-indigo-950 text-white flex items-center justify-center font-bold">
-                              <School size={28} />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight uppercase">
-                            {branding?.schoolName || profile.branchName || 'UGBEKUN INTERNATIONAL ACADEMY'}
-                          </h1>
-                          <p className="text-xs italic font-bold text-slate-600 mt-0.5">
-                            {branding?.tagline || 'Excellence in Knowledge & Character'}
-                          </p>
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            {branding?.address || 'Main Campus'} {branding?.phone ? `• Tel: ${branding.phone}` : ''} {branding?.email ? `• Email: ${branding.email}` : ''}
-                          </p>
-                        </div>
-
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                          <img
-                            src={getAvatarUrl(profile.photo, `${profile.firstName} ${profile.lastName}`)}
-                            alt={profile.firstName}
-                            className="w-full h-full object-cover rounded-xl"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-2">
-                        <span className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest">
-                          Continuous Assessment & Terminal Academic Report Card
-                        </span>
-                        <p className="text-xs font-bold text-indigo-700 mt-1.5">
-                          Academic Session: {branding?.academicSession || '2025/2026'} &bull; Term: {branding?.currentTerm || 'First Term'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Student Bio Grid */}
-                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 text-xs">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Student Name</span>
-                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
-                            {profile.firstName} {profile.lastName}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Registration No</span>
-                          <span className="font-mono font-extrabold text-slate-900 text-sm block mt-0.5">
-                            {profile.registerNo}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Class & Arm</span>
-                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
-                            {profile.className} {profile.sectionName}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Gender</span>
-                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5 capitalize">
-                            {profile.gender || 'Not Specified'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Attendance Record</span>
-                          <span className="font-extrabold text-emerald-700 text-sm block mt-0.5">
-                            {attendance?.percentage ?? 100}% ({attendance?.presentCount ?? 0} of {attendance?.totalDays ?? 0} Days)
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Class Position (Rank)</span>
-                          <span className="font-extrabold text-indigo-700 text-sm block mt-0.5">
-                            {userRankText} <span className="text-[11px] text-slate-500 font-normal">out of {totalClass}</span>
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Terminal Average</span>
-                          <span className="font-extrabold text-slate-900 text-sm block mt-0.5">
-                            {avgScore}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Terminal Grade</span>
-                          <span className="font-extrabold text-indigo-800 text-sm block mt-0.5">
-                            {getGradeLetter(avgScore).letter}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Academic Marks Breakdown Table */}
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <BarChart3 size={15} className="text-indigo-600" />
-                        <span>Cognitive Academic Evaluation & Subject Breakdown</span>
-                      </h4>
-
-                      {reportCardList.length > 0 ? (
-                        <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-slate-100/80 text-[10px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
-                              <tr>
-                                <th className="p-3">#</th>
-                                <th className="p-3">Subject</th>
-                                <th className="p-3 text-center">CBT / CA (40)</th>
-                                <th className="p-3 text-center">Theory / Exam (60)</th>
-                                <th className="p-3 text-center">Total (100)</th>
-                                <th className="p-3 text-center">Class Avg</th>
-                                <th className="p-3 text-center">Grade</th>
-                                <th className="p-3">Remark</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {reportCardList.map((item, idx) => {
-                                const totalVal = parseFloat(item.mark || '0')
-                                const gradeInfo = getGradeLetter(totalVal)
-                                return (
-                                  <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                    <td className="p-3 font-mono text-slate-400 font-bold">{idx + 1}</td>
-                                    <td className="p-3">
-                                      <span className="font-bold text-slate-900 block">{item.subjectName}</span>
-                                      <span className="text-[10px] text-slate-400 font-mono">{item.subjectCode}</span>
-                                    </td>
-                                    <td className="p-3 text-center font-mono font-semibold text-slate-700">
-                                      {item.cbtMark ? item.cbtMark : '-'}
-                                    </td>
-                                    <td className="p-3 text-center font-mono font-semibold text-slate-700">
-                                      {item.theoryMark ? item.theoryMark : '-'}
-                                    </td>
-                                    <td className="p-3 text-center font-mono font-black text-slate-900 text-sm">
-                                      {item.mark !== null ? `${item.mark}` : 'ABS'}
-                                    </td>
-                                    <td className="p-3 text-center font-mono text-slate-500 font-medium">
-                                      {item.classAverage}%
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${gradeInfo.bg} ${gradeInfo.color}`}>
-                                        {gradeInfo.letter.split(' ')[0]}
-                                      </span>
-                                    </td>
-                                    <td className="p-3 font-medium text-slate-700 text-[11px]">
-                                      {gradeInfo.letter.includes('(') ? gradeInfo.letter.split('(')[1].replace(')', '') : 'Satisfactory'}
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-400 text-xs italic">
-                          No recorded subject marks available for this term yet.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Non-Cognitive / Affective Skills & Ratings */}
-                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/60 space-y-2">
-                      <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-                        Affective & Behavioral Development
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center text-xs">
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] font-bold text-slate-500 block">Punctuality</span>
-                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
-                          <span className="text-[9px] text-slate-400 font-semibold">Excellent</span>
-                        </div>
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] font-bold text-slate-500 block">Class Neatness</span>
-                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
-                          <span className="text-[9px] text-slate-400 font-semibold">Commendable</span>
-                        </div>
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] font-bold text-slate-500 block">Attentiveness</span>
-                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
-                          <span className="text-[9px] text-slate-400 font-semibold">Consistent</span>
-                        </div>
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] font-bold text-slate-500 block">Peer Relations</span>
-                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
-                          <span className="text-[9px] text-slate-400 font-semibold">Respectful</span>
-                        </div>
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] font-bold text-slate-500 block">Teamwork</span>
-                          <span className="font-bold text-amber-500 text-sm mt-0.5 block">⭐⭐⭐⭐⭐</span>
-                          <span className="text-[9px] text-slate-400 font-semibold">Active Leader</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Qualitative Teacher & Principal Endorsement */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                      <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                          Class Teacher's Commentary
-                        </span>
-                        <p className="text-xs text-slate-700 italic leading-relaxed">
-                          "{grades?.commentary || 'A diligent, polite, and academically steady pupil. Demonstrates high enthusiasm for learning and cooperation.'}"
-                        </p>
-                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-                          <span className="font-bold text-slate-900">{profile.formTeacher?.name || 'Class Teacher'}</span>
-                          <span className="text-[10px] text-slate-400 font-semibold">Signed & Endorsed</span>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                            Principal's Certification & Stamp
-                          </span>
-                          <p className="text-xs text-slate-700 italic leading-relaxed">
-                            "Satisfactory academic outcome. Confirmed for progression in line with institution requirements."
-                          </p>
-                        </div>
-
-                        <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {branding?.principalSignatureUrl ? (
-                              <img src={branding.principalSignatureUrl} alt="Signature" className="h-9 object-contain" />
-                            ) : (
-                              <span className="font-serif italic text-sm font-bold text-indigo-900">Dr. School Principal</span>
-                            )}
-                          </div>
-                          <div className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                            <CheckCircle2 size={12} className="text-emerald-600" />
-                            <span>Official Stamp</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Grading System Legend Footer */}
-                    <div className="border-t border-slate-200 pt-4 text-[10px] text-slate-500 text-center leading-relaxed">
-                      <span className="font-bold text-slate-700">Official Grading Scale:</span> A (80-100%: Distinction) &bull; B (70-79%: Very Good) &bull; C (60-69%: Credit) &bull; D (50-59%: Pass) &bull; E (40-49%: Fair) &bull; F (0-39%: Fail)
-                    </div>
-                  </div>
+                  <BrandedReportCardPreview
+                    student={{
+                      id: profile.studentId,
+                      studentName: `${profile.lastName}, ${profile.firstName}`,
+                      firstName: profile.firstName,
+                      lastName: profile.lastName,
+                      registerNo: profile.registerNo,
+                      admissionNo: profile.registerNo,
+                      className: profile.className || 'Class',
+                      sectionName: profile.sectionName,
+                      gender: profile.gender,
+                      photo: profile.photo,
+                      birthday: profile.birthday,
+                      average: avgScore,
+                      rawAverage: grades?.rawAverage ?? avgScore,
+                      maxMarksPerSubject: grades?.maxTotal || 100,
+                      rank: grades?.rank ?? null,
+                      position: grades?.rank ? `${userRankText} of ${totalClass}` : null,
+                      totalClassStudents: totalClass,
+                      presentCount: attendance?.presentCount ?? 0,
+                      absentCount: (attendance?.totalDays ?? 0) - (attendance?.presentCount ?? 0),
+                      totalAttendanceDays: attendance?.totalDays ?? 0,
+                      attendanceRate: attendance?.percentage ?? 100,
+                      teacherComment: grades?.teacherComment || grades?.commentary || '',
+                      principalComment: grades?.principalComment || '',
+                      resumptionDate: grades?.resumptionDate || grades?.schoolBranding?.resumptionDate || null,
+                      nextTermFees: grades?.nextTermFees || grades?.schoolBranding?.nextTermFees || null,
+                      psychomotor: grades?.psychomotor,
+                      affective: grades?.affective,
+                      reportCard: reportCardList.map((item) => ({
+                        id: item.id,
+                        subjectName: item.subjectName,
+                        subjectCode: item.subjectCode,
+                        cbtMark: item.cbtMark,
+                        theoryMark: item.theoryMark,
+                        mark: item.mark,
+                        stageScore: item.mark,
+                        componentScores: item.componentScores,
+                        maxMarks: item.maxMarks || grades?.maxTotal || 100,
+                        absent: item.absent,
+                        classAverage: item.classAverage,
+                      })),
+                    }}
+                    branding={{
+                      ...(branding || {}),
+                      ...(grades?.schoolBranding || {}),
+                      classTeacherName:
+                        grades?.schoolBranding?.classTeacherName ||
+                        profile.formTeacher?.name ||
+                        'Class Teacher',
+                    }}
+                    assessmentComponents={grades?.assessmentComponents}
+                    maxTotal={grades?.maxTotal || 100}
+                    stage={grades?.stage || 'FULL'}
+                    gradingRanges={(grades?.gradingScale?.ranges || []).map((r) => ({
+                      grade: r.grade,
+                      minPercentage: r.minPercentage ?? r.minScore ?? 0,
+                      maxPercentage: r.maxPercentage ?? r.maxScore ?? 100,
+                      remark: r.remark,
+                    }))}
+                    onClose={handleCloseReportCardPreview}
+                    onDownloadPdf={handleExportReportCard}
+                    isDownloadingPdf={exportingPdf}
+                  />
                 ) : (
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-4 sm:p-6 max-w-4xl mx-auto space-y-4">
                     {loadingPdfPreview ? (

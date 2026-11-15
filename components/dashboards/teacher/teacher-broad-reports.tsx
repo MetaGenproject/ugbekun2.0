@@ -117,6 +117,8 @@ interface TabulationRow {
   attendanceSummary?: { present: number; absent: number; total: number; rate: number }
   teacherComment?: string
   principalComment?: string
+  psychomotor?: Record<string, string>
+  affective?: Record<string, string>
   // Login Details
   studentUsername?: string
   studentPassword?: string
@@ -463,6 +465,8 @@ export function TeacherBroadReports() {
       attendanceRate: row.attendanceRate,
       teacherComment: row.teacherComment || '',
       principalComment: row.principalComment || '',
+      psychomotor: row.psychomotor,
+      affective: row.affective,
       resumptionDate: reportsData?.schoolBranding?.resumptionDate || null,
       nextTermFees: reportsData?.schoolBranding?.nextTermFees || null,
       reportCard: subjectRows,
@@ -2066,11 +2070,13 @@ export function TeacherBroadReports() {
                     remark: payload.teacherComment,
                     principalRemark: payload.principalComment,
                     teacherSignatureUrl: payload.teacherSignatureUrl,
+                    psychomotor: payload.psychomotor,
+                    affective: payload.affective,
                     status: 'SUBMITTED_TO_PRINCIPAL',
                   }
                 )
                 if (res.success) {
-                  toast.success("Teacher's comment & signature saved to report card immediately!")
+                  toast.success("Teacher's comment, traits & signature saved to report card immediately!")
                   await fetchReports()
                   setPreviewStudentRow((prev) =>
                     prev
@@ -2078,6 +2084,8 @@ export function TeacherBroadReports() {
                         ...prev,
                         teacherComment: payload.teacherComment,
                         principalComment: payload.principalComment,
+                        psychomotor: payload.psychomotor || prev.psychomotor,
+                        affective: payload.affective || prev.affective,
                       }
                       : null
                   )

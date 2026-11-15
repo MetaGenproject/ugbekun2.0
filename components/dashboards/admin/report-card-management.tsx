@@ -2394,11 +2394,30 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                     teacherSignatureUrl: payload.teacherSignatureUrl,
                     principalSignatureUrl: payload.principalSignatureUrl,
                     principalName: payload.principalName,
+                    psychomotor: payload.psychomotor,
+                    affective: payload.affective,
                     status: 'PRINCIPAL_SIGNED_OFF',
                   }
                 )
                 if (res.success) {
-                  toast.success('Report card comments, resumption date, next term fees & signatures updated!')
+                  toast.success('Report card comments, traits, resumption date, next term fees & signatures updated!')
+                  setPreviewStudent((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          teacherComment: payload.teacherComment,
+                          principalComment: payload.principalComment,
+                          resumptionDate: payload.resumptionDate,
+                          nextTermFees: payload.nextTermFees,
+                          psychomotor: payload.psychomotor
+                            ? { ...prev.psychomotor, ...payload.psychomotor }
+                            : prev.psychomotor,
+                          affective: payload.affective
+                            ? { ...prev.affective, ...payload.affective }
+                            : prev.affective,
+                        }
+                      : null
+                  )
                   await fetchStudents(
                     selectedClassId,
                     selectedSectionId,

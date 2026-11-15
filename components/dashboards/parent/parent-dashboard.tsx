@@ -34,12 +34,20 @@ import {
   Copy,
   Sparkles,
   MessageSquare,
-  Building2
+  Building2,
+  Printer,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { getAvatarUrl } from '@/lib/avatar'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { SchoolHeader } from '../school-header'
+import {
+  BrandedReportCardPreview,
+  PSYCHOMOTOR_TRAIT_DEFINITIONS,
+  AFFECTIVE_TRAIT_DEFINITIONS,
+  resolveTraitRatingMeta,
+  type EvaluationMatrixComponent,
+} from '../shared/branded-report-card-preview'
 
 interface DashboardProps {
   user: {
@@ -221,12 +229,22 @@ interface GradeData {
     ca2Score?: number | null
     theoryMark?: string | null
     mark: string | null
+    componentScores?: Record<string, number | string | null>
+    maxMarks?: number | null
     absent: boolean
     classAverage: number | null
     statusRemark?: string
   }>
   overallAverage: number | null
+  maxTotal?: number
+  assessmentComponents?: EvaluationMatrixComponent[]
+  gradingScale?: { ranges?: Array<{ grade: string; minPercentage?: number; maxPercentage?: number; minScore?: number; maxScore?: number; remark?: string }> }
+  schoolBranding?: Record<string, any>
   commentary: string | null
+  teacherComment?: string | null
+  principalComment?: string | null
+  psychomotor?: Record<string, string>
+  affective?: Record<string, string>
   rank: number | null
   totalClassStudents: number
   isEcd?: boolean
@@ -378,6 +396,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [tasks, setTasks] = useState<TaskData | null>(null)
   const [grades, setGrades] = useState<GradeData | null>(null)
+  const [showA4ReportModal, setShowA4ReportModal] = useState<boolean>(false)
 
   // Sub-feature state
   const [invoices, setInvoices] = useState<InvoiceData[]>([])
@@ -1977,14 +1996,24 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                 </p>
               </div>
 
-              <button
-                onClick={handleExportPdf}
-                disabled={exportingPdf}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-md shadow-blue-600/20 cursor-pointer"
-              >
-                {exportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                <span>{isMidTerm ? 'Download Mid-Term Slip (PDF)' : 'Download Report Card (PDF)'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowA4ReportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+                >
+                  <Printer size={15} />
+                  <span>Preview & Print (1-Page A4)</span>
+                </button>
+                <button
+                  onClick={handleExportPdf}
+                  disabled={exportingPdf}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-md shadow-blue-600/20 cursor-pointer"
+                >
+                  {exportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  <span>{isMidTerm ? 'Download Mid-Term Slip (PDF)' : 'Download Report Card (PDF)'}</span>
+                </button>
+              </div>
             </div>
 
             {/* ECD Montessori Evaluation (If applicable) */}
@@ -2187,6 +2216,51 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
               )}
             </div>
 
+            {/* Psychomotor & Affective Assessment Grid */}
+            {(grades?.psychomotor || grades?.affective) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                  <div className="px-4 py-2.5 bg-slate-900 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-between">
+                    <span>Psychomotor Skills Assessment</span>
+                    <span className="text-[10px] text-slate-300">Scale (1–5)</span>
+                  </div>
+                  <div className="divide-y divide-slate-100 text-xs">
+                    {PSYCHOMOTOR_TRAIT_DEFINITIONS.map((t) => {
+                      const meta = resolveTraitRatingMeta(grades?.psychomotor?.[t.key])
+                      return (
+                        <div key={t.key} className="px-4 py-2.5 flex items-center justify-between">
+                          <span className="font-bold text-slate-800">{t.label}</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {meta.score}/5 • {meta.label} ({meta.code})
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                  <div className="px-4 py-2.5 bg-blue-700 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-between">
+                    <span>Affective & Behavioral Traits</span>
+                    <span className="text-[10px] text-blue-100">Scale (1–5)</span>
+                  </div>
+                  <div className="divide-y divide-slate-100 text-xs">
+                    {AFFECTIVE_TRAIT_DEFINITIONS.map((t) => {
+                      const meta = resolveTraitRatingMeta(grades?.affective?.[t.key])
+                      return (
+                        <div key={t.key} className="px-4 py-2.5 flex items-center justify-between">
+                          <span className="font-bold text-slate-800">{t.label}</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-sky-50 text-sky-700 border border-sky-200">
+                            {meta.score}/5 • {meta.label} ({meta.code})
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Principal Commentary */}
             {grades?.commentary && (
               <div className="p-5 rounded-3xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-900 space-y-1">
@@ -2196,6 +2270,83 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
                 <p className="font-medium italic text-slate-800">
                   &ldquo;{grades.commentary}&rdquo;
                 </p>
+              </div>
+            )}
+
+            {/* 1-Page A4 Report Card Modal */}
+            {showA4ReportModal && profile && (
+              <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/75 backdrop-blur-xs p-2 sm:p-5 overflow-y-auto">
+                <div className="w-full max-w-[220mm] my-3">
+                  <BrandedReportCardPreview
+                    student={{
+                      id: profile.studentId || selectedChildId || 0,
+                      studentName: `${profile.lastName}, ${profile.firstName}`,
+                      firstName: profile.firstName,
+                      lastName: profile.lastName,
+                      registerNo: profile.registerNo,
+                      admissionNo: profile.registerNo,
+                      className: profile.className || 'Class',
+                      sectionName: profile.sectionName,
+                      gender: profile.gender,
+                      photo: profile.photo,
+                      birthday: null,
+                      average: grades?.overallAverage ?? 0,
+                      maxMarksPerSubject: grades?.maxTotal || 100,
+                      rank: grades?.rank ?? null,
+                      position:
+                        grades?.rank && rankingType !== 'hidden'
+                          ? `#${grades.rank} of ${grades?.totalClassStudents || 1}`
+                          : null,
+                      totalClassStudents: grades?.totalClassStudents || 1,
+                      presentCount: attendance?.presentCount ?? 0,
+                      absentCount: (attendance?.totalDays ?? 0) - (attendance?.presentCount ?? 0),
+                      totalAttendanceDays: attendance?.totalDays ?? 0,
+                      attendanceRate: attendance?.percentage ?? 100,
+                      teacherComment: grades?.teacherComment || grades?.commentary || '',
+                      principalComment: grades?.principalComment || '',
+                      resumptionDate:
+                        grades?.nextTermResumptionDate ||
+                        grades?.schoolBranding?.resumptionDate ||
+                        null,
+                      nextTermFees:
+                        grades?.nextTermFees || grades?.schoolBranding?.nextTermFees || null,
+                      psychomotor: grades?.psychomotor,
+                      affective: grades?.affective,
+                      reportCard: (grades?.reportCard || []).map((item) => ({
+                        id: item.id,
+                        subjectName: item.subjectName,
+                        subjectCode: item.subjectCode || undefined,
+                        cbtMark: item.cbtMark,
+                        theoryMark: item.theoryMark,
+                        mark: item.mark,
+                        stageScore: item.mark,
+                        componentScores: item.componentScores,
+                        maxMarks: item.maxMarks || grades?.maxTotal || 100,
+                        absent: item.absent,
+                        classAverage: item.classAverage,
+                      })),
+                    }}
+                    branding={{
+                      ...(grades?.schoolBranding || {}),
+                      classTeacherName:
+                        grades?.schoolBranding?.classTeacherName ||
+                        formTeacher?.name ||
+                        'Class Teacher',
+                    }}
+                    assessmentComponents={grades?.assessmentComponents}
+                    maxTotal={grades?.maxTotal || 100}
+                    stage={grades?.stage || 'FULL'}
+                    gradingRanges={(grades?.gradingScale?.ranges || []).map((r) => ({
+                      grade: r.grade,
+                      minPercentage: r.minPercentage ?? r.minScore ?? 0,
+                      maxPercentage: r.maxPercentage ?? r.maxScore ?? 100,
+                      remark: r.remark,
+                    }))}
+                    onClose={() => setShowA4ReportModal(false)}
+                    onDownloadPdf={handleExportPdf}
+                    isDownloadingPdf={exportingPdf}
+                  />
+                </div>
               </div>
             )}
           </div>
