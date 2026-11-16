@@ -596,6 +596,9 @@ export function QuestionBankManager({ profile, onImportToBuilder, isAdmin }: Que
             setAssignClassId(String(uniqueTeacherClasses[0].id))
             setFormClassId(String(uniqueTeacherClasses[0].id))
             setImportClassId(String(uniqueTeacherClasses[0].id))
+            if (uniqueTeacherClasses.length === 1) {
+              setSelectedClassId(String(uniqueTeacherClasses[0].id))
+            }
           }
         }
       } catch (e: any) {
@@ -1594,7 +1597,11 @@ ANSWER: A`)
                   onChange={(e) => setSelectedClassId(e.target.value)}
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                 >
-                  <option value="All">All Classes (Entire School)</option>
+                  {isAdminPortal ? (
+                    <option value="All">All Classes (Entire School)</option>
+                  ) : classesList.length > 1 ? (
+                    <option value="All">All My Assigned Classes</option>
+                  ) : null}
                   {classesList.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -1790,7 +1797,11 @@ ANSWER: A`)
                   onChange={(e) => setSelectedClassId(e.target.value)}
                   className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
                 >
-                  <option value="All">All Classes</option>
+                  {isAdminPortal ? (
+                    <option value="All">All Classes</option>
+                  ) : classesList.length > 1 ? (
+                    <option value="All">All My Assigned Classes</option>
+                  ) : null}
                   {classesList.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}

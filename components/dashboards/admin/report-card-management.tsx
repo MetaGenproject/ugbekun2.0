@@ -67,6 +67,9 @@ interface ClassItem {
   usesScores?: boolean
   isCommentBased?: boolean
   isPublished?: boolean
+  showPosition?: boolean
+  rankingType?: 'full' | 'topn' | 'hidden'
+  rankingLimit?: number
   totalEnrolled: number
   sections: ClassSectionItem[]
 }
@@ -119,6 +122,8 @@ interface StudentReportPreview {
   grade?: string | null
   position?: string | null
   rank?: number | null
+  showPosition?: boolean
+  totalClassStudents?: number | null
   attendanceDays: string
   presentCount: number
   absentCount: number
@@ -253,6 +258,164 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
   const [psychomotorScores, setPsychomotorScores] = useState<Record<number, Record<string, string>>>({})
   const [affectiveScores, setAffectiveScores] = useState<Record<number, Record<string, string>>>({})
   const [isSavingBehavioral, setIsSavingBehavioral] = useState(false)
+
+  // Multi-Class Position Policy Configuration Modal State
+  const [showPositionSettingsModal, setShowPositionSettingsModal] = useState(false)
+  const [classPositionDrafts, setClassPositionDrafts] = useState<
+    Array<{
+      classId: number
+      className: string
+      isEcd: boolean
+      usesScores: boolean
+      showPosition: boolean
+      rankingType: 'full' | 'topn' | 'hidden'
+      rankingLimit: number
+    }>
+  >([])
+  const [isSavingPositionSettings, setIsSavingPositionSettings] = useState(false)
+
+  const openPositionSettingsModal = async () => {
+    setShowPositionSettingsModal(true)
+    try {
+      const res = await apiSlice.get<{
+        success: boolean
+        classes: Array<{
+          classId: number
+          className: string
+          isEcd: boolean
+          usesScores: boolean
+          showPosition: boolean
+          rankingType: 'full' | 'topn' | 'hidden'
+          rankingLimit: number
+        }>
+      }>(endpoints.admin.reportCards.positionSettings)
+      if (res.success && Array.isArray(res.classes)) {
+        setClassPositionDrafts(res.classes)
+      } else {
+        setClassPositionDrafts(
+          classes.map((c) => ({
+            classId: c.id,
+            className: c.name,
+            isEcd: Boolean(c.isEcd),
+            usesScores: c.usesScores !== false,
+            showPosition: c.showPosition !== false,
+            rankingType: c.rankingType || 'full',
+            rankingLimit: c.rankingLimit || 3,
+          }))
+        )
+      }
+    } catch {
+      setClassPositionDrafts(
+        classes.map((c) => ({
+          classId: c.id,
+          className: c.name,
+          isEcd: Boolean(c.isEcd),
+          usesScores: c.usesScores !== false,
+          showPosition: c.showPosition !== false,
+          rankingType: c.rankingType || 'full',
+          rankingLimit: c.rankingLimit || 3,
+        }))
+      )
+    }
+  }
+
+  const handleQuickUpdateActiveClassPosition = async (
+    nextRankingType: 'full' | 'topn' | 'hidden',
+    nextLimit: number = rankingLimit
+  ) => {
+    setRankingType(nextRankingType)
+    setRankingLimit(nextLimit)
+    if (!selectedClassId) return
+    const showPos = nextRankingType !== 'hidden'
+    try {
+      await apiSlice.post(endpoints.admin.reportCards.positionSettings, {
+        classId: selectedClassId,
+        showPosition: showPos,
+        rankingType: nextRankingType,
+        rankingLimit: nextLimit,
+      })
+      setClasses((prev) =>
+        prev.map((c) =>
+          c.id === selectedClassId
+            ? { ...c, showPosition: showPos, rankingType: nextRankingType, rankingLimit: nextLimit }
+            : c
+        )
+      )
+      setSchoolBranding((prev) =>
+        prev ? { ...prev, showPosition: showPos, rankingType: nextRankingType, rankingLimit: nextLimit } : prev
+      )
+      if (selectedSectionId) {
+        await fetchStudents(
+          selectedClassId,
+          selectedSectionId,
+          selectedSessionId || undefined,
+          assessmentStage,
+          selectedTermId
+        )
+      }
+      toast.success(
+        showPos
+          ? `Class Position enabled (${nextRankingType === 'topn' ? `Top ${nextLimit}` : 'Full Rank'}) for this class.`
+          : 'Class Position hidden on report cards for this class.'
+      )
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update class position setting.')
+    }
+  }
+
+  const handleSaveAllClassPositionSettings = async () => {
+    setIsSavingPositionSettings(true)
+    try {
+      const res = await apiSlice.post<{ success: boolean; message?: string }>(
+        endpoints.admin.reportCards.positionSettings,
+        {
+          classes: classPositionDrafts.map((d) => ({
+            classId: d.classId,
+            showPosition: d.showPosition,
+            rankingType: d.showPosition ? (d.rankingType === 'topn' ? 'topn' : 'full') : 'hidden',
+            rankingLimit: d.rankingLimit || 3,
+          })),
+        }
+      )
+      if (res.success) {
+        toast.success('Class position settings saved across all classes!')
+        setShowPositionSettingsModal(false)
+        await fetchClasses(selectedSessionId || undefined, selectedTermId)
+        if (selectedClassId && selectedSectionId) {
+          await fetchStudents(
+            selectedClassId,
+            selectedSectionId,
+            selectedSessionId || undefined,
+            assessmentStage,
+            selectedTermId
+          )
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save class position settings.')
+    } finally {
+      setIsSavingPositionSettings(false)
+    }
+  }
+
+  const applyTierPositionPreset = (preset: 'nursery_primary_only' | 'all_on' | 'all_off') => {
+    setClassPositionDrafts((prev) =>
+      prev.map((c) => {
+        const lower = c.className.toLowerCase()
+        const isSecondary =
+          /\b(jss|sss|js\s*\d|ss\s*\d|junior\s*sec|senior\s*sec|secondary|year\s*(7|8|9|10|11|12)|grade\s*(7|8|9|10|11|12))\b/i.test(
+            lower
+          )
+        const shouldShow =
+          preset === 'all_on' ? true : preset === 'all_off' ? false : !isSecondary
+        return {
+          ...c,
+          showPosition: shouldShow,
+          rankingType: shouldShow ? (c.rankingType === 'topn' ? 'topn' : 'full') : 'hidden',
+        }
+      })
+    )
+  }
 
   // Load Classes on Mount
   useEffect(() => {
@@ -501,6 +664,12 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
         }
         if (res.schoolBranding) {
           setSchoolBranding(res.schoolBranding)
+          if (res.schoolBranding.rankingType) {
+            setRankingType(res.schoolBranding.showPosition === false ? 'hidden' : res.schoolBranding.rankingType)
+          }
+          if (res.schoolBranding.rankingLimit) {
+            setRankingLimit(res.schoolBranding.rankingLimit)
+          }
         }
         if (Array.isArray(res.assessmentComponents)) {
           setAssessmentComponents(res.assessmentComponents)
@@ -998,6 +1167,15 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
             </button>
 
             <button
+              onClick={openPositionSettingsModal}
+              className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition cursor-pointer"
+              title="Choose which classes display student positions on report cards (e.g. Nursery & Primary ON, Secondary OFF)"
+            >
+              <Sliders size={14} className="text-indigo-600" />
+              <span>Class Position Settings</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('ai-comments')}
               className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
             >
@@ -1178,21 +1356,26 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
           </div>
 
           <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
-            <span className="text-xs font-bold text-slate-500">Ranking:</span>
+            <span className="text-xs font-bold text-slate-500">Class Position:</span>
             <select
               value={rankingType}
-              onChange={e => setRankingType(e.target.value as any)}
-              className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 text-slate-800"
+              onChange={e => handleQuickUpdateActiveClassPosition(e.target.value as any, rankingLimit)}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                rankingType === 'hidden'
+                  ? 'border-slate-300 bg-slate-100 text-slate-600'
+                  : 'border-emerald-200 bg-emerald-50/70 text-emerald-900'
+              }`}
+              title="Toggle whether student position is shown on report cards for this class"
             >
-              <option value="full">Full Class Rank</option>
-              <option value="topn">Top N Ranks Only</option>
-              <option value="hidden">Hide Class Rank</option>
+              <option value="full">Show Position (Full Class Rank)</option>
+              <option value="topn">Show Position (Top N Only)</option>
+              <option value="hidden">Hide Position for This Class</option>
             </select>
             {rankingType === 'topn' && (
               <select
                 value={rankingLimit}
-                onChange={e => setRankingLimit(Number(e.target.value))}
-                className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 text-slate-800"
+                onChange={e => handleQuickUpdateActiveClassPosition('topn', Number(e.target.value))}
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 text-slate-800 cursor-pointer"
               >
                 <option value={3}>Top 3</option>
                 <option value={5}>Top 5</option>
@@ -1395,10 +1578,20 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                           </div>
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
-                              {assessmentStage === 'FULL' ? 'CLASS RANK' : 'STAGE STATUS'}
+                              {assessmentStage === 'FULL'
+                                ? st.showPosition === false || rankingType === 'hidden'
+                                  ? 'TOTAL SCORE'
+                                  : 'CLASS RANK'
+                                : 'STAGE STATUS'}
                             </span>
                             <span className="font-bold text-indigo-700 text-sm">
-                              {assessmentStage === 'FULL' ? st.position : (assessmentStage === 'COMBINED_CA' ? 'CA Progress Graded' : 'Progress Recorded')}
+                              {assessmentStage === 'FULL'
+                                ? st.showPosition === false || rankingType === 'hidden'
+                                  ? `${st.totalMarks ?? 0} pts`
+                                  : st.position || '—'
+                                : assessmentStage === 'COMBINED_CA'
+                                  ? 'CA Progress Graded'
+                                  : 'Progress Recorded'}
                             </span>
                           </div>
                         </div>
@@ -2357,6 +2550,192 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                   Approve & Sync All to Official Report Cards
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MULTI-CLASS POSITION SETTINGS MODAL */}
+      {showPositionSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden my-6 max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                  <Sliders size={16} className="text-amber-400" />
+                  Class Report Card Position Configuration
+                </h3>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  Choose which classes display student positions on report cards (e.g. Nursery &amp; Primary ON, Secondary OFF).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPositionSettingsModal(false)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <EyeOff size={15} />
+              </button>
+            </div>
+
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <span className="text-[11px] font-extrabold uppercase text-slate-500">
+                Quick School Presets:
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyTierPositionPreset('nursery_primary_only')}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer shadow-2xs"
+                >
+                  Nursery &amp; Primary Only (Hide Secondary)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTierPositionPreset('all_on')}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer"
+                >
+                  Enable All Classes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTierPositionPreset('all_off')}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                >
+                  Disable All Classes
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-2.5 flex-1">
+              {classPositionDrafts.map((cls) => {
+                const lower = cls.className.toLowerCase()
+                const tierLabel = cls.isEcd || /nursery|kg|kindergarten|reception|creche|pre/i.test(lower)
+                  ? 'Early Years / Nursery'
+                  : /jss|sss|js\s*\d|ss\s*\d|secondary|year\s*(7|8|9|10|11|12)/i.test(lower)
+                    ? 'Secondary'
+                    : 'Primary'
+
+                return (
+                  <div
+                    key={cls.classId}
+                    className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                      cls.showPosition
+                        ? 'bg-emerald-50/40 border-emerald-200'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setClassPositionDrafts((prev) =>
+                            prev.map((item) =>
+                              item.classId === cls.classId
+                                ? {
+                                    ...item,
+                                    showPosition: !item.showPosition,
+                                    rankingType: !item.showPosition ? 'full' : 'hidden',
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                          cls.showPosition ? 'bg-emerald-600' : 'bg-slate-300'
+                        }`}
+                        title={cls.showPosition ? 'Position Enabled' : 'Position Disabled'}
+                      >
+                        <span
+                          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                            cls.showPosition ? 'left-5.5' : 'left-0.5'
+                          }`}
+                        />
+                      </button>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-xs text-slate-900">{cls.className}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[10px] font-bold text-slate-500">
+                            {tierLabel}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {cls.showPosition
+                            ? 'Position is displayed on student report cards for this class'
+                            : 'Position is hidden on student report cards for this class'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      {cls.showPosition ? (
+                        <>
+                          <select
+                            value={cls.rankingType === 'topn' ? 'topn' : 'full'}
+                            onChange={(e) => {
+                              const rType = e.target.value as 'full' | 'topn'
+                              setClassPositionDrafts((prev) =>
+                                prev.map((item) =>
+                                  item.classId === cls.classId ? { ...item, rankingType: rType } : item
+                                )
+                              )
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-emerald-900 cursor-pointer"
+                          >
+                            <option value="full">Full Position (1st, 2nd, 3rd...)</option>
+                            <option value="topn">Top N Positions Only</option>
+                          </select>
+                          {cls.rankingType === 'topn' && (
+                            <select
+                              value={cls.rankingLimit || 3}
+                              onChange={(e) => {
+                                const lim = Number(e.target.value)
+                                setClassPositionDrafts((prev) =>
+                                  prev.map((item) =>
+                                    item.classId === cls.classId ? { ...item, rankingLimit: lim } : item
+                                  )
+                                )
+                              }}
+                              className="px-2 py-1.5 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-emerald-900 cursor-pointer"
+                            >
+                              <option value={3}>Top 3</option>
+                              <option value={5}>Top 5</option>
+                              <option value={10}>Top 10</option>
+                            </select>
+                          )}
+                        </>
+                      ) : (
+                        <span className="px-3 py-1 rounded-xl bg-slate-200/80 text-slate-600 text-[11px] font-bold">
+                          Position Off
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowPositionSettingsModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAllClassPositionSettings}
+                disabled={isSavingPositionSettings}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSavingPositionSettings ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={14} className="text-emerald-400" />
+                )}
+                <span>Save Class Position Settings</span>
+              </button>
             </div>
           </div>
         </div>

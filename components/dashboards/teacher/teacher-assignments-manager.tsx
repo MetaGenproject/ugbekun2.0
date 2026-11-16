@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   ListTodo,
   Plus,
   Calendar,
   CheckCircle2,
   Clock,
-  FileText,
   Loader2,
   Upload,
   Download,
@@ -15,7 +14,6 @@ import {
   Save,
   AlertCircle,
   X,
-  ExternalLink,
   BookOpen,
   Users,
   Search,
@@ -24,9 +22,10 @@ import {
   Trash2,
   FileUp,
   Sparkles,
-  HelpCircle,
-  ChevronRight,
-  Filter,
+  Database,
+  ShieldCheck,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { toast } from 'sonner'
@@ -34,22 +33,52 @@ import { toast } from 'sonner'
 interface AssignedClass {
   id: number
   name: string
-  sections: Array<{ id: number; name: string }>
+  sections?: Array<{ id: number; name: string }>
 }
 
 interface AssignedSubject {
   id: number
   name: string
+  classId?: number
+  className?: string
+}
+
+interface TeacherAllocationPair {
+  classId: number
+  className: string
+  subjectId: number
+  subjectName: string
+  sectionId?: number
+  sectionName?: string
+}
+
+interface QuestionBankItem {
+  id: number
+  questionText: string
+  questionType: string
+  options: any
+  correctOption: string | null
+  marks: number
+  subjectId: number
+  classId: number | null
+  termName?: string | null
+  topic?: string | null
+  status?: string | null
+  subject?: { id: number; name: string }
+  class?: { id: number; name: string } | null
 }
 
 interface HomeworkItem {
   id: number
   title: string
   description?: string
+  classId?: number
+  subjectId?: number
   className: string
   subjectName: string
   dueDate: string
   questions?: any
+  questionBankIds?: number[] | null
   attachmentUrl?: string | null
   attachmentName?: string | null
   submissionMode?: 'ONLINE_QUESTIONS' | 'FILE_UPLOAD' | 'OFFLINE'
@@ -87,17 +116,58 @@ interface SubmissionRow {
 
 interface QuestionDraft {
   id: string
+  questionBankId?: number
+  classId?: number
+  subjectId?: number
   questionText: string
   type: 'MCQ' | 'TF' | 'THEORY'
   options: string[]
   correctAnswer: string
   points: number
+  topic?: string
+}
+
+function normalizeBankOptions(rawOptions: any, qType: 'MCQ' | 'TF' | 'THEORY'): string[] {
+  if (qType === 'THEORY') return []
+  if (qType === 'TF') return ['True', 'False']
+  if (Array.isArray(rawOptions) && rawOptions.length >= 2) {
+    return rawOptions.map((o) => String(o))
+  }
+  if (typeof rawOptions === 'string' && rawOptions.trim()) {
+    try {
+      const parsed = JSON.parse(rawOptions)
+      if (Array.isArray(parsed) && parsed.length >= 2) {
+        return parsed.map((o) => String(o))
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return ['Option A', 'Option B', 'Option C', 'Option D']
+}
+
+function resolveCorrectAnswerText(correctOption: string | null | undefined, options: string[], qType: 'MCQ' | 'TF' | 'THEORY'): string {
+  if (qType === 'THEORY') return String(correctOption || '')
+  if (qType === 'TF') {
+    const upper = String(correctOption || '').trim().toUpperCase()
+    return upper === 'B' || upper === 'FALSE' ? 'False' : 'True'
+  }
+  const raw = String(correctOption || '').trim()
+  if (options.includes(raw)) return raw
+  const upper = raw.toUpperCase()
+  if (upper.length === 1 && upper >= 'A' && upper <= 'F') {
+    const idx = upper.charCodeAt(0) - 65
+    if (options[idx] !== undefined) return options[idx]
+  }
+  return options[0] || 'Option A'
 }
 
 export function TeacherAssignmentsManager() {
-  // Selector Options
+  // Strictly scoped Teacher Class & Subject Allocations
+  const [allocations, setAllocations] = useState<TeacherAllocationPair[]>([])
   const [classes, setClasses] = useState<AssignedClass[]>([])
-  const [subjects, setSubjects] = useState<AssignedSubject[]>([])
+  const [allAssignedSubjects, setAllAssignedSubjects] = useState<AssignedSubject[]>([])
+  const [classFilterId, setClassFilterId] = useState<string>('ALL')
 
   // Assignments List
   const [homeworks, setHomeworks] = useState<HomeworkItem[]>([])
@@ -114,17 +184,15 @@ export function TeacherAssignmentsManager() {
   const [newMaxMarks, setNewMaxMarks] = useState('20')
   const [assignmentMode, setAssignmentMode] = useState<'ONLINE_QUESTIONS' | 'FILE_UPLOAD' | 'OFFLINE'>('ONLINE_QUESTIONS')
 
-  // Online Questions Builder State
-  const [questions, setQuestions] = useState<QuestionDraft[]>([
-    {
-      id: 'q-1',
-      questionText: '',
-      type: 'MCQ',
-      options: ['Option A', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: 'Option A',
-      points: 5,
-    },
-  ])
+  // Question Source Mode inside ONLINE_QUESTIONS ('BANK' | 'MANUAL')
+  const [questionSourceTab, setQuestionSourceTab] = useState<'BANK' | 'MANUAL'>('BANK')
+  const [bankQuestions, setBankQuestions] = useState<QuestionBankItem[]>([])
+  const [loadingBank, setLoadingBank] = useState(false)
+  const [bankSearch, setBankSearch] = useState('')
+  const [bankTermFilter, setBankTermFilter] = useState('ALL')
+
+  // Online Questions Builder State (combines imported Question Bank items + custom manual questions)
+  const [questions, setQuestions] = useState<QuestionDraft[]>([])
 
   // Teacher Question Document Attachment State ("Upload for Download")
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
@@ -144,6 +212,30 @@ export function TeacherAssignmentsManager() {
   // Access / Privilege Notice State
   const [accessNotice, setAccessNotice] = useState<string | null>(null)
 
+  // Strictly filter subjects to ONLY those assigned to the teacher for the selected classId
+  const subjectsForSelectedClass = useMemo(() => {
+    const targetClassId = Number(newClassId)
+    if (!targetClassId) return []
+    const matchingFromAllocations = allocations
+      .filter((a) => Number(a.classId) === targetClassId)
+      .map((a) => ({ id: a.subjectId, name: a.subjectName, classId: a.classId, className: a.className }))
+
+    if (matchingFromAllocations.length > 0) {
+      return Array.from(new Map(matchingFromAllocations.map((s) => [s.id, s])).values())
+    }
+    return allAssignedSubjects.filter((s) => !s.classId || Number(s.classId) === targetClassId)
+  }, [allocations, allAssignedSubjects, newClassId])
+
+  const selectedClassName = useMemo(
+    () => classes.find((c) => String(c.id) === String(newClassId))?.name || 'Assigned Class',
+    [classes, newClassId]
+  )
+
+  const selectedSubjectName = useMemo(
+    () => subjectsForSelectedClass.find((s) => String(s.id) === String(newSubjectId))?.name || 'Assigned Subject',
+    [subjectsForSelectedClass, newSubjectId]
+  )
+
   // Load classes, subjects, and assignments on mount
   useEffect(() => {
     async function loadData() {
@@ -155,39 +247,71 @@ export function TeacherAssignmentsManager() {
           apiSlice.get<{ success: boolean; homeworks: HomeworkItem[] }>(endpoints.teacher.homeworks).catch(() => ({ success: false, homeworks: [] })),
         ])
 
-        if (classesRes.success && classesRes.assignedClasses && classesRes.assignedClasses.length > 0) {
-          setClasses(classesRes.assignedClasses)
+        const rawAssignedPairs: TeacherAllocationPair[] = Array.isArray(subjectsRes.assignedSubjects)
+          ? subjectsRes.assignedSubjects
+              .filter((s: any) => s.classId && (s.subjectId || s.id))
+              .map((s: any) => ({
+                classId: Number(s.classId),
+                className: s.className || 'Class',
+                subjectId: Number(s.subjectId || s.id),
+                subjectName: s.subjectName || s.name || 'Subject',
+                sectionId: s.sectionId ? Number(s.sectionId) : undefined,
+                sectionName: s.sectionName || undefined,
+              }))
+          : []
 
-          let initialClassId = String(classesRes.assignedClasses[0].id)
-          try {
-            const storedJson = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_teacher_active_context') : null
-            if (storedJson) {
-              const ctx = JSON.parse(storedJson)
-              if (ctx.classId && classesRes.assignedClasses.some((c) => c.id === ctx.classId)) {
-                initialClassId = String(ctx.classId)
-              }
-            }
-          } catch {
-            // ignore
+        setAllocations(rawAssignedPairs)
+
+        // Build strictly scoped classes list from teacher's allocations + roster
+        const classMap = new Map<number, AssignedClass>()
+        if (classesRes.success && Array.isArray(classesRes.assignedClasses)) {
+          classesRes.assignedClasses.forEach((c) => {
+            if (c.id) classMap.set(Number(c.id), { id: Number(c.id), name: c.name, sections: c.sections })
+          })
+        }
+        rawAssignedPairs.forEach((pair) => {
+          if (!classMap.has(pair.classId)) {
+            classMap.set(pair.classId, { id: pair.classId, name: pair.className })
           }
-          setNewClassId(initialClassId)
+        })
+
+        const scopedClasses = Array.from(classMap.values())
+        setClasses(scopedClasses)
+
+        let initialClassId = scopedClasses[0] ? String(scopedClasses[0].id) : ''
+        try {
+          const storedJson = typeof window !== 'undefined' ? localStorage.getItem('ugbekun_teacher_active_context') : null
+          if (storedJson) {
+            const ctx = JSON.parse(storedJson)
+            if (ctx.classId && scopedClasses.some((c) => Number(c.id) === Number(ctx.classId))) {
+              initialClassId = String(ctx.classId)
+            }
+          }
+        } catch {
+          // ignore
+        }
+        setNewClassId(initialClassId)
+        if (scopedClasses.length === 1) {
+          setClassFilterId(String(scopedClasses[0].id))
         }
 
-        if (subjectsRes.success) {
-          const rawSubjects = (subjectsRes.assignedSubjects && subjectsRes.assignedSubjects.length > 0)
-            ? subjectsRes.assignedSubjects.map((s: any) => ({ id: s.subjectId || s.id, name: s.subjectName || s.name }))
-            : []
-          
-          const uniqueSubjects = Array.from(new Map(rawSubjects.map((s: any) => [s.id, s])).values())
-          setSubjects(uniqueSubjects as any)
-          if (uniqueSubjects.length > 0) {
-            setNewSubjectId(String(uniqueSubjects[0].id))
-            setAccessNotice(null)
-          } else {
-            setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
-          }
+        const uniqueSubjects = Array.from(
+          new Map(
+            rawAssignedPairs.map((s) => [
+              `${s.classId}-${s.subjectId}`,
+              { id: s.subjectId, name: s.subjectName, classId: s.classId, className: s.className },
+            ])
+          ).values()
+        )
+        setAllAssignedSubjects(uniqueSubjects)
+
+        if (uniqueSubjects.length > 0 && initialClassId) {
+          const firstForClass =
+            uniqueSubjects.find((s) => Number(s.classId) === Number(initialClassId)) || uniqueSubjects[0]
+          setNewSubjectId(String(firstForClass.id))
+          setAccessNotice(null)
         } else {
-          setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
+          setAccessNotice('Accessed can not be granted meet Admin for the priveleges..')
         }
 
         if (hwRes.success && hwRes.homeworks) {
@@ -196,7 +320,7 @@ export function TeacherAssignmentsManager() {
       } catch (err: any) {
         const msg = err instanceof Error ? err.message : String(err || '')
         if (msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('privilege') || (err as any)?.status === 403) {
-          setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
+          setAccessNotice('Accessed can not be granted meet Admin for the priveleges..')
         } else {
           toast.error(msg || 'Failed to load assignments.')
         }
@@ -208,11 +332,67 @@ export function TeacherAssignmentsManager() {
     loadData()
   }, [])
 
-  // Listen to Top Bar Context Switcher
+  // Ensure newSubjectId always belongs to newClassId when newClassId changes,
+  // and strip any Question Bank questions that belonged to a different class/subject
+  useEffect(() => {
+    if (!newClassId) return
+    const validSubIds = new Set(subjectsForSelectedClass.map((s) => String(s.id)))
+    if (subjectsForSelectedClass.length > 0 && !validSubIds.has(String(newSubjectId))) {
+      setNewSubjectId(String(subjectsForSelectedClass[0].id))
+    }
+    // Strictly remove any Question Bank questions that do not match the selected class & subject
+    setQuestions((prev) =>
+      prev.filter(
+        (q) =>
+          !q.questionBankId ||
+          (Number(q.classId) === Number(newClassId) && Number(q.subjectId) === Number(newSubjectId))
+      )
+    )
+  }, [newClassId, newSubjectId, subjectsForSelectedClass])
+
+  // Fetch Question Bank items strictly for the teacher's selected class & subject
+  const fetchClassScopedQuestionBank = useCallback(async () => {
+    if (!newClassId || !newSubjectId) {
+      setBankQuestions([])
+      return
+    }
+    try {
+      setLoadingBank(true)
+      const query = `?classId=${encodeURIComponent(newClassId)}&subjectId=${encodeURIComponent(newSubjectId)}`
+      const res = await apiSlice.get<{ success: boolean; items: QuestionBankItem[] }>(
+        endpoints.teacher.questionBank(query)
+      )
+      if (res.success && Array.isArray(res.items)) {
+        // Client-side defense-in-depth: strictly keep only items matching the teacher's selected classId and subjectId
+        const strictlyScoped = res.items.filter(
+          (item) =>
+            Number(item.classId) === Number(newClassId) &&
+            Number(item.subjectId) === Number(newSubjectId) &&
+            (item.status || 'APPROVED') === 'APPROVED'
+        )
+        setBankQuestions(strictlyScoped)
+      } else {
+        setBankQuestions([])
+      }
+    } catch {
+      setBankQuestions([])
+    } finally {
+      setLoadingBank(false)
+    }
+  }, [newClassId, newSubjectId])
+
+  useEffect(() => {
+    if (showCreateModal && assignmentMode === 'ONLINE_QUESTIONS' && newClassId && newSubjectId) {
+      fetchClassScopedQuestionBank()
+    }
+  }, [showCreateModal, assignmentMode, newClassId, newSubjectId, fetchClassScopedQuestionBank])
+
+  // Listen to Top Bar Context Switcher (only allow switching to classes the teacher actually teaches)
   useEffect(() => {
     const handleContextSwitch = (e: any) => {
       const ctx = e.detail
       if (!ctx || !ctx.classId) return
+      if (!classes.some((c) => Number(c.id) === Number(ctx.classId))) return
       setNewClassId(String(ctx.classId))
       if (ctx.subjectId) {
         setNewSubjectId(String(ctx.subjectId))
@@ -221,7 +401,7 @@ export function TeacherAssignmentsManager() {
 
     window.addEventListener('ugbekun-context-changed', handleContextSwitch)
     return () => window.removeEventListener('ugbekun-context-changed', handleContextSwitch)
-  }, [])
+  }, [classes])
 
   // Auto-calculate total points if in ONLINE_QUESTIONS mode
   useEffect(() => {
@@ -233,13 +413,111 @@ export function TeacherAssignmentsManager() {
     }
   }, [questions, assignmentMode])
 
+  // Filtered Question Bank items for the selected class & subject
+  const filteredBankQuestions = useMemo(() => {
+    return bankQuestions.filter((item) => {
+      if (bankTermFilter !== 'ALL' && item.termName && item.termName !== bankTermFilter) {
+        return false
+      }
+      if (bankSearch.trim()) {
+        const q = bankSearch.toLowerCase().trim()
+        const matchText = (item.questionText || '').toLowerCase().includes(q)
+        const matchTopic = (item.topic || '').toLowerCase().includes(q)
+        return matchText || matchTopic
+      }
+      return true
+    })
+  }, [bankQuestions, bankSearch, bankTermFilter])
+
+  const selectedBankIdSet = useMemo(
+    () => new Set(questions.map((q) => q.questionBankId).filter(Boolean) as number[]),
+    [questions]
+  )
+
+  const handleToggleBankQuestion = (item: QuestionBankItem) => {
+    if (Number(item.classId) !== Number(newClassId) || Number(item.subjectId) !== Number(newSubjectId)) {
+      toast.error('You can only select questions belonging to your assigned class and subject.')
+      return
+    }
+    const exists = selectedBankIdSet.has(item.id)
+    if (exists) {
+      setQuestions((prev) => prev.filter((q) => q.questionBankId !== item.id))
+    } else {
+      const rawType = String(item.questionType || 'mcq').toLowerCase()
+      const mappedType: 'MCQ' | 'TF' | 'THEORY' =
+        rawType === 'true_false' || rawType === 'tf'
+          ? 'TF'
+          : rawType === 'theory'
+            ? 'THEORY'
+            : 'MCQ'
+      const opts = normalizeBankOptions(item.options, mappedType)
+      const correctAns = resolveCorrectAnswerText(item.correctOption, opts, mappedType)
+
+      setQuestions((prev) => [
+        ...prev,
+        {
+          id: `bank-${item.id}`,
+          questionBankId: item.id,
+          classId: Number(item.classId),
+          subjectId: Number(item.subjectId),
+          questionText: item.questionText,
+          type: mappedType,
+          options: opts,
+          correctAnswer: correctAns,
+          points: Number(item.marks) || 2,
+          topic: item.topic || undefined,
+        },
+      ])
+    }
+  }
+
+  const handleSelectAllFilteredBank = () => {
+    const allSelected =
+      filteredBankQuestions.length > 0 &&
+      filteredBankQuestions.every((item) => selectedBankIdSet.has(item.id))
+
+    if (allSelected) {
+      const removeIds = new Set(filteredBankQuestions.map((i) => i.id))
+      setQuestions((prev) => prev.filter((q) => !q.questionBankId || !removeIds.has(q.questionBankId)))
+    } else {
+      const toAdd: QuestionDraft[] = []
+      for (const item of filteredBankQuestions) {
+        if (selectedBankIdSet.has(item.id)) continue
+        if (Number(item.classId) !== Number(newClassId) || Number(item.subjectId) !== Number(newSubjectId)) continue
+        const rawType = String(item.questionType || 'mcq').toLowerCase()
+        const mappedType: 'MCQ' | 'TF' | 'THEORY' =
+          rawType === 'true_false' || rawType === 'tf'
+            ? 'TF'
+            : rawType === 'theory'
+              ? 'THEORY'
+              : 'MCQ'
+        const opts = normalizeBankOptions(item.options, mappedType)
+        const correctAns = resolveCorrectAnswerText(item.correctOption, opts, mappedType)
+        toAdd.push({
+          id: `bank-${item.id}`,
+          questionBankId: item.id,
+          classId: Number(item.classId),
+          subjectId: Number(item.subjectId),
+          questionText: item.questionText,
+          type: mappedType,
+          options: opts,
+          correctAnswer: correctAns,
+          points: Number(item.marks) || 2,
+          topic: item.topic || undefined,
+        })
+      }
+      setQuestions((prev) => [...prev, ...toAdd])
+    }
+  }
+
   // Question draft management handlers
   const handleAddQuestion = () => {
-    const nextNum = questions.length + 1
     setQuestions((prev) => [
       ...prev,
       {
-        id: `q-${Date.now()}`,
+        id: `q-${Date.now()}-${prev.length + 1}`,
+        classId: Number(newClassId),
+        subjectId: Number(newSubjectId),
         questionText: '',
         type: 'MCQ',
         options: ['Option A', 'Option B', 'Option C', 'Option D'],
@@ -247,13 +525,10 @@ export function TeacherAssignmentsManager() {
         points: 5,
       },
     ])
+    setQuestionSourceTab('MANUAL')
   }
 
   const handleRemoveQuestion = (id: string) => {
-    if (questions.length <= 1) {
-      toast.error('You need at least one question.')
-      return
-    }
     setQuestions((prev) => prev.filter((q) => q.id !== id))
   }
 
@@ -262,7 +537,6 @@ export function TeacherAssignmentsManager() {
       prev.map((q) => {
         if (q.id !== id) return q
         const updated = { ...q, ...updates }
-        // If type changed to TF, set default options
         if (updates.type === 'TF') {
           updated.options = ['True', 'False']
           if (updated.correctAnswer !== 'True' && updated.correctAnswer !== 'False') {
@@ -377,11 +651,26 @@ export function TeacherAssignmentsManager() {
       return
     }
 
-    // Validate questions if online questions mode
+    // Verify the teacher actually has access to the chosen (classId, subjectId) pair
+    const isAuthorisedPair =
+      allocations.length === 0
+        ? classes.some((c) => Number(c.id) === Number(newClassId))
+        : allocations.some(
+            (a) => Number(a.classId) === Number(newClassId) && Number(a.subjectId) === Number(newSubjectId)
+          )
+    if (!isAuthorisedPair) {
+      toast.error('You can only create assignments for your assigned class and subject.')
+      return
+    }
+
     if (assignmentMode === 'ONLINE_QUESTIONS') {
+      if (questions.length === 0) {
+        toast.error('Select questions from your Class Question Bank or write at least one question.')
+        return
+      }
       const emptyQ = questions.find((q) => !q.questionText.trim())
       if (emptyQ) {
-        toast.error('Please enter the question text for all set questions.')
+        toast.error('Please enter the question text for all questions in this assignment.')
         return
       }
     }
@@ -389,21 +678,38 @@ export function TeacherAssignmentsManager() {
     try {
       setCreating(true)
 
+      const bankIds =
+        assignmentMode === 'ONLINE_QUESTIONS'
+          ? (questions.map((q) => q.questionBankId).filter(Boolean) as number[])
+          : []
+
       const payloadQuestions =
         assignmentMode === 'ONLINE_QUESTIONS'
           ? questions.map((q) => ({
+              id: q.questionBankId || undefined,
+              questionBankId: q.questionBankId || undefined,
               questionText: q.questionText.trim(),
               type: q.type,
-              questionType: q.type.toLowerCase(),
+              questionType: q.type === 'TF' ? 'true_false' : q.type.toLowerCase(),
               options: q.type === 'MCQ' || q.type === 'TF' ? q.options : [],
               correctAnswer: q.correctAnswer,
               points: Number(q.points) || 1,
+              marks: Number(q.points) || 1,
+              topic: q.topic || undefined,
             }))
           : []
 
       const payload = {
         title: newTitle.trim(),
-        description: newDescription.trim() || `Complete assignment as instructed (${assignmentMode === 'FILE_UPLOAD' ? 'Document Upload & Write-up' : assignmentMode === 'ONLINE_QUESTIONS' ? 'Online Interactive Questions' : 'Offline Manual Submission'})`,
+        description:
+          newDescription.trim() ||
+          `Complete assignment as instructed (${
+            assignmentMode === 'FILE_UPLOAD'
+              ? 'Document Upload & Write-up'
+              : assignmentMode === 'ONLINE_QUESTIONS'
+                ? 'Online Interactive Questions'
+                : 'Offline Manual Submission'
+          })`,
         classId: Number(newClassId),
         subjectId: Number(newSubjectId),
         dueDate: newDueDate,
@@ -411,6 +717,7 @@ export function TeacherAssignmentsManager() {
         submissionMode: assignmentMode,
         attachmentUrl: attachmentUrl || null,
         attachmentName: attachmentName || null,
+        questionBankIds: bankIds,
         questions: payloadQuestions,
       }
 
@@ -420,22 +727,13 @@ export function TeacherAssignmentsManager() {
       )
 
       if (res.success) {
-        toast.success('Assignment published successfully!')
+        toast.success('Assignment published to your class successfully!')
         setShowCreateModal(false)
         setNewTitle('')
         setNewDescription('')
         setAttachmentUrl(null)
         setAttachmentName(null)
-        setQuestions([
-          {
-            id: 'q-1',
-            questionText: '',
-            type: 'MCQ',
-            options: ['Option A', 'Option B', 'Option C', 'Option D'],
-            correctAnswer: 'Option A',
-            points: 5,
-          },
-        ])
+        setQuestions([])
         // Refresh homeworks list
         const refreshed = await apiSlice.get<{ success: boolean; homeworks: HomeworkItem[] }>(
           endpoints.teacher.homeworks
@@ -486,7 +784,7 @@ export function TeacherAssignmentsManager() {
         return {
           ...s,
           score: num,
-          status: num !== null ? 'MARKED' : (s.submitted || s.submittedAt ? 'AWAITING_MARKING' : 'NOT_SUBMITTED'),
+          status: num !== null ? 'MARKED' : s.submitted || s.submittedAt ? 'AWAITING_MARKING' : 'NOT_SUBMITTED',
         }
       })
     )
@@ -564,7 +862,6 @@ export function TeacherAssignmentsManager() {
 
       if (res.success) {
         toast.success('Assignment scores saved! Updated records are now visible to parents.')
-        // Reload submissions
         handleOpenSubmissions(selectedHomework)
       } else {
         toast.error(res.message || 'Failed to save grades.')
@@ -576,6 +873,20 @@ export function TeacherAssignmentsManager() {
     }
   }
 
+  // Strictly filter visible homeworks to the teacher's assigned classes (and optional classFilterId)
+  const visibleHomeworks = useMemo(() => {
+    const allowedClassIds = new Set(classes.map((c) => Number(c.id)))
+    return homeworks.filter((hw) => {
+      if (hw.classId && allowedClassIds.size > 0 && !allowedClassIds.has(Number(hw.classId))) {
+        return false
+      }
+      if (classFilterId !== 'ALL' && hw.classId && Number(hw.classId) !== Number(classFilterId)) {
+        return false
+      }
+      return true
+    })
+  }, [homeworks, classes, classFilterId])
+
   // KPI Metrics Calculation
   const totalRosterCount = submissions.length
   const markedStudentsCount = submissions.filter((s) => s.status === 'MARKED').length
@@ -585,7 +896,6 @@ export function TeacherAssignmentsManager() {
   // Filtered submissions list
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((s) => {
-      // 1. Search Query
       if (submissionSearch.trim()) {
         const q = submissionSearch.toLowerCase().trim()
         const matchName = (s.name || '').toLowerCase().includes(q)
@@ -593,7 +903,6 @@ export function TeacherAssignmentsManager() {
         if (!matchName && !matchReg) return false
       }
 
-      // 2. Status Pill Filter
       if (statusFilter === 'MARKED') return s.status === 'MARKED'
       if (statusFilter === 'AWAITING_MARKING') return s.status === 'AWAITING_MARKING'
       if (statusFilter === 'NOT_SUBMITTED') return s.status === 'NOT_SUBMITTED' || s.status === 'MISSING'
@@ -623,27 +932,41 @@ export function TeacherAssignmentsManager() {
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold mb-2 border border-indigo-200/60">
-            <ListTodo size={14} />
-            <span>Interactive Online & Document Assignments</span>
+            <ShieldCheck size={14} />
+            <span>Class-Scoped Question Bank &amp; Assignment Manager</span>
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Assignment Management</h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Set online questions manually, upload worksheets for students to download & submit write-ups, inspect student document uploads, and enter scores with instant parent portal synchronization.
+            Assign questions directly from your class&apos;s Question Bank, write new questions, or upload worksheets strictly for your assigned class and subject.
           </p>
+          {classes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+              <span className="text-[11px] font-bold text-slate-400 uppercase mr-1">Authorised Class Scope:</span>
+              {classes.map((c) => (
+                <span
+                  key={c.id}
+                  className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold"
+                >
+                  {c.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <button
           onClick={() => {
-            if (subjects.length === 0) {
-              setAccessNotice("Accessed can not be granted meet Admin for the priveleges..")
+            if (allAssignedSubjects.length === 0 || classes.length === 0) {
+              setAccessNotice('Accessed can not be granted meet Admin for the priveleges..')
               return
             }
             setShowCreateModal(true)
             setAssignmentMode('ONLINE_QUESTIONS')
+            setQuestionSourceTab('BANK')
           }}
-          disabled={subjects.length === 0}
+          disabled={allAssignedSubjects.length === 0 || classes.length === 0}
           className="h-11 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-xs hover:shadow cursor-pointer shrink-0 disabled:cursor-not-allowed"
-          title={subjects.length === 0 ? "Accessed can not be granted meet Admin for the priveleges.." : "New Assignment"}
+          title={allAssignedSubjects.length === 0 ? 'Accessed can not be granted meet Admin for the priveleges..' : 'New Assignment'}
         >
           <Plus size={16} />
           <span>New Assignment</span>
@@ -725,9 +1048,8 @@ export function TeacherAssignmentsManager() {
             </div>
           </div>
 
-          {/* 4 KPI SUMMARY CARDS: Total, Attempted & Graded, Pending Review, Not Attempted */}
+          {/* 4 KPI SUMMARY CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Class Enrolled */}
             <div
               onClick={() => setStatusFilter('ALL')}
               className={`p-5 rounded-2xl border transition cursor-pointer ${
@@ -750,7 +1072,6 @@ export function TeacherAssignmentsManager() {
               </div>
             </div>
 
-            {/* Attempted & Graded */}
             <div
               onClick={() => setStatusFilter('MARKED')}
               className={`p-5 rounded-2xl border transition cursor-pointer ${
@@ -761,7 +1082,7 @@ export function TeacherAssignmentsManager() {
             >
               <div className="flex items-center justify-between">
                 <span className={`text-xs font-bold uppercase tracking-wider ${statusFilter === 'MARKED' ? 'text-emerald-100' : 'text-emerald-700'}`}>
-                  Attempted & Graded
+                  Attempted &amp; Graded
                 </span>
                 <CheckCircle2 size={16} className={statusFilter === 'MARKED' ? 'text-white' : 'text-emerald-600'} />
               </div>
@@ -775,7 +1096,6 @@ export function TeacherAssignmentsManager() {
               </div>
             </div>
 
-            {/* Pending Marking / Awaiting Score */}
             <div
               onClick={() => setStatusFilter('AWAITING_MARKING')}
               className={`p-5 rounded-2xl border transition cursor-pointer ${
@@ -800,7 +1120,6 @@ export function TeacherAssignmentsManager() {
               </div>
             </div>
 
-            {/* Not Attempted */}
             <div
               onClick={() => setStatusFilter('NOT_SUBMITTED')}
               className={`p-5 rounded-2xl border transition cursor-pointer ${
@@ -828,7 +1147,6 @@ export function TeacherAssignmentsManager() {
 
           {/* Submissions Table Box */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            {/* Filter Tabs & Search Bar */}
             <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto p-1 bg-slate-100/80 rounded-2xl text-xs font-bold">
                 <button
@@ -848,7 +1166,7 @@ export function TeacherAssignmentsManager() {
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Attempted & Graded ({markedStudentsCount})</span>
+                  <span>Attempted &amp; Graded ({markedStudentsCount})</span>
                 </button>
                 <button
                   type="button"
@@ -884,7 +1202,6 @@ export function TeacherAssignmentsManager() {
               </div>
             </div>
 
-            {/* Submissions Roster Table */}
             {loadingSubmissions ? (
               <div className="p-16 text-center">
                 <Loader2 className="animate-spin text-indigo-600 mx-auto mb-3" size={28} />
@@ -922,15 +1239,14 @@ export function TeacherAssignmentsManager() {
                             )}
                           </td>
 
-                          {/* Status Indicator */}
                           <td className="p-4 text-center">
                             <span
                               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
                                 st.status === 'MARKED'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                   : st.status === 'AWAITING_MARKING'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
                               }`}
                             >
                               <span
@@ -938,21 +1254,20 @@ export function TeacherAssignmentsManager() {
                                   st.status === 'MARKED'
                                     ? 'bg-emerald-600'
                                     : st.status === 'AWAITING_MARKING'
-                                    ? 'bg-amber-500'
-                                    : 'bg-rose-500'
+                                      ? 'bg-amber-500'
+                                      : 'bg-rose-500'
                                 }`}
                               />
                               <span>
                                 {st.status === 'MARKED'
                                   ? 'Marked'
                                   : st.status === 'AWAITING_MARKING'
-                                  ? 'Pending Marking'
-                                  : 'Not Attempted'}
+                                    ? 'Pending Marking'
+                                    : 'Not Attempted'}
                               </span>
                             </span>
                           </td>
 
-                          {/* Student File Attachment (PDF, Word, Image) */}
                           <td className="p-4 text-center">
                             {hasUploadedFile ? (
                               <a
@@ -975,7 +1290,6 @@ export function TeacherAssignmentsManager() {
                             )}
                           </td>
 
-                          {/* Score Input */}
                           <td className="p-4 text-center">
                             <input
                               type="number"
@@ -988,7 +1302,6 @@ export function TeacherAssignmentsManager() {
                             />
                           </td>
 
-                          {/* Teacher Feedback / Comment */}
                           <td className="p-4">
                             <input
                               type="text"
@@ -999,7 +1312,6 @@ export function TeacherAssignmentsManager() {
                             />
                           </td>
 
-                          {/* Action Button */}
                           <td className="p-4 text-center">
                             <button
                               type="button"
@@ -1031,13 +1343,31 @@ export function TeacherAssignmentsManager() {
       ) : (
         /* ASSIGNMENTS LIST VIEW */
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-              <span>My Assignments</span>
+              <span>My Class Assignments</span>
               <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black">
-                {homeworks.length}
+                {visibleHomeworks.length}
               </span>
             </h3>
+
+            {classes.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">Filter by My Class:</span>
+                <select
+                  value={classFilterId}
+                  onChange={(e) => setClassFilterId(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 cursor-pointer"
+                >
+                  <option value="ALL">All My Assigned Classes ({classes.length})</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {loadingList ? (
@@ -1045,7 +1375,7 @@ export function TeacherAssignmentsManager() {
               <Loader2 className="animate-spin text-indigo-600 mx-auto mb-3" size={28} />
               <p className="text-xs text-slate-500 font-medium">Loading assignments...</p>
             </div>
-          ) : homeworks.length > 0 ? (
+          ) : visibleHomeworks.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
@@ -1053,43 +1383,60 @@ export function TeacherAssignmentsManager() {
                     <th className="p-4">Assignment Title</th>
                     <th className="p-4">Class</th>
                     <th className="p-4">Subject</th>
+                    <th className="p-4">Questions / Mode</th>
                     <th className="p-4">Due Date</th>
                     <th className="p-4 text-center">Marked / Submitted</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {homeworks.map((hw) => (
-                    <tr key={`hw-${hw.id}`} className="hover:bg-slate-50/80 transition">
-                      <td className="p-4">
-                        <span className="font-bold text-slate-900 block">{hw.title}</span>
-                        {hw.description && (
-                          <span className="text-[11px] text-slate-400 line-clamp-1">{hw.description}</span>
-                        )}
-                      </td>
-                      <td className="p-4 font-semibold text-indigo-600">{hw.className}</td>
-                      <td className="p-4 text-slate-700 font-medium">{hw.subjectName}</td>
-                      <td className="p-4 text-slate-600 font-mono">
-                        {new Date(hw.dueDate).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 font-mono text-[11px] font-bold text-slate-700">
-                          <span className="text-emerald-700">{hw.markedCount ?? 0}</span>
-                          <span className="text-slate-400">/</span>
-                          <span>{hw.submissionsCount ?? 0} Submitted</span>
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => handleOpenSubmissions(hw)}
-                          className="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition border border-indigo-200 cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <Eye size={13} />
-                          <span>View Roster & Mark</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {visibleHomeworks.map((hw) => {
+                    const qList = Array.isArray(hw.questions)
+                      ? hw.questions
+                      : Array.isArray(hw.questions?.questions)
+                        ? hw.questions.questions
+                        : []
+                    return (
+                      <tr key={`hw-${hw.id}`} className="hover:bg-slate-50/80 transition">
+                        <td className="p-4">
+                          <span className="font-bold text-slate-900 block">{hw.title}</span>
+                          {hw.description && (
+                            <span className="text-[11px] text-slate-400 line-clamp-1">{hw.description}</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-semibold text-indigo-600">{hw.className}</td>
+                        <td className="p-4 text-slate-700 font-medium">{hw.subjectName}</td>
+                        <td className="p-4">
+                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[11px]">
+                            {qList.length > 0
+                              ? `${qList.length} Question${qList.length === 1 ? '' : 's'} (${hw.maxMarks || 20} pts)`
+                              : hw.submissionMode === 'FILE_UPLOAD'
+                                ? 'Worksheet Upload'
+                                : 'Offline Task'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-slate-600 font-mono">
+                          {new Date(hw.dueDate).toLocaleDateString()}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 font-mono text-[11px] font-bold text-slate-700">
+                            <span className="text-emerald-700">{hw.markedCount ?? 0}</span>
+                            <span className="text-slate-400">/</span>
+                            <span>{hw.submissionsCount ?? 0} Submitted</span>
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleOpenSubmissions(hw)}
+                            className="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition border border-indigo-200 cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Eye size={13} />
+                            <span>View Roster &amp; Mark</span>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1098,25 +1445,25 @@ export function TeacherAssignmentsManager() {
               <ListTodo className="mx-auto text-slate-300 mb-3" size={36} />
               <h4 className="text-sm font-bold text-slate-800">No Assignments Created Yet</h4>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Click &apos;New Assignment&apos; above to assign homework or upload worksheets for your classrooms.
+                Click &apos;New Assignment&apos; above to select questions from your class Question Bank or upload worksheets for your classroom.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* CREATE ASSIGNMENT MODAL (Online Questions, Upload for Download, Offline) */}
+      {/* CREATE ASSIGNMENT MODAL (With Strict Class-Scoped Question Bank Picker) */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+          <div className="relative w-full max-w-3xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-slate-900 border border-slate-100 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div>
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <ListTodo className="text-indigo-600" size={18} />
-                  <span>Create Assignment</span>
+                  <span>Create Class Assignment</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Publish online interactive questions or upload worksheets for student write-up submissions.
+                  Select questions from the Question Bank strictly for your assigned class &amp; subject, or write new questions.
                 </p>
               </div>
               <button
@@ -1128,9 +1475,59 @@ export function TeacherAssignmentsManager() {
             </div>
 
             <form onSubmit={handleCreateAssignment} className="space-y-5 text-xs">
-              {/* Assignment Mode Selector */}
+              {/* Strictly Scoped Class & Subject Selector First */}
+              <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-indigo-600" />
+                    1. Authorised Class &amp; Subject Scope (Locked to Your Teaching Allocation)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold text-[10px]">
+                    Strict Class Isolation
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Assigned Class <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newClassId}
+                      onChange={(e) => setNewClassId(e.target.value)}
+                      disabled={classes.length <= 1}
+                      className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl font-bold text-slate-900 cursor-pointer disabled:bg-slate-100"
+                    >
+                      {classes.map((c) => (
+                        <option key={`c-opt-${c.id}`} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Assigned Subject ({selectedClassName}) <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newSubjectId}
+                      onChange={(e) => setNewSubjectId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl font-bold text-slate-900 cursor-pointer"
+                    >
+                      {subjectsForSelectedClass.map((s) => (
+                        <option key={`s-opt-${s.id}`} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assignment Delivery Mode Selector */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Assignment Delivery Mode</label>
+                <label className="block font-bold text-slate-700 mb-1.5">2. Assignment Delivery Mode</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <button
                     type="button"
@@ -1142,11 +1539,11 @@ export function TeacherAssignmentsManager() {
                     }`}
                   >
                     <div className="flex items-center gap-1.5 font-extrabold text-xs">
-                      <Sparkles size={14} className="text-indigo-600 shrink-0" />
-                      <span>Online Questions</span>
+                      <Database size={14} className="text-indigo-600 shrink-0" />
+                      <span>Question Bank / Online</span>
                     </div>
                     <p className="text-[10.5px] mt-1 text-slate-500 leading-tight">
-                      Set questions manually (MCQ, True/False, Theory).
+                      Pick from your {selectedClassName} Question Bank or write questions.
                     </p>
                   </button>
 
@@ -1164,7 +1561,7 @@ export function TeacherAssignmentsManager() {
                       <span>Upload for Download</span>
                     </div>
                     <p className="text-[10.5px] mt-1 text-slate-500 leading-tight">
-                      Attach worksheet; students download & upload write-up.
+                      Attach worksheet; students download &amp; upload write-up.
                     </p>
                   </button>
 
@@ -1188,60 +1585,22 @@ export function TeacherAssignmentsManager() {
                 </div>
               </div>
 
-              {/* Title Input */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Assignment Title <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Mathematics — Linear Equations & Angles Assignment"
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                />
-              </div>
-
-              {/* Class & Subject Dropdowns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              {/* Title, Due Date & Max Marks */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
                   <label className="block font-bold text-slate-700 mb-1">
-                    Class <span className="text-rose-500">*</span>
+                    Assignment Title <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={newClassId}
-                    onChange={(e) => setNewClassId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
-                  >
-                    {classes.map((c) => (
-                      <option key={`c-opt-${c.id}`} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    required
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder={`e.g. ${selectedSubjectName} — ${selectedClassName} Weekly Assignment`}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Subject <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={newSubjectId}
-                    onChange={(e) => setNewSubjectId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold cursor-pointer"
-                  >
-                    {subjects.map((s) => (
-                      <option key={`s-opt-${s.id}`} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Due Date & Max Marks */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Due Date <span className="text-rose-500">*</span>
@@ -1254,9 +1613,21 @@ export function TeacherAssignmentsManager() {
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Instructions / Description</label>
+                  <input
+                    type="text"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="Provide instructions or guidance for students..."
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Max Score (Total Points)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Total Max Marks</label>
                   <input
                     type="number"
                     value={newMaxMarks}
@@ -1264,18 +1635,6 @@ export function TeacherAssignmentsManager() {
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl font-bold"
                   />
                 </div>
-              </div>
-
-              {/* Instructions / Description */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Instructions / Description</label>
-                <textarea
-                  rows={2}
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Provide instructions, pages to read, or guidance for students..."
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-indigo-500"
-                />
               </div>
 
               {/* WORKSHEET / QUESTION DOCUMENT ATTACHMENT SECTION */}
@@ -1340,167 +1699,366 @@ export function TeacherAssignmentsManager() {
                 )}
               </div>
 
-              {/* ONLINE QUESTIONS STUDIO SECTION (If Mode is ONLINE_QUESTIONS) */}
+              {/* ONLINE QUESTIONS & QUESTION BANK PICKER SECTION */}
               {assignmentMode === 'ONLINE_QUESTIONS' && (
-                <div className="space-y-4 pt-2 border-t border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
-                        <Sparkles size={14} className="text-indigo-600" />
-                        <span>Interactive Questions ({questions.length})</span>
-                      </h4>
-                      <p className="text-[11px] text-slate-500">
-                        Manually set questions with marks for student online quiz submission.
-                      </p>
+                <div className="space-y-4 pt-3 border-t border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl">
+                      <button
+                        type="button"
+                        onClick={() => setQuestionSourceTab('BANK')}
+                        className={`px-3.5 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                          questionSourceTab === 'BANK'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Database size={13} />
+                        <span>
+                          Pick from {selectedClassName} Question Bank ({bankQuestions.length})
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuestionSourceTab('MANUAL')}
+                        className={`px-3.5 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer ${
+                          questionSourceTab === 'MANUAL'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Sparkles size={13} />
+                        <span>Selected &amp; Custom Questions ({questions.length})</span>
+                      </button>
                     </div>
 
                     <button
                       type="button"
                       onClick={handleAddQuestion}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-indigo-200"
                     >
                       <Plus size={13} />
-                      <span>Add Question</span>
+                      <span>Write New Question</span>
                     </button>
                   </div>
 
-                  <div className="space-y-4">
-                    {questions.map((q, qIdx) => (
-                      <div
-                        key={q.id}
-                        className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 relative"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
-                              {qIdx + 1}
+                  {/* TAB A: QUESTION BANK PICKER (STRICTLY SCOPED TO SELECTED CLASS & SUBJECT) */}
+                  {questionSourceTab === 'BANK' && (
+                    <div className="rounded-2xl border border-indigo-200/80 bg-slate-50/70 p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div>
+                          <h4 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                            <Database size={14} className="text-indigo-600" />
+                            <span>
+                              {selectedClassName} · {selectedSubjectName} Question Bank
                             </span>
-                            <span className="font-extrabold text-slate-800 text-xs">Question #{qIdx + 1}</span>
-                          </div>
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            Showing only approved Question Bank items strictly classified for{' '}
+                            <strong className="text-slate-800">{selectedClassName}</strong> and{' '}
+                            <strong className="text-slate-800">{selectedSubjectName}</strong>.
+                          </p>
+                        </div>
 
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[11px] text-slate-500 font-bold">Marks:</span>
-                              <input
-                                type="number"
-                                min="1"
-                                value={q.points}
-                                onChange={(e) => handleUpdateQuestion(q.id, { points: Number(e.target.value) || 1 })}
-                                className="w-14 h-7 text-center font-bold text-xs rounded-lg border border-slate-200"
+                        {filteredBankQuestions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleSelectAllFilteredBank}
+                            className="px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[11px] cursor-pointer transition shrink-0"
+                          >
+                            {filteredBankQuestions.every((i) => selectedBankIdSet.has(i.id))
+                              ? 'Deselect All Shown'
+                              : `Select All (${filteredBankQuestions.length})`}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                          <input
+                            type="text"
+                            value={bankSearch}
+                            onChange={(e) => setBankSearch(e.target.value)}
+                            placeholder={`Search ${selectedClassName} ${selectedSubjectName} questions by text or topic...`}
+                            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs"
+                          />
+                        </div>
+                        <select
+                          value={bankTermFilter}
+                          onChange={(e) => setBankTermFilter(e.target.value)}
+                          className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                        >
+                          <option value="ALL">All Terms</option>
+                          <option value="First Term">First Term</option>
+                          <option value="Second Term">Second Term</option>
+                          <option value="Third Term">Third Term</option>
+                        </select>
+                      </div>
+
+                      {loadingBank ? (
+                        <div className="py-10 text-center">
+                          <Loader2 size={22} className="animate-spin text-indigo-600 mx-auto mb-2" />
+                          <p className="text-xs text-slate-500 font-semibold">
+                            Loading {selectedClassName} Question Bank...
+                          </p>
+                        </div>
+                      ) : filteredBankQuestions.length === 0 ? (
+                        <div className="py-8 px-4 text-center bg-white rounded-xl border border-dashed border-slate-300 space-y-2">
+                          <p className="text-xs font-bold text-slate-700">
+                            No Question Bank items found for {selectedClassName} · {selectedSubjectName}
+                          </p>
+                          <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                            Questions from other classes are strictly hidden. Click &quot;Write New Question&quot; to create questions for {selectedClassName} (they will automatically be saved to your {selectedClassName} Question Bank).
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleAddQuestion}
+                            className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs cursor-pointer"
+                          >
+                            <Plus size={13} /> Write First Question for {selectedClassName}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                          {filteredBankQuestions.map((item) => {
+                            const isSelected = selectedBankIdSet.has(item.id)
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => handleToggleBankQuestion(item)}
+                                className={`p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                                  isSelected
+                                    ? 'bg-indigo-50/90 border-indigo-400 ring-1 ring-indigo-300'
+                                    : 'bg-white border-slate-200 hover:border-indigo-300'
+                                }`}
+                              >
+                                <div className="mt-0.5 text-indigo-600 shrink-0">
+                                  {isSelected ? <CheckSquare size={16} /> : <Square size={16} className="text-slate-400" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-extrabold text-[10px]">
+                                      {item.class?.name || selectedClassName}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px] uppercase">
+                                      {item.questionType || 'MCQ'}
+                                    </span>
+                                    {item.topic && (
+                                      <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-semibold text-[10px]">
+                                        {item.topic}
+                                      </span>
+                                    )}
+                                    <span className="ml-auto px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold text-[10px]">
+                                      {item.marks || 1} pt{Number(item.marks) === 1 ? '' : 's'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs font-bold text-slate-900 line-clamp-2">
+                                    {item.questionText}
+                                  </p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {questions.length > 0 && (
+                        <div className="pt-2 border-t border-indigo-200/60 flex items-center justify-between text-xs">
+                          <span className="font-bold text-indigo-950">
+                            {questions.length} question{questions.length === 1 ? '' : 's'} attached to this assignment ({newMaxMarks} total marks)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setQuestionSourceTab('MANUAL')}
+                            className="font-extrabold text-indigo-600 hover:underline cursor-pointer"
+                          >
+                            Review / Edit Attached Questions →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB B: SELECTED & CUSTOM QUESTIONS LIST */}
+                  {questionSourceTab === 'MANUAL' && (
+                    <div className="space-y-3">
+                      {questions.length === 0 ? (
+                        <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 space-y-2">
+                          <p className="text-xs font-bold text-slate-700">No questions added yet</p>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setQuestionSourceTab('BANK')}
+                              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs cursor-pointer"
+                            >
+                              Pick from {selectedClassName} Question Bank
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAddQuestion}
+                              className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold text-xs cursor-pointer"
+                            >
+                              Write New Question
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        questions.map((q, qIdx) => (
+                          <div
+                            key={q.id}
+                            className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 relative"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
+                                  {qIdx + 1}
+                                </span>
+                                <span className="font-extrabold text-slate-800 text-xs">
+                                  Question #{qIdx + 1}
+                                </span>
+                                {q.questionBankId ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                    From {selectedClassName} Question Bank (#{q.questionBankId})
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                                    New ({selectedClassName})
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-slate-500 font-bold">Marks:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={q.points}
+                                    onChange={(e) =>
+                                      handleUpdateQuestion(q.id, { points: Number(e.target.value) || 1 })
+                                    }
+                                    className="w-14 h-7 text-center font-bold text-xs rounded-lg border border-slate-200"
+                                  />
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveQuestion(q.id)}
+                                  className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  title="Remove Question"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Question Type Selection */}
+                            <div className="flex items-center gap-2">
+                              <label className="text-[11px] font-bold text-slate-500">Type:</label>
+                              <select
+                                value={q.type}
+                                onChange={(e) => handleUpdateQuestion(q.id, { type: e.target.value as any })}
+                                className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold cursor-pointer"
+                              >
+                                <option value="MCQ">Multiple Choice (MCQ)</option>
+                                <option value="TF">True / False</option>
+                                <option value="THEORY">Theory / Short Answer</option>
+                              </select>
+                            </div>
+
+                            {/* Question Text */}
+                            <div>
+                              <textarea
+                                rows={2}
+                                required
+                                value={q.questionText}
+                                onChange={(e) =>
+                                  handleUpdateQuestion(q.id, { questionText: e.target.value })
+                                }
+                                placeholder={`Type Question #${qIdx + 1} here...`}
+                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                               />
                             </div>
 
-                            {questions.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveQuestion(q.id)}
-                                className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                                title="Delete Question"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            {/* MCQ Options Builder */}
+                            {q.type === 'MCQ' && (
+                              <div className="space-y-2 pt-1">
+                                <label className="text-[11px] font-bold text-slate-600 block">
+                                  Options &amp; Correct Answer (Select the radio of the correct choice):
+                                </label>
+                                <div className="space-y-1.5">
+                                  {q.options.map((opt, optIdx) => {
+                                    const isCorrect = q.correctAnswer === opt
+                                    return (
+                                      <div key={optIdx} className="flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`correct-${q.id}`}
+                                          checked={isCorrect}
+                                          onChange={() =>
+                                            handleUpdateQuestion(q.id, { correctAnswer: opt })
+                                          }
+                                          className="cursor-pointer text-indigo-600"
+                                          title="Mark as correct answer"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={opt}
+                                          onChange={(e) =>
+                                            handleOptionChange(q.id, optIdx, e.target.value)
+                                          }
+                                          className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                                        />
+                                        {q.options.length > 2 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveOption(q.id, optIdx)}
+                                            className="text-slate-400 hover:text-rose-500 cursor-pointer p-1"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                {q.options.length < 6 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddOption(q.id)}
+                                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer pt-1"
+                                  >
+                                    <Plus size={12} />
+                                    <span>Add Option</span>
+                                  </button>
+                                )}
+                              </div>
                             )}
-                          </div>
-                        </div>
 
-                        {/* Question Type Selection */}
-                        <div className="flex items-center gap-2">
-                          <label className="text-[11px] font-bold text-slate-500">Type:</label>
-                          <select
-                            value={q.type}
-                            onChange={(e) => handleUpdateQuestion(q.id, { type: e.target.value as any })}
-                            className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold cursor-pointer"
-                          >
-                            <option value="MCQ">Multiple Choice (MCQ)</option>
-                            <option value="TF">True / False</option>
-                            <option value="THEORY">Theory / Short Answer</option>
-                          </select>
-                        </div>
-
-                        {/* Question Text */}
-                        <div>
-                          <textarea
-                            rows={2}
-                            required
-                            value={q.questionText}
-                            onChange={(e) => handleUpdateQuestion(q.id, { questionText: e.target.value })}
-                            placeholder={`Type Question #${qIdx + 1} here...`}
-                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                          />
-                        </div>
-
-                        {/* MCQ Options Builder */}
-                        {q.type === 'MCQ' && (
-                          <div className="space-y-2 pt-1">
-                            <label className="text-[11px] font-bold text-slate-600 block">
-                              Options & Correct Answer (Select the radio of the correct choice):
-                            </label>
-                            <div className="space-y-1.5">
-                              {q.options.map((opt, optIdx) => {
-                                const isCorrect = q.correctAnswer === opt
-                                return (
-                                  <div key={optIdx} className="flex items-center gap-2">
+                            {/* True / False Selection */}
+                            {q.type === 'TF' && (
+                              <div className="flex items-center gap-4 pt-1">
+                                <span className="text-[11px] font-bold text-slate-600">Correct Answer:</span>
+                                {['True', 'False'].map((tf) => (
+                                  <label key={tf} className="flex items-center gap-1.5 cursor-pointer font-bold text-xs">
                                     <input
                                       type="radio"
-                                      name={`correct-${q.id}`}
-                                      checked={isCorrect}
-                                      onChange={() => handleUpdateQuestion(q.id, { correctAnswer: opt })}
-                                      className="cursor-pointer text-indigo-600"
-                                      title="Mark as correct answer"
+                                      name={`tf-${q.id}`}
+                                      checked={q.correctAnswer === tf}
+                                      onChange={() => handleUpdateQuestion(q.id, { correctAnswer: tf })}
+                                      className="text-indigo-600"
                                     />
-                                    <input
-                                      type="text"
-                                      value={opt}
-                                      onChange={(e) => handleOptionChange(q.id, optIdx, e.target.value)}
-                                      className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-medium"
-                                    />
-                                    {q.options.length > 2 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveOption(q.id, optIdx)}
-                                        className="text-slate-400 hover:text-rose-500 cursor-pointer p-1"
-                                      >
-                                        <X size={13} />
-                                      </button>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            {q.options.length < 6 && (
-                              <button
-                                type="button"
-                                onClick={() => handleAddOption(q.id)}
-                                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer pt-1"
-                              >
-                                <Plus size={12} />
-                                <span>Add Option</span>
-                              </button>
+                                    <span>{tf}</span>
+                                  </label>
+                                ))}
+                              </div>
                             )}
                           </div>
-                        )}
-
-                        {/* True / False Selection */}
-                        {q.type === 'TF' && (
-                          <div className="flex items-center gap-4 pt-1">
-                            <span className="text-[11px] font-bold text-slate-600">Correct Answer:</span>
-                            {['True', 'False'].map((tf) => (
-                              <label key={tf} className="flex items-center gap-1.5 cursor-pointer font-bold text-xs">
-                                <input
-                                  type="radio"
-                                  name={`tf-${q.id}`}
-                                  checked={q.correctAnswer === tf}
-                                  onChange={() => handleUpdateQuestion(q.id, { correctAnswer: tf })}
-                                  className="text-indigo-600"
-                                />
-                                <span>{tf}</span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1526,7 +2084,7 @@ export function TeacherAssignmentsManager() {
                   ) : (
                     <>
                       <Check size={14} />
-                      <span>Publish Assignment</span>
+                      <span>Publish to {selectedClassName}</span>
                     </>
                   )}
                 </button>

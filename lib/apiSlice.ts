@@ -420,6 +420,7 @@ export const endpoints = {
       behavioral: `${BASE_URL}/admin/report-cards/behavioral`,
       aiComments: `${BASE_URL}/admin/report-cards/ai-comments`,
       togglePublish: `${BASE_URL}/admin/report-cards/toggle-publish`,
+      positionSettings: `${BASE_URL}/admin/report-cards/position-settings`,
       publishStatus: (sessionId?: number, classId?: number, termId?: number) => {
         const params = new URLSearchParams()
         if (sessionId) params.append('sessionId', String(sessionId))

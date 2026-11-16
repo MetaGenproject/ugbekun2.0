@@ -36,6 +36,9 @@ export interface SchoolReportBranding {
   classTeacherSignatureUrl: string | null
   autoPublishReportCards: boolean
   branchCode: string
+  showPosition?: boolean
+  rankingType?: 'full' | 'topn' | 'hidden'
+  rankingLimit?: number
 }
 
 export interface EvaluationMatrixComponent {
@@ -99,6 +102,7 @@ export interface BrandedReportCardStudentData {
   grade?: string | null
   position?: string | null
   rank?: number | null
+  showPosition?: boolean
   totalClassStudents?: number | null
   presentCount?: number
   absentCount?: number
@@ -605,13 +609,13 @@ export function BrandedReportCardPreview({
     Array.isArray(gradingRanges) && gradingRanges.length > 0
       ? gradingRanges
       : [
-          { grade: 'A', minPercentage: 70, maxPercentage: 100, remark: 'Excellent' },
-          { grade: 'B', minPercentage: 60, maxPercentage: 69, remark: 'Very Good' },
-          { grade: 'C', minPercentage: 50, maxPercentage: 59, remark: 'Credit' },
-          { grade: 'D', minPercentage: 45, maxPercentage: 49, remark: 'Pass' },
-          { grade: 'E', minPercentage: 40, maxPercentage: 44, remark: 'Fair' },
-          { grade: 'F', minPercentage: 0, maxPercentage: 39, remark: 'Fail' },
-        ]
+        { grade: 'A', minPercentage: 70, maxPercentage: 100, remark: 'Excellent' },
+        { grade: 'B', minPercentage: 60, maxPercentage: 69, remark: 'Very Good' },
+        { grade: 'C', minPercentage: 50, maxPercentage: 59, remark: 'Credit' },
+        { grade: 'D', minPercentage: 45, maxPercentage: 49, remark: 'Pass' },
+        { grade: 'E', minPercentage: 40, maxPercentage: 44, remark: 'Fair' },
+        { grade: 'F', minPercentage: 0, maxPercentage: 39, remark: 'Fail' },
+      ]
 
   const getComponentScoreValue = (
     row: BrandedReportSubjectRow,
@@ -669,13 +673,24 @@ export function BrandedReportCardPreview({
     return n + (s[(v - 20) % 10] || s[v] || s[0])
   }
 
-  const rankString = isCaStage
+  const showPositionOnCard =
+    !isCaStage &&
+    branding?.showPosition !== false &&
+    student.showPosition !== false &&
+    branding?.rankingType !== 'hidden'
+
+  const rankString = !showPositionOnCard
     ? '-'
     : student.rank && student.totalClassStudents
       ? `${getOrdinalSuffix(student.rank)} of ${student.totalClassStudents}`
       : student.position
         ? student.position.replace(' out of ', ' of ')
         : '-'
+
+  const totalScoreString =
+    validRowsCount > 0
+      ? `${Math.round(computedTotal * 10) / 10} / ${validRowsCount * resolvedMaxTotal}`
+      : `${rows.length} Subjects`
 
   const presentDays = student.presentCount ?? 0
   const absentDays = student.absentCount ?? 0
@@ -688,9 +703,9 @@ export function BrandedReportCardPreview({
 
   const dobDisplay = student.birthday
     ? (() => {
-        const d = new Date(student.birthday)
-        return !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB') : String(student.birthday)
-      })()
+      const d = new Date(student.birthday)
+      return !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB') : String(student.birthday)
+    })()
     : 'N/A'
   const genderDisplay = student.gender
     ? String(student.gender).charAt(0).toUpperCase() + String(student.gender).slice(1).toLowerCase()
@@ -777,11 +792,10 @@ export function BrandedReportCardPreview({
             <button
               type="button"
               onClick={() => setIsEditing(!isEditing)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                isEditing
-                  ? 'bg-amber-500 text-slate-950'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              }`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${isEditing
+                ? 'bg-amber-500 text-slate-950'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                }`}
             >
               <Edit3 size={13} />
               {isEditing ? 'Close Editor' : 'Edit Remarks / Traits / Signatures'}
@@ -1157,8 +1171,12 @@ export function BrandedReportCardPreview({
                   </span>
                 </div>
                 <div className="flex items-baseline">
-                  <span className="w-[100px] shrink-0 text-[#475569]">Class Position:</span>
-                  <span className="font-bold text-[#0f172a] truncate">{rankString}</span>
+                  <span className="w-[100px] shrink-0 text-[#475569]">
+                    {showPositionOnCard ? 'Class Position:' : 'Total Score:'}
+                  </span>
+                  <span className="font-bold text-[#0f172a] truncate">
+                    {showPositionOnCard ? rankString : totalScoreString}
+                  </span>
                 </div>
                 <div className="flex items-baseline">
                   <span className="w-[100px] shrink-0 text-[#475569]">Attendance:</span>
@@ -1205,8 +1223,8 @@ export function BrandedReportCardPreview({
               </div>
 
               {student.isCommentBased &&
-              student.subjectComments &&
-              student.subjectComments.length > 0 ? (
+                student.subjectComments &&
+                student.subjectComments.length > 0 ? (
                 <table className="w-full text-[10px] border-collapse border border-[#e2e8f0]">
                   <thead>
                     <tr
@@ -1222,9 +1240,8 @@ export function BrandedReportCardPreview({
                     {student.subjectComments.map((item, idx) => (
                       <tr
                         key={item.id || idx}
-                        className={`border-b border-[#e2e8f0] ${
-                          idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
-                        }`}
+                        className={`border-b border-[#e2e8f0] ${idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
+                          }`}
                       >
                         <td className="py-1.5 px-2 font-bold text-[#0f172a]">{item.subjectName}</td>
                         <td className="py-1.5 px-2 text-[#475569]">{item.comment}</td>
@@ -1293,9 +1310,8 @@ export function BrandedReportCardPreview({
                       return (
                         <tr
                           key={r.id || idx}
-                          className={`border-b border-[#e2e8f0] ${
-                            idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
-                          }`}
+                          className={`border-b border-[#e2e8f0] ${idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
+                            }`}
                         >
                           <td
                             className={`${rowPadClass} px-1.5 font-bold text-[#0f172a] text-[9.5px] truncate`}
@@ -1343,9 +1359,8 @@ export function BrandedReportCardPreview({
                       return (
                         <tr
                           key={`filler-${fIdx}`}
-                          className={`border-b border-[#e2e8f0] ${
-                            rowIdx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
-                          }`}
+                          className={`border-b border-[#e2e8f0] ${rowIdx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
+                            }`}
                         >
                           <td className={`${rowPadClass} px-1.5 text-transparent select-none`}>-</td>
                           <td className={`${rowPadClass} px-2 text-transparent select-none`}>-</td>
@@ -1383,7 +1398,11 @@ export function BrandedReportCardPreview({
                       </td>
                       <td className="py-1.5 px-1.5 text-center">{finalGrade}</td>
                       <td className="py-1.5 px-1.5 text-center truncate">
-                        {isCaStage ? 'In Progress' : rankString}
+                        {isCaStage
+                          ? 'In Progress'
+                          : showPositionOnCard
+                            ? rankString
+                            : overallGradeInfo.remark}
                       </td>
                     </tr>
                   </tfoot>
@@ -1423,9 +1442,8 @@ export function BrandedReportCardPreview({
                       return (
                         <tr
                           key={trait.key}
-                          className={`border-b border-[#e2e8f0] ${
-                            idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
-                          }`}
+                          className={`border-b border-[#e2e8f0] ${idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
+                            }`}
                         >
                           <td className="py-1 px-2 font-bold text-[#0f172a]">{trait.label}</td>
                           <td className="py-1 px-2 text-right whitespace-nowrap">
@@ -1435,11 +1453,10 @@ export function BrandedReportCardPreview({
                                 return (
                                   <span
                                     key={n}
-                                    className={`w-[15px] h-[13px] rounded-[2px] text-[8px] font-bold inline-flex items-center justify-center border ${
-                                      active
-                                        ? 'text-white border-transparent'
-                                        : 'text-[#94a3b8] border-[#cbd5e1] bg-white'
-                                    }`}
+                                    className={`w-[15px] h-[13px] rounded-[2px] text-[8px] font-bold inline-flex items-center justify-center border ${active
+                                      ? 'text-white border-transparent'
+                                      : 'text-[#94a3b8] border-[#cbd5e1] bg-white'
+                                      }`}
                                     style={active ? { backgroundColor: primaryColor } : undefined}
                                   >
                                     {n}
@@ -1477,9 +1494,8 @@ export function BrandedReportCardPreview({
                       return (
                         <tr
                           key={trait.key}
-                          className={`border-b border-[#e2e8f0] ${
-                            idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
-                          }`}
+                          className={`border-b border-[#e2e8f0] ${idx % 2 === 0 ? 'bg-[#f8fafc]' : 'bg-white'
+                            }`}
                         >
                           <td className="py-1 px-2 font-bold text-[#0f172a]">{trait.label}</td>
                           <td className="py-1 px-2 text-right whitespace-nowrap">
@@ -1489,11 +1505,10 @@ export function BrandedReportCardPreview({
                                 return (
                                   <span
                                     key={n}
-                                    className={`w-[15px] h-[13px] rounded-[2px] text-[8px] font-bold inline-flex items-center justify-center border ${
-                                      active
-                                        ? 'text-white border-transparent'
-                                        : 'text-[#94a3b8] border-[#cbd5e1] bg-white'
-                                    }`}
+                                    className={`w-[15px] h-[13px] rounded-[2px] text-[8px] font-bold inline-flex items-center justify-center border ${active
+                                      ? 'text-white border-transparent'
+                                      : 'text-[#94a3b8] border-[#cbd5e1] bg-white'
+                                      }`}
                                     style={active ? { backgroundColor: secondaryColor } : undefined}
                                   >
                                     {n}
