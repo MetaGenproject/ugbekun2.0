@@ -553,6 +553,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
   const [isSubmittingExam, setIsSubmittingExam] = useState<boolean>(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState<boolean>(false)
+  const hasAutoSubmittedExamIdRef = useRef<number | null>(null)
   const [cbtResultModal, setCbtResultModal] = useState<{
     totalScore: number
     totalPossible: number
@@ -582,7 +583,10 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
       setTimeRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(interval)
-          handleSubmitCbtExam(true)
+          if (hasAutoSubmittedExamIdRef.current !== activeCbtExam.id) {
+            hasAutoSubmittedExamIdRef.current = activeCbtExam.id
+            handleSubmitCbtExam(true)
+          }
           return 0
         }
         return prev - 1
@@ -665,6 +669,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
           } catch {}
         }
 
+        hasAutoSubmittedExamIdRef.current = null
         setActiveCbtExam(res.exam)
         setActiveQuestionIdx(0)
         setSelectedAnswers(initialAnswers)
