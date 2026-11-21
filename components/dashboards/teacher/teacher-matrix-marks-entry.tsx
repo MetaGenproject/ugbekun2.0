@@ -572,6 +572,24 @@ export function TeacherMatrixMarksEntry() {
 
   // Auto-fetch when Class, Subject, Section, Exam, Matrix, or Session changes
   useEffect(() => {
+    if (!selectedSessionId) return
+    let active = true
+    apiSlice
+      .get<{ success: boolean; exams: ExamOption[] }>(`${endpoints.teacher.exams}?sessionId=${selectedSessionId}`)
+      .then((res) => {
+        if (!active || !res.success || !Array.isArray(res.exams)) return
+        setExams(res.exams)
+        if (res.exams.length > 0 && !res.exams.some((ex) => String(ex.id) === String(selectedExamId))) {
+          setSelectedExamId(String(res.exams[0].id))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [selectedSessionId])
+
+  useEffect(() => {
     if (selectedClassId && selectedSubjectId) {
       fetchMarksSheet()
     }
