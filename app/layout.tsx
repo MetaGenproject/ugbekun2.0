@@ -5,23 +5,17 @@ import { SystemStatusToastContainer } from '@/components/ui/status-notifier'
 import { Toaster } from '@/components/ui/sonner'
 import { SchoolBrandingProvider } from '@/lib/schoolBrandingContext'
 import { GlobalErrorTracker } from '@/components/common/global-error-tracker'
+import { resolveServerTenantBranding, buildTenantMetadata } from '@/lib/serverTenantBranding'
 import './globals.css'
 
 const geist = Geist({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: 'Ugbekun - School Management System',
-  description: 'Modern school management platform with QR attendance, online classes, fees management, exams, and parent/student portals',
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon-48x48.png', sizes: '48x48', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: '/favicon.ico',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await resolveServerTenantBranding()
+  return {
+    ...buildTenantMetadata(tenant),
+    generator: 'v0.app',
+  }
 }
 
 export default function RootLayout({

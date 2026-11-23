@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation'
 import { ShieldCheck, Cloud, Headphones, Landmark, Globe } from 'lucide-react'
 import { UgbekunLogo } from '@/components/logo'
 import { LoginContainer } from '@/components/login-container'
+import { applyDocumentBranding } from '@/lib/documentBranding'
 
 export interface TenantBranding {
   isCustomDomain?: boolean
@@ -53,6 +54,11 @@ export function LoginPageClient() {
           // If we have an explicit branchId or custom domain/subdomain, apply tenant branding
           if (branchIdParam || json.data.isCustomDomain || json.data.branchId) {
             setBranding(json.data)
+            applyDocumentBranding({
+              schoolName: json.data.schoolName,
+              logoUrl: json.data.logoUrl,
+              isTenantScoped: Boolean(branchIdParam || json.data.isCustomDomain),
+            })
           }
         }
       } catch (err) {

@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { normalizeTenantHost } from '@/lib/platformHosts'
+import { applyDocumentBranding } from '@/lib/documentBranding'
 
 export interface SchoolBrandingData {
   branchId: number
@@ -110,24 +112,52 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
   const fetchBranding = async (attempt = 1, maxRetries = 2): Promise<void> => {
     try {
       let branchIdParam = ''
+      let hasExplicitUrlTenant = false
+      let isAuthenticatedSchoolUser = false
+      let hostInfo = normalizeTenantHost('')
+      const urlQuery = new URLSearchParams()
+
       if (typeof window !== 'undefined') {
+        hostInfo = normalizeTenantHost(window.location.hostname)
+        const sp = new URLSearchParams(window.location.search)
+        const qBranch = sp.get('branchId')
+        const qDomain = sp.get('domain')
+        const qSub = sp.get('subdomain') || hostInfo.subdomain
+
+        if (qBranch) {
+          urlQuery.set('branchId', qBranch)
+          hasExplicitUrlTenant = true
+        }
+        if (qDomain) {
+          urlQuery.set('domain', qDomain)
+          hasExplicitUrlTenant = true
+        } else if (hostInfo.isTenantHost && hostInfo.normalizedHostname) {
+          urlQuery.set('domain', hostInfo.normalizedHostname)
+        }
+        if (qSub) {
+          urlQuery.set('subdomain', qSub)
+          hasExplicitUrlTenant = true
+        }
+
         const rawUser = localStorage.getItem('ugbekun_user')
         if (rawUser) {
           try {
             const parsed = JSON.parse(rawUser)
             const role = Number(parsed?.role)
             // Superadmin belongs to the entire SaaS platform, not a school branch
-            if (role === 1) {
+            if (role === 1 && !hasExplicitUrlTenant && !hostInfo.isTenantHost) {
               setBranding(UGBEKUN_ADMIN_BRANDING)
               applyColors(UGBEKUN_ADMIN_BRANDING.primaryColor, UGBEKUN_ADMIN_BRANDING.secondaryColor)
               setIsLoading(false)
               return
             }
             const targetBranchId = parsed?.branchId || parsed?.branch?.id
-            // Parents: do not pin branding to a stale parent/HQ branchId.
-            // The children overview header uses the selected child's school.
-            if (targetBranchId && role !== 6) {
-              branchIdParam = `?branchId=${targetBranchId}`
+            if (targetBranchId && role !== 1) {
+              isAuthenticatedSchoolUser = true
+              // Parents: do not pin branding to a stale parent/HQ branchId.
+              if (role !== 6) {
+                branchIdParam = `?branchId=${targetBranchId}`
+              }
             }
           } catch {
             // ignore parse error
@@ -135,15 +165,38 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
         }
       }
 
-      const res = await apiSlice.get<{ success: boolean; data: SchoolBrandingData }>(
-        `${endpoints.public.schoolInfo}${branchIdParam}`
-      )
-      if (res?.data) {
-        setBranding(res.data)
-        applyColors(res.data.primaryColor, res.data.secondaryColor)
-        if (typeof window !== 'undefined') {
+      const isTenantScoped = hasExplicitUrlTenant || hostInfo.isTenantHost || isAuthenticatedSchoolUser
+      let resolved: SchoolBrandingData | null = null
+
+      if ((hasExplicitUrlTenant || hostInfo.isTenantHost) && urlQuery.toString()) {
+        const tenantRes = await apiSlice
+          .get<{ success: boolean; data: any }>(`${endpoints.public.branding}?${urlQuery.toString()}`)
+          .catch(() => null)
+        if (tenantRes?.success && tenantRes?.data?.branchId) {
+          resolved = { ...defaultBranding, ...tenantRes.data }
+        }
+      }
+
+      if (!resolved) {
+        const res = await apiSlice.get<{ success: boolean; data: SchoolBrandingData }>(
+          `${endpoints.public.schoolInfo}${branchIdParam}`
+        )
+        if (res?.data) {
+          resolved = res.data
+        }
+      }
+
+      if (resolved) {
+        setBranding(resolved)
+        applyColors(resolved.primaryColor, resolved.secondaryColor)
+        applyDocumentBranding({
+          schoolName: resolved.schoolName,
+          logoUrl: resolved.logoUrl,
+          isTenantScoped,
+        })
+        if (typeof window !== 'undefined' && resolved.branchId > 0) {
           try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify(res.data))
+            localStorage.setItem(CACHE_KEY, JSON.stringify(resolved))
           } catch {
             // ignore quota errors
           }
@@ -168,22 +221,47 @@ export function SchoolBrandingProvider({ children }: { children: React.ReactNode
     // 1. Immediately hydrate from localStorage cache if available to prevent layout flash
     if (typeof window !== 'undefined') {
       try {
+        const hostInfo = normalizeTenantHost(window.location.hostname)
+        const sp = new URLSearchParams(window.location.search)
+        const qBranch = sp.get('branchId')
+        const hasUrlTenant = Boolean(qBranch || sp.get('domain') || sp.get('subdomain') || hostInfo.isTenantHost)
+
+        let isSchoolUser = false
         const rawUser = localStorage.getItem('ugbekun_user')
         if (rawUser) {
           const parsedUser = JSON.parse(rawUser)
-          if (Number(parsedUser?.role) === 1) {
+          const role = Number(parsedUser?.role)
+          if (role === 1 && !hasUrlTenant) {
             setBranding(UGBEKUN_ADMIN_BRANDING)
             applyColors(UGBEKUN_ADMIN_BRANDING.primaryColor, UGBEKUN_ADMIN_BRANDING.secondaryColor)
             setIsLoading(false)
             return
           }
+          if (role !== 1 && (parsedUser?.branchId || parsedUser?.branch?.id)) {
+            isSchoolUser = true
+          }
         }
         const cached = localStorage.getItem(CACHE_KEY)
         if (cached) {
           const parsed = JSON.parse(cached)
-          if (parsed && typeof parsed === 'object' && parsed.schoolName && parsed.schoolName !== 'MetaGen Academy') {
+          const matchesQueryBranch = !qBranch || String(parsed?.branchId) === String(qBranch)
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            parsed.schoolName &&
+            parsed.schoolName !== 'MetaGen Academy' &&
+            matchesQueryBranch &&
+            !hostInfo.isTenantHost
+          ) {
             setBranding((prev) => ({ ...prev, ...parsed }))
             applyColors(parsed.primaryColor, parsed.secondaryColor)
+            if (isSchoolUser || qBranch) {
+              applyDocumentBranding({
+                schoolName: parsed.schoolName,
+                logoUrl: parsed.logoUrl,
+                isTenantScoped: true,
+              })
+            }
           }
         }
       } catch {

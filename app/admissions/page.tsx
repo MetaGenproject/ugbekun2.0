@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { applyDocumentBranding } from '@/lib/documentBranding'
 import {
   GraduationCap,
   User,
@@ -134,6 +135,11 @@ function AdmissionsContent() {
 
       if (json && json.success && json.data) {
         setMeta(json.data)
+        applyDocumentBranding({
+          schoolName: json.data.schoolName,
+          logoUrl: json.data.logoUrl,
+          isTenantScoped: true,
+        })
         if (json.data.classes?.length > 0 && !formData.classId) {
           setFormData((prev) => ({ ...prev, classId: String(json.data.classes[0].id) }))
         }

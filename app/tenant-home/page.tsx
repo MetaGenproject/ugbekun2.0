@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
+import { applyDocumentBranding } from '@/lib/documentBranding'
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 
 function TenantHomeContent() {
@@ -69,6 +70,11 @@ function TenantHomeContent() {
 
       if (json && json.success && json.data) {
         setHomepageData(json.data)
+        applyDocumentBranding({
+          schoolName: json.data.schoolName,
+          logoUrl: json.data.logoUrl,
+          isTenantScoped: true,
+        })
       } else {
         throw new Error(json?.message || 'Failed to load school homepage.')
       }

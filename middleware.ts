@@ -1,26 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-const PLATFORM_HOSTS = [
-  'localhost',
-  '127.0.0.1',
-  'ugbekun.edu.ng',
-  'www.ugbekun.edu.ng',
-  'ugbekun-beta.vercel.app',
-  'www.ugbekun-beta.vercel.app',
-  'ugbekun.com',
-  'www.ugbekun.com',
-  'app.ugbekun.com',
-  'www.app.ugbekun.com',
-  'ugbekun-frontend.abj.pipeops.app',
-]
+import { normalizeTenantHost } from './lib/platformHosts'
 
 export function middleware(request: NextRequest) {
   const url = request.nextUrl
   const hostHeader = request.headers.get('host') || ''
-  
-  // Extract hostname without port
-  const rawHostname = hostHeader.split(':')[0].trim().toLowerCase()
 
   // Ignore static assets, next internal files, and api routes
   if (
@@ -32,36 +16,26 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check if current hostname is a known apex platform domain
-  const isPlatformApex = PLATFORM_HOSTS.includes(rawHostname)
+  const {
+    rawHostname,
+    normalizedHostname,
+    subdomain: detectedSubdomain,
+    isCustomDomain,
+  } = normalizeTenantHost(hostHeader)
 
-  // Normalize host: if it is not a platform host and starts with 'www.', strip 'www.'
-  // so that www.school.com.ng and school.com.ng consistently match the tenant configuration.
-  const normalizedHostname = (!isPlatformApex && rawHostname.startsWith('www.'))
-    ? rawHostname.slice(4)
-    : rawHostname
-
-  // Clone headers to inject tenant metadata
+  // Clone headers to inject tenant metadata for SSR metadata & branding
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-tenant-host', normalizedHostname)
   requestHeaders.set('x-tenant-raw-host', rawHostname)
 
-  // Check for platform subdomain (e.g. "uiss.ugbekun.edu.ng" or "uiss.localhost")
-  let detectedSubdomain: string | null = null
-  for (const apex of PLATFORM_HOSTS) {
-    if (normalizedHostname.endsWith(`.${apex}`)) {
-      const sub = normalizedHostname.slice(0, normalizedHostname.length - apex.length - 1)
-      if (sub && sub !== 'www' && sub !== 'app' && sub !== 'api' && sub !== 'admin') {
-        detectedSubdomain = sub
-        break
-      }
-    }
-  }
+  const queryBranchId = url.searchParams.get('branchId')
+  const queryDomain = url.searchParams.get('domain')
+  const querySubdomain = url.searchParams.get('subdomain') || detectedSubdomain
 
-  const isCustomDomain = !isPlatformApex && !detectedSubdomain
-
-  if (detectedSubdomain) {
-    requestHeaders.set('x-tenant-subdomain', detectedSubdomain)
+  if (queryBranchId) requestHeaders.set('x-tenant-branch-id', queryBranchId)
+  if (queryDomain) requestHeaders.set('x-tenant-domain-param', queryDomain)
+  if (querySubdomain) {
+    requestHeaders.set('x-tenant-subdomain', querySubdomain)
   }
 
   // If visitor is accessing the root "/" from a custom domain, school subdomain, or with explicit query params, rewrite to /tenant-home
