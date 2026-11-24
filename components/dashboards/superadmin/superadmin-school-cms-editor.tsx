@@ -31,6 +31,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react'
 import { SchoolLandingView, SchoolHomepageData } from '@/components/tenant-home/school-landing-view'
+import { SuperadminDomainPanel } from '@/components/dashboards/superadmin/superadmin-domain-panel'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 
 interface BranchOption {
@@ -53,7 +54,7 @@ export function SuperadminSchoolCmsEditor() {
   const [errorMessage, setErrorMessage] = useState('')
 
   // CMS Editor Tab
-  const [activeTab, setActiveTab] = useState<'banners' | 'welcome' | 'gallery' | 'academics' | 'announcements' | 'branding' | 'settings' | 'preview'>('banners')
+  const [activeTab, setActiveTab] = useState<'banners' | 'welcome' | 'gallery' | 'academics' | 'announcements' | 'branding' | 'domains' | 'settings' | 'preview'>('banners')
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
 
   // Form State
@@ -605,6 +606,18 @@ export function SuperadminSchoolCmsEditor() {
               >
                 <Palette size={14} />
                 <span>Colors & Branding</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('domains')}
+                className={`inline-flex items-center space-x-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'domains'
+                    ? 'bg-cyan-500 text-slate-950 shadow-md'
+                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                }`}
+              >
+                <Globe size={14} />
+                <span>Custom Domain & DNS</span>
               </button>
 
               <button
@@ -1317,6 +1330,37 @@ export function SuperadminSchoolCmsEditor() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB: CUSTOM DOMAIN & DNS MANAGEMENT */}
+          {activeTab === 'domains' && selectedBranchId && (
+            <SuperadminDomainPanel
+              branchId={selectedBranchId}
+              theme="dark"
+              onUpdated={(updatedDom) => {
+                setBranches((prev) =>
+                  prev.map((b) =>
+                    b.id === updatedDom.branchId
+                      ? {
+                          ...b,
+                          customDomain: updatedDom.customDomain || undefined,
+                          subdomain: updatedDom.subdomain || undefined,
+                        }
+                      : b
+                  )
+                )
+                setCmsData((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        customDomain: updatedDom.customDomain,
+                        subdomain: updatedDom.subdomain || prev.subdomain,
+                        domainStatus: updatedDom.domainStatus,
+                      }
+                    : prev
+                )
+              }}
+            />
           )}
 
           {/* 10. TAB 8: LIVE DEVICE PREVIEW */}

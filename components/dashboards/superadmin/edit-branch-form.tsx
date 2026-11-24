@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { X, Loader2, AlertCircle } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { SuperadminDomainPanel } from './superadmin-domain-panel'
 
 export interface BranchDetails {
   id: number
@@ -156,6 +157,8 @@ export function EditBranchForm({ branch, onClose, onSaved }: EditBranchFormProps
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             Live enrolment: {branch.students.toLocaleString()} students · {branch.parents.toLocaleString()} parents · {branch.teachers.toLocaleString()} teachers · {branch.staff.toLocaleString()} staff
           </div>
+
+          <SuperadminDomainPanel branchId={branch.id} theme="light" />
 
           <div className="flex justify-end gap-3 pt-2">
             <button
