@@ -644,9 +644,11 @@ export default function AttendanceRegister({
     setSuccess(null)
     try {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-      if (!isSubmitted) {
-        await flushDraft().catch(() => null)
+      if (inFlightPatchRef.current) {
+        await inFlightPatchRef.current.catch(() => null)
       }
+
+      saveOfflineAttendanceDraft(activeForm.classId, activeForm.sectionId, attendanceDate, attendanceRecords)
 
       const payload = students.map((student) => {
         const data = attendanceRecords[student.id] || { status: '', remark: '' }
@@ -668,6 +670,8 @@ export default function AttendanceRegister({
         markRemainingPresent: markRemaining,
       })
 
+      markAttendanceDraftSynced(activeForm.classId, activeForm.sectionId, attendanceDate)
+
       const wasSubmitted = isSubmitted
       setSuccess(
         wasSubmitted
@@ -676,15 +680,23 @@ export default function AttendanceRegister({
       )
       setIsEditingSubmitted(false)
       setCanEdit(true)
+      setAutosaveState('saved')
       if (res.register) {
-        setRegisterMeta((prev) => ({
-          id: res.register!.id,
-          status: res.register!.status,
-          version: res.register!.version,
-          takenByTeacherName: prev?.takenByTeacherName ?? teacherName ?? null,
-          submittedAt: prev?.submittedAt ?? new Date().toISOString(),
+        const nextMeta: RegisterMeta = {
+          id: res.register.id,
+          status: res.register.status,
+          version: res.register.version,
+          takenByTeacherName: registerMeta?.takenByTeacherName ?? teacherName ?? null,
+          submittedAt: registerMeta?.submittedAt ?? new Date().toISOString(),
           canEdit: true,
-        }))
+        }
+        const submittedSummary = markRemaining
+          ? { ...summary, present: summary.present + summary.unmarked, unmarked: 0 }
+          : summary
+        setRegisterMeta(nextMeta)
+        setWeekDays((days) =>
+          days.map((day) => (day.dateKey === attendanceDate ? { ...day, register: nextMeta, summary: submittedSummary } : day))
+        )
       }
       lastSavedRef.current = {
         ...attendanceRecords,
@@ -707,7 +719,15 @@ export default function AttendanceRegister({
           return next
         })
       }
-      await loadRegister(attendanceDate, selectedFormIdx)
+      // Refresh week strip counts in the background without blocking submit completion
+      void apiSlice
+        .get<{ success: boolean; days: WeekDay[] }>(
+          `${endpoints.teacher.attendanceWeek}?classId=${activeForm.classId}&sectionId=${activeForm.sectionId}&date=${attendanceDate}${activeForm.sessionId ? `&sessionId=${activeForm.sessionId}` : ''}`
+        )
+        .then((weekRes) => {
+          if (weekRes?.days) setWeekDays(weekRes.days)
+        })
+        .catch(() => null)
     } catch (err: any) {
       setError(err.message || 'Failed to submit attendance register.')
       if (String(err.message || '').toLowerCase().includes('updated elsewhere')) {
