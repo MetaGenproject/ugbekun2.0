@@ -35,7 +35,6 @@ import {
   Sparkles,
   MessageSquare,
   Building2,
-  Printer,
 } from 'lucide-react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
 import { getAvatarUrl } from '@/lib/avatar'
@@ -45,13 +44,12 @@ import {
   StudentAttendanceReport,
   type StudentAttendanceReportData,
 } from '../shared/student-attendance-report'
+import type { EvaluationMatrixComponent } from '../shared/branded-report-card-preview'
 import {
-  BrandedReportCardPreview,
-  PSYCHOMOTOR_TRAIT_DEFINITIONS,
-  AFFECTIVE_TRAIT_DEFINITIONS,
-  resolveTraitRatingMeta,
-  type EvaluationMatrixComponent,
-} from '../shared/branded-report-card-preview'
+  ReportCardGenerator,
+  type GeneratedStudentGradeReport,
+  type StudentReportOptionsPayload,
+} from '../shared/report-card-generator'
 
 interface DashboardProps {
   user: {
@@ -325,7 +323,6 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [tasks, setTasks] = useState<TaskData | null>(null)
   const [grades, setGrades] = useState<GradeData | null>(null)
-  const [showA4ReportModal, setShowA4ReportModal] = useState<boolean>(false)
 
   // Sub-feature state
   const [invoices, setInvoices] = useState<InvoiceData[]>([])
@@ -1858,382 +1855,78 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
         </div>
       )}
 
-      {/* SECTION 3: GRADES & REPORT CARD */}
-      {activeSection === 'grades' && (() => {
-        const isMidTerm = Boolean(grades?.stage === 'MID_TERM' || (!grades?.releaseExam && !grades?.releaseFull && grades?.isPublished))
-        return (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <TrendingUp className="text-blue-600" size={24} />
-                  {isMidTerm
-                    ? 'Continuous Assessment Progress & Mid-Term Slip'
-                    : 'Terminal Grade Progress & Official Report Card'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  {isMidTerm
-                    ? 'Continuous Assessment records, progress evaluation notes, and mid-term slip.'
-                    : 'Subject-by-subject assessment performance, class position, and printable terminal evaluation.'}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowA4ReportModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
-                >
-                  <Printer size={15} />
-                  <span>Preview & Print (1-Page A4)</span>
-                </button>
-                <button
-                  onClick={handleExportPdf}
-                  disabled={exportingPdf}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-md shadow-blue-600/20 cursor-pointer"
-                >
-                  {exportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                  <span>{isMidTerm ? 'Download Mid-Term Slip (PDF)' : 'Download Report Card (PDF)'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ECD Montessori Evaluation (If applicable) */}
-            {grades?.isEcd && (
-              <div className="bg-gradient-to-r from-purple-900 to-indigo-900 p-6 rounded-3xl text-white space-y-4 shadow-xl">
-                <div className="flex items-center justify-between border-b border-purple-700/50 pb-3">
-                  <span className="px-3 py-1 rounded-full bg-purple-500/30 text-purple-200 text-xs font-bold border border-purple-400/30">
-                    Montessori ECD Assessment Matrix
-                  </span>
-                  <span className="text-xs font-semibold text-purple-300">Early Childhood Development</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                  <div className="bg-white/10 p-3 rounded-2xl border border-white/10">
-                    <span className="text-purple-300 font-semibold block">Writing Mastery</span>
-                    <span className="text-sm font-extrabold">{grades.assessment?.writingMastery || 'N/A'}</span>
-                  </div>
-                  <div className="bg-white/10 p-3 rounded-2xl border border-white/10">
-                    <span className="text-purple-300 font-semibold block">Physical Coordination</span>
-                    <span className="text-sm font-extrabold">{grades.assessment?.physicalCoordination || 'N/A'}</span>
-                  </div>
-                  <div className="bg-white/10 p-3 rounded-2xl border border-white/10">
-                    <span className="text-purple-300 font-semibold block">Peer Respect</span>
-                    <span className="text-sm font-extrabold">{grades.assessment?.peerRespect || 'N/A'}</span>
-                  </div>
-                  <div className="bg-white/10 p-3 rounded-2xl border border-white/10">
-                    <span className="text-purple-300 font-semibold block">Group Participation</span>
-                    <span className="text-sm font-extrabold">{grades.assessment?.activeGroupParticipation || 'N/A'}</span>
-                  </div>
-                </div>
-                {grades.assessment?.narrativeComment && (
-                  <div className="p-3 bg-white/10 rounded-2xl border border-white/10 text-xs text-purple-100">
-                    <span className="font-bold text-white block mb-1">Teacher Narrative:</span>
-                    <p>{grades.assessment.narrativeComment}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Grades Table */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-              {isMidTerm && (
-                <div className="px-5 py-3.5 bg-amber-50/80 border-b border-amber-200/80 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                    <span className="font-bold">
-                      Continuous Assessment Progress Slip (Mid-Term)
-                      {grades?.visibleStages && grades.visibleStages.length > 0
-                        ? ` • Stages: ${grades.visibleStages.join(' + ')}`
-                        : ''}
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/90 border border-amber-200 px-2.5 py-0.5 rounded-full">
-                    Terminal Exam Withheld Pending Release
-                  </span>
-                </div>
-              )}
-
-              <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    {isMidTerm ? 'Mid-Term Continuous Assessment Scores' : 'Subject Grades & Class Comparative Scores'}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {isMidTerm ? (
-                      <span>
-                        Assessment Stage: <span className="font-bold text-amber-700">CA Progress Slip</span> | Final Exam & Class Position: <span className="italic text-slate-400">Withheld until official terminal release</span>
-                      </span>
-                    ) : (
-                      <span>
-                        Overall Average: <span className="font-bold text-blue-600">{grades?.overallAverage !== undefined && grades.overallAverage !== null ? `${grades.overallAverage}%` : 'N/A'}</span> | Class Rank: <span className="font-bold text-emerald-600">{grades?.rank ? `#${grades.rank}` : 'N/A'}</span> of {grades?.totalClassStudents ?? 0}
-                      </span>
-                    )}
-                  </p>
-                </div>
-
-                {/* Ranking settings (For Full Reports) */}
-                {!isMidTerm && (
-                  <div className="flex items-center gap-3 text-xs">
-                    <label className="font-semibold text-slate-600">PDF Ranking Mode:</label>
-                    <select
-                      value={rankingType}
-                      onChange={(e) => setRankingType(e.target.value)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold"
-                    >
-                      <option value="full">Show Full Class Rank</option>
-                      <option value="top_n">Show Top N Only</option>
-                      <option value="hidden">Hide Rank on PDF</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {grades?.reportCard && grades.reportCard.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-700">
-                    <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                      {isMidTerm ? (
-                        <tr>
-                          <th className="p-4">Subject Name</th>
-                          <th className="p-4">Code</th>
-                          <th className="p-4">CA Score</th>
-                          <th className="p-4">Class Avg</th>
-                          <th className="p-4 text-right">Status</th>
-                        </tr>
-                      ) : (
-                        <tr>
-                          <th className="p-4">Subject Name</th>
-                          <th className="p-4">Code</th>
-                          <th className="p-4">CBT Score</th>
-                          <th className="p-4">Theory Score</th>
-                          <th className="p-4">Total Score</th>
-                          <th className="p-4">Class Avg</th>
-                          <th className="p-4 text-right">Status</th>
-                        </tr>
-                      )}
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {grades.reportCard.map((item) => {
-                        if (isMidTerm) {
-                          const caScore = item.ca1Score !== null && item.ca1Score !== undefined
-                            ? item.ca1Score
-                            : item.cbtMark
-                            ? item.cbtMark
-                            : item.ca2Score !== null && item.ca2Score !== undefined
-                            ? item.ca2Score
-                            : '-'
-                          return (
-                            <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                              <td className="p-4 font-bold text-slate-900">{item.subjectName}</td>
-                              <td className="p-4 text-slate-500 font-mono">{item.subjectCode || 'N/A'}</td>
-                              <td className="p-4 font-black text-amber-700 text-sm">
-                                {item.absent ? <span className="text-rose-600 font-bold">ABSENT</span> : `${caScore} pts`}
-                              </td>
-                              <td className="p-4 font-semibold text-slate-500">
-                                {item.classAverage !== null && item.classAverage !== undefined ? `${item.classAverage}%` : '-'}
-                              </td>
-                              <td className="p-4 text-right">
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                                  {item.absent ? 'Absent' : (item.statusRemark || 'Progress Recorded')}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        }
-
-                        const total = Number(item.mark || 0)
-                        return (
-                          <tr key={item.id} className="hover:bg-slate-50/80 transition">
-                            <td className="p-4 font-bold text-slate-900">{item.subjectName}</td>
-                            <td className="p-4 text-slate-500 font-mono">{item.subjectCode || 'N/A'}</td>
-                            <td className="p-4 font-semibold text-purple-600">{item.cbtMark || '-'}</td>
-                            <td className="p-4 font-semibold text-indigo-600">{item.theoryMark || '-'}</td>
-                            <td className="p-4 font-black text-slate-900 text-sm">
-                              {item.absent ? <span className="text-rose-600 font-bold">ABSENT</span> : `${total}%`}
-                            </td>
-                            <td className="p-4 font-semibold text-slate-500">{item.classAverage !== null ? `${item.classAverage}%` : '-'}</td>
-                            <td className="p-4 text-right">
-                              {total >= 70 ? (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                  Excellent
-                                </span>
-                              ) : total >= 50 ? (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                                  Good
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                  Needs Focus
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="p-12 text-center text-slate-500 text-xs">
-                  No grade records published for this active term yet.
-                </div>
-              )}
-
-              {/* Next Term Information Bar */}
-              {(grades?.nextTermFees || grades?.nextTermResumptionDate) && (
-                <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
-                  {grades?.nextTermResumptionDate && (
-                    <div>
-                      <strong className="text-slate-800">Next Term Resumes:</strong>{' '}
-                      <span className="font-semibold text-slate-900">{grades.nextTermResumptionDate}</span>
-                    </div>
-                  )}
-                  {grades?.nextTermFees && (
-                    <div className="ml-auto">
-                      <strong className="text-slate-800">Next Term Expected Fees:</strong>{' '}
-                      <span className="font-bold text-rose-700">{grades.nextTermFees}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Psychomotor & Affective Assessment Grid */}
-            {(grades?.psychomotor || grades?.affective) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-                  <div className="px-4 py-2.5 bg-slate-900 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-between">
-                    <span>Psychomotor Skills Assessment</span>
-                    <span className="text-[10px] text-slate-300">Scale (1–5)</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 text-xs">
-                    {PSYCHOMOTOR_TRAIT_DEFINITIONS.map((t) => {
-                      const meta = resolveTraitRatingMeta(grades?.psychomotor?.[t.key])
-                      return (
-                        <div key={t.key} className="px-4 py-2.5 flex items-center justify-between">
-                          <span className="font-bold text-slate-800">{t.label}</span>
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            {meta.score}/5 • {meta.label} ({meta.code})
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-                  <div className="px-4 py-2.5 bg-blue-700 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-between">
-                    <span>Affective & Behavioral Traits</span>
-                    <span className="text-[10px] text-blue-100">Scale (1–5)</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 text-xs">
-                    {AFFECTIVE_TRAIT_DEFINITIONS.map((t) => {
-                      const meta = resolveTraitRatingMeta(grades?.affective?.[t.key])
-                      return (
-                        <div key={t.key} className="px-4 py-2.5 flex items-center justify-between">
-                          <span className="font-bold text-slate-800">{t.label}</span>
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-sky-50 text-sky-700 border border-sky-200">
-                            {meta.score}/5 • {meta.label} ({meta.code})
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Principal Commentary */}
-            {grades?.commentary && (
-              <div className="p-5 rounded-3xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-900 space-y-1">
-                <span className="font-bold uppercase tracking-wider text-[10px] text-blue-700 block">
-                  Principal Sign-off Commentary
-                </span>
-                <p className="font-medium italic text-slate-800">
-                  &ldquo;{grades.commentary}&rdquo;
-                </p>
-              </div>
-            )}
-
-            {/* 1-Page A4 Report Card Modal */}
-            {showA4ReportModal && profile && (
-              <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/75 backdrop-blur-xs p-2 sm:p-5 overflow-y-auto">
-                <div className="w-full max-w-[220mm] my-3">
-                  <BrandedReportCardPreview
-                    student={{
-                      id: profile.studentId || selectedChildId || 0,
-                      studentName: `${profile.lastName}, ${profile.firstName}`,
-                      firstName: profile.firstName,
-                      lastName: profile.lastName,
-                      registerNo: profile.registerNo,
-                      admissionNo: profile.registerNo,
-                      className: profile.className || 'Class',
-                      sectionName: profile.sectionName,
-                      gender: profile.gender,
-                      photo: profile.photo,
-                      birthday: null,
-                      average: grades?.overallAverage ?? 0,
-                      maxMarksPerSubject: grades?.maxTotal || 100,
-                      rank: grades?.rank ?? null,
-                      position:
-                        grades?.rank && rankingType !== 'hidden'
-                          ? `#${grades.rank} of ${grades?.totalClassStudents || 1}`
-                          : null,
-                      totalClassStudents: grades?.totalClassStudents || 1,
-                      presentCount: attendance?.presentCount ?? 0,
-                      absentCount: (attendance?.totalDays ?? 0) - (attendance?.presentCount ?? 0),
-                      totalAttendanceDays: attendance?.totalDays ?? 0,
-                      attendanceRate: attendance?.percentage ?? 100,
-                      teacherComment: grades?.teacherComment || grades?.commentary || '',
-                      principalComment: grades?.principalComment || '',
-                      resumptionDate:
-                        grades?.nextTermResumptionDate ||
-                        grades?.schoolBranding?.resumptionDate ||
-                        null,
-                      nextTermFees:
-                        grades?.nextTermFees || grades?.schoolBranding?.nextTermFees || null,
-                      psychomotor: grades?.psychomotor,
-                      affective: grades?.affective,
-                      reportCard: (grades?.reportCard || []).map((item) => ({
-                        id: item.id,
-                        subjectName: item.subjectName,
-                        subjectCode: item.subjectCode || undefined,
-                        cbtMark: item.cbtMark,
-                        theoryMark: item.theoryMark,
-                        mark: item.mark,
-                        stageScore: item.mark,
-                        componentScores: item.componentScores,
-                        maxMarks: item.maxMarks || grades?.maxTotal || 100,
-                        absent: item.absent,
-                        classAverage: item.classAverage,
-                      })),
-                    }}
-                    branding={{
-                      ...(grades?.schoolBranding || {}),
-                      classTeacherName:
-                        grades?.schoolBranding?.classTeacherName ||
-                        formTeacher?.name ||
-                        'Class Teacher',
-                    }}
-                    assessmentComponents={grades?.assessmentComponents}
-                    maxTotal={grades?.maxTotal || 100}
-                    stage={grades?.stage || 'FULL'}
-                    gradingRanges={(grades?.gradingScale?.ranges || []).map((r) => ({
-                      grade: r.grade,
-                      minPercentage: r.minPercentage ?? r.minScore ?? 0,
-                      maxPercentage: r.maxPercentage ?? r.maxScore ?? 100,
-                      remark: r.remark,
-                    }))}
-                    onClose={() => setShowA4ReportModal(false)}
-                    onDownloadPdf={handleExportPdf}
-                    isDownloadingPdf={exportingPdf}
-                  />
-                </div>
-              </div>
-            )}
+      {/* SECTION 3: REPORT CARD GENERATOR */}
+      {activeSection === 'grades' && (
+        selectedChildId && profile ? (
+          <ReportCardGenerator
+            portalMode="parent"
+            profile={{
+              studentId: profile.studentId || selectedChildId,
+              firstName: profile.firstName,
+              lastName: profile.lastName,
+              registerNo: profile.registerNo,
+              classId: profile.classId,
+              className: profile.className,
+              sectionId: profile.sectionId,
+              sectionName: profile.sectionName,
+              sessionId: profile.sessionId,
+              gender: profile.gender,
+              photo: profile.photo,
+              fellowStudentsCount: profile.fellowStudentsCount,
+              formTeacher: formTeacher || profile.formTeacher,
+            }}
+            branding={
+              grades?.schoolBranding || {
+                schoolName: profile.schoolName || profile.branchName || undefined,
+                tagline: profile.schoolTagline,
+                logoUrl: profile.schoolLogoUrl,
+                address: profile.schoolAddress,
+                phone: profile.schoolPhone,
+                email: profile.schoolEmail,
+                academicSession: profile.academicSession,
+                currentTerm: profile.currentTerm,
+                primaryColor: profile.primaryColor,
+                secondaryColor: profile.secondaryColor,
+                website: profile.website,
+              }
+            }
+            attendance={attendance}
+            childrenOptions={children}
+            onSelectChild={(childId) => setSelectedChildId(childId)}
+            fetchOptions={() =>
+              apiSlice.get<{ success: boolean } & StudentReportOptionsPayload>(
+                endpoints.parent.childReportCardOptions(profile.studentId || selectedChildId)
+              )
+            }
+            fetchReport={(filters) =>
+              apiSlice.get<GeneratedStudentGradeReport>(
+                endpoints.parent.childGradesReport(profile.studentId || selectedChildId, filters)
+              )
+            }
+            buildPdfUrl={(filters) =>
+              endpoints.parent.childExportPdf(
+                profile.studentId || selectedChildId,
+                rankingType,
+                rankingLimit,
+                filters
+              )
+            }
+          />
+        ) : loadingChild ? (
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-12 flex flex-col items-center justify-center gap-3 text-slate-500">
+            <Loader2 size={28} className="animate-spin text-indigo-600" />
+            <p className="text-xs font-bold text-slate-700">Loading child report card profile…</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-12 text-center space-y-2">
+            <FileText size={28} className="mx-auto text-slate-300" />
+            <h3 className="text-sm font-extrabold text-slate-900">Select a Child to Generate Report Card</h3>
+            <p className="text-xs text-slate-500">
+              Choose one of your linked children above to select a session and term report card.
+            </p>
           </div>
         )
-      })()}
+      )}
 
       {/* SECTION 4: ATTENDANCE LOGS */}
       {activeSection === 'attendance' && (

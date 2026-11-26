@@ -201,10 +201,14 @@ export function resolveTraitRatingMeta(rawVal?: string | null): {
 }
 
 function formatCompactRemark(rawRemark?: string | null): string {
-  const str = String(rawRemark || '-').trim()
+  const str = String(rawRemark || '').trim()
   if (!str) return '-'
-  if (/needs\s*improvement\s*\/\s*fail/i.test(str)) return 'Needs Improvement'
-  if (/very\s*good/i.test(str) && str.length > 14) return 'Very Good'
+  if (/excellent|distinction/i.test(str)) return 'Excellent'
+  if (/very\s*good/i.test(str)) return 'Very Good'
+  if (/good|credit/i.test(str)) return 'Good'
+  if (/pass/i.test(str)) return 'Pass'
+  if (/fair/i.test(str)) return 'Fair'
+  if (/fail|needs\s*improvement|poor/i.test(str)) return 'Fail'
   return str
 }
 
@@ -215,7 +219,9 @@ function getLetterGradeAndRemark(
   const rounded = Math.round(normalizedPercentage)
   if (Array.isArray(gradingRanges) && gradingRanges.length > 0) {
     for (const r of gradingRanges) {
-      if (rounded >= Number(r.minPercentage) && rounded <= Number(r.maxPercentage)) {
+      const minPct = Number(r.minPercentage ?? (r as any).minScore ?? 0)
+      const maxPct = Number(r.maxPercentage ?? (r as any).maxScore ?? 100)
+      if (rounded >= minPct && rounded <= maxPct) {
         return {
           grade: r.grade,
           remark: formatCompactRemark(r.remark || r.grade),
@@ -225,10 +231,10 @@ function getLetterGradeAndRemark(
   }
   if (normalizedPercentage >= 70) return { grade: 'A', remark: 'Excellent' }
   if (normalizedPercentage >= 60) return { grade: 'B', remark: 'Very Good' }
-  if (normalizedPercentage >= 50) return { grade: 'C', remark: 'Credit' }
+  if (normalizedPercentage >= 50) return { grade: 'C', remark: 'Good' }
   if (normalizedPercentage >= 45) return { grade: 'D', remark: 'Pass' }
   if (normalizedPercentage >= 40) return { grade: 'E', remark: 'Fair' }
-  return { grade: 'F', remark: 'Needs Improvement' }
+  return { grade: 'F', remark: 'Fail' }
 }
 
 function deduplicateSubjectRows(
@@ -284,8 +290,12 @@ function deduplicateSubjectRows(
         }
       }
 
-      const prevAvg = Number(existing.classAverage ?? 0) || 0
-      const incAvg = Number(row.classAverage ?? 0) || 0
+      const hasPrevAvg = existing.classAverage !== null && existing.classAverage !== undefined && !isNaN(Number(existing.classAverage))
+      const hasIncAvg = row.classAverage !== null && row.classAverage !== undefined && !isNaN(Number(row.classAverage))
+      const prevAvg = hasPrevAvg ? Number(existing.classAverage) : 0
+      const incAvg = hasIncAvg ? Number(row.classAverage) : 0
+      const mergedClassAvg =
+        hasPrevAvg || hasIncAvg ? Math.max(prevAvg, incAvg) : (existing.classAverage ?? row.classAverage ?? null)
 
       map.set(key, {
         ...existing,
@@ -294,7 +304,7 @@ function deduplicateSubjectRows(
         stageScore: recomputedTotal,
         mark: String(recomputedTotal),
         totalScore: recomputedTotal,
-        classAverage: Math.max(prevAvg, incAvg, recomputedTotal),
+        classAverage: mergedClassAvg,
         absent: Boolean(existing.absent && row.absent && recomputedTotal === 0),
       })
     }
@@ -611,7 +621,7 @@ export function BrandedReportCardPreview({
       : [
         { grade: 'A', minPercentage: 70, maxPercentage: 100, remark: 'Excellent' },
         { grade: 'B', minPercentage: 60, maxPercentage: 69, remark: 'Very Good' },
-        { grade: 'C', minPercentage: 50, maxPercentage: 59, remark: 'Credit' },
+        { grade: 'C', minPercentage: 50, maxPercentage: 59, remark: 'Good' },
         { grade: 'D', minPercentage: 45, maxPercentage: 49, remark: 'Pass' },
         { grade: 'E', minPercentage: 40, maxPercentage: 44, remark: 'Fair' },
         { grade: 'F', minPercentage: 0, maxPercentage: 39, remark: 'Fail' },
@@ -646,25 +656,60 @@ export function BrandedReportCardPreview({
     return '-'
   }
 
+  const getEffectiveRowMax = (r: BrandedReportSubjectRow): number => {
+    const explicitMax = Number(r.maxMarks) || 0
+    const baseMax = explicitMax > 0 ? explicitMax : resolvedMaxTotal || 100
+    if (explicitMax > 0 && resolvedMaxTotal > 0 && explicitMax < resolvedMaxTotal) {
+      return explicitMax
+    }
+    if (resolvedComponents.length > 0) {
+      let recMax = 0
+      let hasAnyComp = false
+      for (let cIdx = 0; cIdx < resolvedComponents.length; cIdx++) {
+        const comp = resolvedComponents[cIdx]
+        const val = getComponentScoreValue(r, comp, cIdx)
+        if (val !== '-' && val !== '' && !isNaN(Number(val))) {
+          recMax += Number(comp.maxMarks) || 0
+          hasAnyComp = true
+        }
+      }
+      if (hasAnyComp && recMax > 0) {
+        return recMax
+      }
+    }
+    return baseMax
+  }
+
+  const validRows = rows.filter(
+    (r) => !r.absent && !isNaN(Number(r.stageScore ?? r.mark ?? r.totalScore))
+  )
+  const validRowsCount = validRows.length
   const computedTotal = rows.reduce(
     (acc, r) => acc + (r.absent ? 0 : Number(r.stageScore ?? r.mark ?? r.totalScore ?? 0) || 0),
     0
   )
-  const validRowsCount = rows.filter(
-    (r) => !r.absent && !isNaN(Number(r.stageScore ?? r.mark ?? r.totalScore))
-  ).length
+  const totalPossibleMarks = validRows.reduce((acc, r) => acc + getEffectiveRowMax(r), 0)
+  const hasPartialRecordedMax =
+    validRowsCount > 0 &&
+    resolvedMaxTotal > 0 &&
+    totalPossibleMarks > 0 &&
+    totalPossibleMarks < validRowsCount * resolvedMaxTotal
 
   const computedAvg =
-    rawRows.length !== rows.length && validRowsCount > 0 && resolvedMaxTotal > 0
-      ? Number((((computedTotal / validRowsCount) / resolvedMaxTotal) * 100).toFixed(1))
+    (hasPartialRecordedMax || rawRows.length !== rows.length) &&
+    validRowsCount > 0 &&
+    totalPossibleMarks > 0
+      ? Number(((computedTotal / totalPossibleMarks) * 100).toFixed(1))
       : (student.average ??
-        (validRowsCount > 0 && resolvedMaxTotal > 0
-          ? Number((((computedTotal / validRowsCount) / resolvedMaxTotal) * 100).toFixed(1))
+        (validRowsCount > 0 && totalPossibleMarks > 0
+          ? Number(((computedTotal / totalPossibleMarks) * 100).toFixed(1))
           : 0))
 
   const overallGradeInfo = getLetterGradeAndRemark(Number(computedAvg || 0), effectiveGradingRanges)
   const finalGrade =
-    rawRows.length !== rows.length ? overallGradeInfo.grade : student.grade || overallGradeInfo.grade
+    hasPartialRecordedMax || rawRows.length !== rows.length
+      ? overallGradeInfo.grade
+      : student.grade || overallGradeInfo.grade
   const gpaRating = `${finalGrade} (${overallGradeInfo.remark})`
 
   const getOrdinalSuffix = (n: number) => {
@@ -689,7 +734,7 @@ export function BrandedReportCardPreview({
 
   const totalScoreString =
     validRowsCount > 0
-      ? `${Math.round(computedTotal * 10) / 10} / ${validRowsCount * resolvedMaxTotal}`
+      ? `${Math.round(computedTotal * 10) / 10} / ${totalPossibleMarks}`
       : `${rows.length} Subjects`
 
   const presentDays = student.presentCount ?? 0
@@ -757,7 +802,7 @@ export function BrandedReportCardPreview({
 
   const scaleSummary = effectiveGradingRanges
     .slice(0, 6)
-    .map((r) => `${r.grade}:${r.minPercentage}-${r.maxPercentage}%`)
+    .map((r) => `${r.grade}:${r.minPercentage ?? (r as any).minScore ?? 0}-${r.maxPercentage ?? (r as any).maxScore ?? 100}%`)
     .join(' | ')
 
   const resolvedTeacherRemark =
@@ -1296,15 +1341,16 @@ export function BrandedReportCardPreview({
                   <tbody>
                     {rows.map((r, idx) => {
                       const totNum = Number(r.stageScore ?? r.mark ?? r.totalScore ?? 0)
-                      const rowMax = Number(r.maxMarks) || resolvedMaxTotal || 100
+                      const rowMax = getEffectiveRowMax(r)
                       const normalizedPct = rowMax > 0 ? (totNum / rowMax) * 100 : totNum
                       const gradeInfo = getLetterGradeAndRemark(
                         normalizedPct,
                         effectiveGradingRanges
                       )
-                      const rowGrade = r.grade && r.grade !== '-' ? r.grade : gradeInfo.grade
+                      const isPartialMax = resolvedMaxTotal > 0 && rowMax < resolvedMaxTotal
+                      const rowGrade = !isPartialMax && r.grade && r.grade !== '-' ? r.grade : gradeInfo.grade
                       const rowRemark = formatCompactRemark(
-                        r.remark && r.remark !== '-' ? r.remark : gradeInfo.remark
+                        !isPartialMax && r.remark && r.remark !== '-' ? r.remark : gradeInfo.remark
                       )
 
                       return (
@@ -1390,7 +1436,7 @@ export function BrandedReportCardPreview({
                       </td>
                       <td className="py-1.5 px-1.5 text-right whitespace-nowrap">
                         {validRowsCount > 0
-                          ? `${Math.round(computedTotal * 10) / 10} / ${validRowsCount * resolvedMaxTotal}`
+                          ? `${Math.round(computedTotal * 10) / 10} / ${totalPossibleMarks}`
                           : `${computedAvg}%`}
                       </td>
                       <td className="py-1.5 px-1.5 text-right whitespace-nowrap">

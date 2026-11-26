@@ -230,7 +230,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
       return [
         { id: 'overview', label: 'Children Overview', icon: Users, active: true },
         { id: 'sibling-requests', label: 'Sibling Admissions', icon: GraduationCap },
-        { id: 'grades', label: 'Grade Progress', icon: TrendingUp },
+        { id: 'grades', label: 'Report Card', icon: FileText },
         { id: 'attendance', label: 'Attendance Logs', icon: CheckSquare },
         { id: 'billing', label: 'Fee Invoices', icon: DollarSign },
         { id: 'calendar', label: 'Term Calendar', icon: Calendar },
@@ -242,7 +242,7 @@ const getNavLinks = (role: number, branchStats?: BranchStats | null): NavLink[] 
         { id: 'academics', label: 'My Academics', icon: GraduationCap },
         { id: 'assignments', label: 'Assignments', icon: FileText },
         { id: 'cbt-exams', label: 'CBT & Exams', icon: Award },
-        { id: 'results', label: 'Results', icon: TrendingUp },
+        { id: 'results', label: 'Report Card', icon: FileText },
         { id: 'timetable', label: 'Timetable', icon: Calendar },
         { id: 'attendance', label: 'Attendance', icon: CheckSquare },
         { id: 'school-fees', label: 'School Fees', icon: DollarSign },

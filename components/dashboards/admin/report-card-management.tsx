@@ -180,6 +180,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
 
   // Assessment Stage Filter & Term Selection
   const [assessmentStage, setAssessmentStage] = useState<string>('FULL')
+  const [resolvedStage, setResolvedStage] = useState<string>('FULL')
   const [selectedTermId, setSelectedTermId] = useState<number>(1)
   const [assessmentComponents, setAssessmentComponents] = useState<EvaluationMatrixComponent[]>([])
   const [allMatrixColumns, setAllMatrixColumns] = useState<EvaluationMatrixComponent[]>([])
@@ -659,6 +660,9 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
       }>(endpoints.admin.reportCards.students(classId, sectionId, sessionId, stage, termId))
 
       if (res.success && res.students) {
+        if (res.stage) {
+          setResolvedStage(res.stage)
+        }
         if (res.sessionId && !selectedSessionId) {
           setSelectedSessionId(res.sessionId)
         }
@@ -1518,7 +1522,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                           <span className="px-2.5 py-0.5 rounded text-xs font-black border bg-emerald-100 text-emerald-800 border-emerald-200">
                             Qualitative Report
                           </span>
-                        ) : assessmentStage === 'FULL' ? (
+                        ) : (resolvedStage || assessmentStage) === 'FULL' ? (
                           <span
                             className={`px-2.5 py-0.5 rounded text-xs font-black border ${
                               st.grade === 'A'
@@ -1534,7 +1538,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded text-xs font-black border bg-amber-100 text-amber-800 border-amber-200">
-                            {assessmentStage} Slip
+                            {resolvedStage || assessmentStage} • Grade {st.grade || '-'}
                           </span>
                         )}
                       </div>
@@ -1564,32 +1568,30 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
-                              {assessmentStage === 'COMBINED_CA'
-                                ? `CA SCORE${maxTotal ? ` (/${maxTotal})` : ''}`
-                                : assessmentStage === 'FULL'
+                              {(resolvedStage || assessmentStage) === 'COMBINED_CA'
+                                ? `CA AVERAGE (${st.rawAverage ?? '-'}${maxTotal ? `/${maxTotal}` : ''})`
+                                : (resolvedStage || assessmentStage) === 'FULL'
                                 ? 'AVERAGE SCORE'
-                                : `${assessmentStage} STAGE AVG`}
+                                : `${resolvedStage || assessmentStage} STAGE AVG`}
                             </span>
                             <span className="font-mono font-black text-slate-900 text-sm">
-                              {assessmentStage === 'COMBINED_CA'
-                                ? `${st.rawAverage ?? st.average ?? '-'}${maxTotal ? ` / ${maxTotal}` : ''}`
-                                : `${st.average}%`}
+                              {st.average}%
                             </span>
                           </div>
                           <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                             <span className="text-[10px] text-slate-400 block font-bold">
-                              {assessmentStage === 'FULL'
+                              {(resolvedStage || assessmentStage) === 'FULL'
                                 ? st.showPosition === false || rankingType === 'hidden'
                                   ? 'TOTAL SCORE'
                                   : 'CLASS RANK'
                                 : 'STAGE STATUS'}
                             </span>
                             <span className="font-bold text-indigo-700 text-sm">
-                              {assessmentStage === 'FULL'
+                              {(resolvedStage || assessmentStage) === 'FULL'
                                 ? st.showPosition === false || rankingType === 'hidden'
                                   ? `${st.totalMarks ?? 0} pts`
                                   : st.position || '—'
-                                : assessmentStage === 'COMBINED_CA'
+                                : (resolvedStage || assessmentStage) === 'COMBINED_CA'
                                   ? 'CA Progress Graded'
                                   : 'Progress Recorded'}
                             </span>
@@ -2750,7 +2752,7 @@ export function ReportCardManagement({ allowedClassIds }: { allowedClassIds?: nu
               branding={schoolBranding}
               assessmentComponents={assessmentComponents}
               maxTotal={maxTotal}
-              stage={assessmentStage}
+              stage={resolvedStage || assessmentStage}
               gradingRanges={gradingRanges}
               onClose={() => setPreviewStudent(null)}
               onDownloadPdf={() => handleDownloadSinglePdf(previewStudent)}

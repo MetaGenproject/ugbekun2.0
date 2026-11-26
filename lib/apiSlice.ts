@@ -615,8 +615,29 @@ export const endpoints = {
     cbtTakeExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/take`,
     cbtSubmitExam: (examId: number) => `${BASE_URL}/student/cbt/exams/${examId}/submit`,
     grades: `${BASE_URL}/student/grades`,
-    exportPdf: (rankingType: string, rankingLimit?: number) =>
-      `${BASE_URL}/student/grades/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+    reportCardOptions: `${BASE_URL}/student/report-card/options`,
+    gradesReport: (params?: { sessionId?: number; classId?: number; termId?: number; stage?: string }) => {
+      const sp = new URLSearchParams()
+      if (params?.sessionId) sp.set('sessionId', String(params.sessionId))
+      if (params?.classId) sp.set('classId', String(params.classId))
+      if (params?.termId) sp.set('termId', String(params.termId))
+      if (params?.stage) sp.set('stage', params.stage)
+      const qs = sp.toString()
+      return `${BASE_URL}/student/grades${qs ? `?${qs}` : ''}`
+    },
+    exportPdf: (
+      rankingType: string,
+      rankingLimit?: number,
+      filters?: { sessionId?: number; classId?: number; termId?: number; stage?: string }
+    ) => {
+      const sp = new URLSearchParams({ rankingType })
+      if (rankingLimit) sp.set('rankingLimit', String(rankingLimit))
+      if (filters?.sessionId) sp.set('sessionId', String(filters.sessionId))
+      if (filters?.classId) sp.set('classId', String(filters.classId))
+      if (filters?.termId) sp.set('termId', String(filters.termId))
+      if (filters?.stage) sp.set('stage', filters.stage)
+      return `${BASE_URL}/student/grades/export-pdf?${sp.toString()}`
+    },
     events: `${BASE_URL}/student/events`,
     teachers: `${BASE_URL}/student/teachers`,
     invoices: `${BASE_URL}/student/invoices`,
@@ -640,8 +661,33 @@ export const endpoints = {
     childAttendance: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/attendance`,
     childTasks: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/tasks`,
     childGrades: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/grades`,
-    childExportPdf: (studentId: number, rankingType: string, rankingLimit?: number) =>
-      `${BASE_URL}/parent/child/${studentId}/export-pdf?rankingType=${rankingType}${rankingLimit ? `&rankingLimit=${rankingLimit}` : ''}`,
+    childReportCardOptions: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/report-card/options`,
+    childGradesReport: (
+      studentId: number,
+      params?: { sessionId?: number; classId?: number; termId?: number; stage?: string }
+    ) => {
+      const sp = new URLSearchParams()
+      if (params?.sessionId) sp.set('sessionId', String(params.sessionId))
+      if (params?.classId) sp.set('classId', String(params.classId))
+      if (params?.termId) sp.set('termId', String(params.termId))
+      if (params?.stage) sp.set('stage', params.stage)
+      const qs = sp.toString()
+      return `${BASE_URL}/parent/child/${studentId}/grades${qs ? `?${qs}` : ''}`
+    },
+    childExportPdf: (
+      studentId: number,
+      rankingType: string,
+      rankingLimit?: number,
+      filters?: { sessionId?: number; classId?: number; termId?: number; stage?: string }
+    ) => {
+      const sp = new URLSearchParams({ rankingType })
+      if (rankingLimit) sp.set('rankingLimit', String(rankingLimit))
+      if (filters?.sessionId) sp.set('sessionId', String(filters.sessionId))
+      if (filters?.classId) sp.set('classId', String(filters.classId))
+      if (filters?.termId) sp.set('termId', String(filters.termId))
+      if (filters?.stage) sp.set('stage', filters.stage)
+      return `${BASE_URL}/parent/child/${studentId}/export-pdf?${sp.toString()}`
+    },
     childInvoices: (studentId: number) => `${BASE_URL}/parent/child/${studentId}/invoices`,
     payChildInvoice: (studentId: number, invoiceId: number) => `${BASE_URL}/parent/child/${studentId}/invoices/${invoiceId}/pay`,
     verifyChildPayment: `${BASE_URL}/parent/payments/verify`,
