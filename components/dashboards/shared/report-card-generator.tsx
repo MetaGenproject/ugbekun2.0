@@ -18,6 +18,24 @@ import {
   type EvaluationMatrixComponent,
 } from './branded-report-card-preview'
 
+export interface StudentStageOption {
+  value: string
+  label: string
+  shortLabel: string
+  maxMarks: number
+  category: 'FULL' | 'CA' | 'EXAM'
+  isCaOnly: boolean
+}
+
+export interface ScopeStageAvailability {
+  sessionId: number
+  classId: number
+  termId: number
+  isPublished: boolean
+  defaultStage: string
+  publishedStages: string[]
+}
+
 export interface StudentReportOptionsPayload {
   sessions: Array<{ id: number; label: string; isCurrent: boolean }>
   classes: Array<{
@@ -33,6 +51,8 @@ export interface StudentReportOptionsPayload {
   currentClassId: number | null
   currentTermId: number
   currentTermLabel: string
+  stageCatalogByClassId?: Record<string, StudentStageOption[]>
+  stageAvailability?: Record<string, ScopeStageAvailability>
 }
 
 export interface GeneratedStudentGradeReport {
@@ -118,6 +138,7 @@ export interface ReportCardFilterParams {
   sessionId?: number
   classId?: number
   termId?: number
+  stage?: string
 }
 
 export interface ReportCardChildOption {
@@ -205,6 +226,16 @@ export function ReportCardGenerator({
   const [selectedTermId, setSelectedTermId] = useState<string>(
     initialOptions?.currentTermId ? String(initialOptions.currentTermId) : '1'
   )
+  const [selectedStage, setSelectedStage] = useState<string>(() => {
+    const sess = initialOptions?.currentSessionId
+    const cls = initialOptions?.currentClassId
+    const term = initialOptions?.currentTermId || 1
+    if (sess && cls) {
+      const avail = initialOptions?.stageAvailability?.[`${sess}:${cls}:${term}`]
+      if (avail?.defaultStage) return avail.defaultStage
+    }
+    return 'FULL'
+  })
 
   const [generating, setGenerating] = useState<boolean>(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -317,6 +348,44 @@ export function ReportCardGenerator({
     ]
   }, [options])
 
+  const scopeAvailability = useMemo(() => {
+    if (!selectedSessionId || !selectedClassId || !selectedTermId) return null
+    return options?.stageAvailability?.[`${selectedSessionId}:${selectedClassId}:${selectedTermId}`] || null
+  }, [options, selectedSessionId, selectedClassId, selectedTermId])
+
+  const stageOptions = useMemo<StudentStageOption[]>(() => {
+    const fromBackend = selectedClassId ? options?.stageCatalogByClassId?.[selectedClassId] : undefined
+    if (fromBackend && fromBackend.length > 0) return fromBackend
+    return [
+      {
+        value: 'FULL',
+        label: 'Full Terminal Report',
+        shortLabel: 'Full Report',
+        maxMarks: 100,
+        category: 'FULL',
+        isCaOnly: false,
+      },
+      {
+        value: 'COMBINED_CA',
+        label: 'Only CA / Combined CA',
+        shortLabel: 'Only CA',
+        maxMarks: 40,
+        category: 'CA',
+        isCaOnly: true,
+      },
+    ]
+  }, [options, selectedClassId])
+
+  // Auto-select the highest published stage whenever Session, Class, Term, or options change
+  useEffect(() => {
+    if (scopeAvailability?.defaultStage) {
+      setSelectedStage(scopeAvailability.defaultStage)
+    } else if (stageOptions.length > 0 && !stageOptions.some((s) => s.value === selectedStage)) {
+      setSelectedStage(stageOptions[0].value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSessionId, selectedClassId, selectedTermId, scopeAvailability?.defaultStage])
+
   const handleSessionChange = (nextSessionId: string) => {
     setSelectedSessionId(nextSessionId)
     const numSess = Number(nextSessionId)
@@ -340,6 +409,7 @@ export function ReportCardGenerator({
       sessionId: selectedSessionId ? Number(selectedSessionId) : undefined,
       classId: selectedClassId ? Number(selectedClassId) : undefined,
       termId: selectedTermId ? Number(selectedTermId) : undefined,
+      stage: selectedStage || undefined,
     }
 
     try {
@@ -442,8 +512,8 @@ export function ReportCardGenerator({
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               {portalMode === 'parent'
-                ? "Select your child, academic session, class, and term to view and print their official report card."
-                : 'Select the academic session, class, and term you want to view and print.'}
+                ? 'Select your child, academic session, class, term, and result stage to view and print their official report card.'
+                : 'Select the academic session, class, term, and result stage you want to view and print.'}
             </p>
           </div>
           {profile.registerNo && (
@@ -456,7 +526,7 @@ export function ReportCardGenerator({
         <form
           onSubmit={handleGenerateReportCard}
           aria-label="Generate report card"
-          className={`grid grid-cols-1 sm:grid-cols-2 ${showChildSelector ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 items-end`}
+          className={`grid grid-cols-1 sm:grid-cols-2 ${showChildSelector ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5'} gap-4 items-end`}
         >
           {showChildSelector && (
             <div>
@@ -565,6 +635,42 @@ export function ReportCardGenerator({
             </select>
           </div>
 
+          <div>
+            <label
+              htmlFor={`${baseId}-stage`}
+              className="block text-xs font-bold text-slate-700 mb-1.5"
+            >
+              Result Stage
+            </label>
+            <select
+              id={`${baseId}-stage`}
+              name="stage"
+              value={selectedStage}
+              onChange={(e) => setSelectedStage(e.target.value)}
+              disabled={loadingOptions || stageOptions.length === 0}
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-900 focus:bg-white focus:outline-2 focus:outline-indigo-600 disabled:opacity-60"
+            >
+              {stageOptions.map((st) => {
+                const isStagePublished = scopeAvailability
+                  ? scopeAvailability.publishedStages.includes(st.value)
+                  : undefined
+                const suffix =
+                  isStagePublished === true
+                    ? ' (Published)'
+                    : isStagePublished === false
+                      ? ' (Not Released)'
+                      : ''
+                return (
+                  <option key={st.value} value={st.value}>
+                    {st.label}
+                    {suffix}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
           <button
             type="submit"
             disabled={generating || loadingOptions || !selectedClassId}
@@ -583,6 +689,28 @@ export function ReportCardGenerator({
             )}
           </button>
         </form>
+
+        {scopeAvailability && (
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 rounded-xl px-3.5 py-2">
+            <span className="text-slate-500">Admin Release Status:</span>
+            {scopeAvailability.publishedStages.length > 0 ? (
+              stageOptions
+                .filter((st) => scopeAvailability.publishedStages.includes(st.value))
+                .map((st) => (
+                  <span
+                    key={st.value}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
+                  >
+                    {st.shortLabel}
+                  </span>
+                ))
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 font-bold">
+                No stages published yet for this term
+              </span>
+            )}
+          </div>
+        )}
 
         {generateError && (
           <div
@@ -609,8 +737,8 @@ export function ReportCardGenerator({
           </h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
             {portalMode === 'parent'
-              ? 'Choose the Child, Session, Class, and Term above, then click '
-              : 'Choose the Session, Class, and Term above, then click '}
+              ? 'Choose the Child, Session, Class, Term, and Result Stage above, then click '
+              : 'Choose the Session, Class, Term, and Result Stage above, then click '}
             <strong className="text-slate-800">Generate Report Card</strong> to inspect and print the official result.
           </p>
         </div>

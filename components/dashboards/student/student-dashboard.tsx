@@ -22,7 +22,6 @@ import {
   Mic,
   Square,
   Upload,
-  Trophy,
   ShieldCheck,
   Smile,
   DollarSign,
@@ -364,12 +363,6 @@ interface SchoolBankDetails {
   accountNumber: string
   branchName: string
   sortCode?: string
-}
-
-function getOrdinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
 function getGradeLetter(score: number): { letter: string; color: string; bg: string } {
@@ -4082,10 +4075,6 @@ function normalizeQuestions(raw: any): any[] {
     (dashboardOverview?.kpi?.resultsPublished ?? grades?.isPublished) &&
     (dashboardOverview?.kpi?.averageScore !== null || grades?.overallAverage !== null)
   )
-  const rawRank = isOverviewPublished ? (dashboardOverview?.kpi?.classRank ?? grades?.rank) : null
-  const userRankText = rawRank ? `${rawRank}${getOrdinal(rawRank)}` : (isOverviewPublished ? 'N/A' : 'Pending')
-  
-  const totalClass = dashboardOverview?.kpi?.totalClassStudents || grades?.totalClassStudents || profile.fellowStudentsCount || 0
   const overallAvg = isOverviewPublished && dashboardOverview?.kpi?.averageScore !== undefined && dashboardOverview?.kpi?.averageScore !== null
     ? `${dashboardOverview.kpi.averageScore}%`
     : (isOverviewPublished && grades?.overallAverage !== undefined && grades?.overallAverage !== null
@@ -4168,8 +4157,8 @@ function normalizeQuestions(raw: any): any[] {
 
           </div>
 
-          {/* 2. Top 4 Metric Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {/* 2. Top 3 Metric Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             
             {/* Card 1: Average Score (Real DB) */}
             <div 
@@ -4189,25 +4178,7 @@ function normalizeQuestions(raw: any): any[] {
               </div>
             </div>
 
-            {/* Card 2: Class Position (Real DB) */}
-            <div 
-              onClick={() => onNavigate?.('results')}
-              className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md hover:border-purple-300 transition cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-                  <Trophy size={20} />
-                </div>
-                <ArrowRight size={14} className="text-slate-400" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Class Position</p>
-                <h3 className="text-2xl font-black text-slate-900 mt-0.5">{userRankText}</h3>
-                <p className="text-[11px] font-medium text-slate-500 mt-1">out of {totalClass} students</p>
-              </div>
-            </div>
-
-            {/* Card 3: Attendance (Real DB) */}
+            {/* Card 2: Attendance (Real DB) */}
             <div 
               onClick={() => onNavigate?.('attendance')}
               className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3 hover:shadow-md hover:border-blue-300 transition cursor-pointer"
