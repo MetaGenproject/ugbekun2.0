@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { apiSlice, endpoints, BASE_URL } from '@/lib/apiSlice'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { getValidPhotoUrl } from '@/lib/utils'
+import { getLagosDateKey } from '@/lib/dateUtils'
+import { AdmissionDateInlineEditor } from './admission-date-editor'
 import {
   UserPlus,
   Users,
@@ -248,6 +250,7 @@ export function StudentOnboarding() {
   const [overrideClassId, setOverrideClassId] = useState<string>('')
   const [overrideSectionId, setOverrideSectionId] = useState<string>('')
   const [overrideSections, setOverrideSections] = useState<Section[]>([])
+  const [approveAdmissionDate, setApproveAdmissionDate] = useState<string>('')
   const [admissionsResult, setAdmissionsResult] = useState<any | null>(null)
   const [isProcessingAction, setIsProcessingAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -649,6 +652,26 @@ export function StudentOnboarding() {
       setActionError(err instanceof Error ? err.message : 'Failed to update application status.')
     } finally {
       setIsProcessingAction(false)
+    }
+  }
+
+  const handleSaveOnlineAdmissionDate = async (admissionId: number, nextDate: string) => {
+    const res = await apiSlice.patch<{ success: boolean; admission?: OnlineAdmissionData }>(
+      endpoints.admin.updateOnlineAdmission(admissionId),
+      { admissionDate: nextDate }
+    )
+    if (res.success) {
+      setOnlineAdmissions((prev) =>
+        prev.map((row) => (row.id === admissionId ? { ...row, admissionDate: nextDate } : row))
+      )
+      if (selectedAdmission?.id === admissionId) {
+        setSelectedAdmission((prev) => (prev ? { ...prev, admissionDate: nextDate } : prev))
+      }
+      showSystemStatus({
+        type: 'ACTION_SUCCESS',
+        title: 'Admission Date Updated',
+        message: `Admission / attendance start date saved as ${nextDate}.`,
+      })
     }
   }
 
@@ -1264,6 +1287,7 @@ export function StudentOnboarding() {
         const payload = {
           student: {
             ...item.student,
+            admissionDate: item.student.admissionDate || getLagosDateKey(),
             classId: Number(item.student.classId),
             sectionId: Number(item.student.sectionId),
           },
@@ -2176,6 +2200,18 @@ export function StudentOnboarding() {
                         type="date"
                         value={studentForm.birthday}
                         onChange={e => setStudentForm({ ...studentForm, birthday: e.target.value })}
+                        className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="onboard-admission-date" className="text-xs font-bold text-slate-500 block mb-1">
+                        Admission Date (Attendance Start)
+                      </label>
+                      <input
+                        id="onboard-admission-date"
+                        type="date"
+                        value={studentForm.admissionDate || getLagosDateKey()}
+                        onChange={e => setStudentForm({ ...studentForm, admissionDate: e.target.value })}
                         className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50"
                       />
                     </div>
@@ -3870,6 +3906,7 @@ export function StudentOnboarding() {
                         <th className="px-4 py-3">Student Candidate</th>
                         <th className="px-4 py-3">Classroom Applied</th>
                         <th className="px-4 py-3">Parent / Guardian</th>
+                        <th className="px-4 py-3">Admission Date</th>
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
@@ -3902,6 +3939,13 @@ export function StudentOnboarding() {
                               <div className="text-[10px] text-slate-400 font-semibold mt-0.5">
                                 {a.grdEmail || a.grdMobileNo || 'No contacts'}
                               </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <AdmissionDateInlineEditor
+                                value={a.admissionDate || a.applyDate}
+                                studentName={`${a.firstName} ${a.lastName || ''}`.trim()}
+                                onSave={(nextDate) => handleSaveOnlineAdmissionDate(a.id, nextDate)}
+                              />
                             </td>
                             <td className="px-4 py-3">
                               {a.status === 1 && (
@@ -3960,6 +4004,9 @@ export function StudentOnboarding() {
                                         setSelectedAdmission(a)
                                         setOverrideClassId(String(a.classId))
                                         setOverrideSectionId(a.sectionId || '')
+                                        setApproveAdmissionDate(
+                                          a.admissionDate ? a.admissionDate.slice(0, 10) : getLagosDateKey()
+                                        )
                                         setAdmissionModalType('approve')
                                       }}
                                       className="p-1 text-emerald-600 hover:text-emerald-800 transition cursor-pointer"
@@ -4176,6 +4223,11 @@ export function StudentOnboarding() {
                     onClick={() => {
                       setOverrideClassId(String(selectedAdmission.classId))
                       setOverrideSectionId(selectedAdmission.sectionId || '')
+                      setApproveAdmissionDate(
+                        selectedAdmission.admissionDate
+                          ? selectedAdmission.admissionDate.slice(0, 10)
+                          : getLagosDateKey()
+                      )
                       setAdmissionModalType('approve')
                     }}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition cursor-pointer active:scale-95"
@@ -4351,8 +4403,9 @@ export function StudentOnboarding() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1 uppercase">Section</label>
+                  <label htmlFor="approve-section-select" className="text-[10px] font-bold text-slate-400 block mb-1 uppercase">Section</label>
                   <select
+                    id="approve-section-select"
                     value={overrideSectionId}
                     onChange={e => setOverrideSectionId(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-700"
@@ -4362,6 +4415,19 @@ export function StudentOnboarding() {
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label htmlFor="approve-admission-date" className="text-[10px] font-bold text-slate-400 block mb-1 uppercase">
+                    Admission Date (Attendance Start)
+                  </label>
+                  <input
+                    id="approve-admission-date"
+                    type="date"
+                    value={approveAdmissionDate}
+                    onChange={e => setApproveAdmissionDate(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-700"
+                  />
                 </div>
               </div>
 
@@ -4381,7 +4447,8 @@ export function StudentOnboarding() {
                   type="button"
                   onClick={() => handleAdmissionAction(selectedAdmission.id, 3, {
                     classId: overrideClassId ? Number(overrideClassId) : undefined,
-                    sectionId: overrideSectionId ? Number(overrideSectionId) : undefined
+                    sectionId: overrideSectionId ? Number(overrideSectionId) : undefined,
+                    admissionDate: approveAdmissionDate || undefined,
                   })}
                   disabled={isProcessingAction || !overrideClassId || !overrideSectionId}
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"

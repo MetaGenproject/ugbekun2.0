@@ -42,6 +42,10 @@ import { getAvatarUrl } from '@/lib/avatar'
 import { showSystemStatus, resolveHttpStatus } from '@/lib/systemStatus'
 import { SchoolHeader } from '../school-header'
 import {
+  StudentAttendanceReport,
+  type StudentAttendanceReportData,
+} from '../shared/student-attendance-report'
+import {
   BrandedReportCardPreview,
   PSYCHOMOTOR_TRAIT_DEFINITIONS,
   AFFECTIVE_TRAIT_DEFINITIONS,
@@ -110,82 +114,7 @@ interface ChildProfile {
   }>
 }
 
-interface AttendanceData {
-  percentage: number
-  totalDays: number
-  presentCount: number
-  absentCount: number
-  lateCount: number
-  logs: Array<{
-    id: number
-    attendanceDate: string
-    status: string
-    remark: string | null
-  }>
-}
-
-type AttendanceLog = AttendanceData['logs'][number]
-type AttendanceRange = 'daily' | 'weekly' | 'monthly'
-
-import { getLagosDateKey } from '@/lib/dateUtils'
-
-function attendanceDateKey(value: string) {
-  const parsed = new Date(value)
-  if (!Number.isNaN(parsed.getTime())) {
-    return getLagosDateKey(parsed)
-  }
-  return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : ''
-}
-
-
-function weekStartKey(dateKey: string) {
-  const [year, month, day] = dateKey.split('-').map(Number)
-  const utc = Date.UTC(year, month - 1, day)
-  const dow = new Date(utc).getUTCDay()
-  const mondayOffset = dow === 0 ? -6 : 1 - dow
-  return new Date(utc + mondayOffset * 86400000).toISOString().slice(0, 10)
-}
-
-function addDaysKey(dateKey: string, days: number) {
-  const [year, month, day] = dateKey.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
-}
-
-function formatDateLabel(dateKey: string, options: Intl.DateTimeFormatOptions) {
-  const [year, month, day] = dateKey.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-GB', {
-    timeZone: 'UTC',
-    ...options,
-  })
-}
-
-function summarizeAttendanceLogs(logs: AttendanceLog[]) {
-  let present = 0
-  let absent = 0
-  let late = 0
-  let excused = 0
-  let sick = 0
-  for (const log of logs) {
-    const status = String(log.status || '').toUpperCase()
-    if (status === 'PRESENT') present += 1
-    else if (status === 'ABSENT') absent += 1
-    else if (status === 'LATE') late += 1
-    else if (status === 'EXCUSED') excused += 1
-    else if (status === 'SICK') sick += 1
-  }
-  const coded = present + absent + late + excused + sick
-  const inAttendance = present + late
-  return {
-    present,
-    absent,
-    late,
-    excused,
-    sick,
-    coded,
-    inAttendance,
-    percentage: coded > 0 ? Number(((inAttendance / coded) * 100).toFixed(1)) : 0,
-  }
-}
+type AttendanceData = StudentAttendanceReportData
 
 interface TaskData {
   notes: Array<{
@@ -468,9 +397,7 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   const [requestError, setRequestError] = useState<string | null>(null)
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null)
 
-  // Filters for Attendance & Billing
-  const [attendanceFilter, setAttendanceFilter] = useState<string>('ALL')
-  const [attendanceRange, setAttendanceRange] = useState<AttendanceRange>('daily')
+  // Filters for Billing
   const [calendarView, setCalendarView] = useState<'events' | 'timetable'>('events')
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null)
 
@@ -912,51 +839,6 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
   daysOfWeek.forEach(d => {
     timetableByDay[d] = timetableSlots.filter(s => s.dayOfWeek.toUpperCase() === d)
   })
-
-  // Filter attendance logs
-  const filteredAttendanceLogs = (attendance?.logs || []).filter((log) => {
-    if (attendanceFilter === 'ALL') return true
-    return String(log.status || '').toUpperCase() === attendanceFilter.toUpperCase()
-  })
-
-  const weeklyAttendance = (() => {
-    const groups = new Map<string, AttendanceLog[]>()
-    for (const log of attendance?.logs || []) {
-      const dateKey = attendanceDateKey(log.attendanceDate)
-      if (!dateKey) continue
-      const start = weekStartKey(dateKey)
-      const rows = groups.get(start) || []
-      rows.push(log)
-      groups.set(start, rows)
-    }
-    return Array.from(groups.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([start, logs]) => ({
-        start,
-        end: addDaysKey(start, 6),
-        logs,
-        summary: summarizeAttendanceLogs(logs),
-      }))
-  })()
-
-  const monthlyAttendance = (() => {
-    const groups = new Map<string, AttendanceLog[]>()
-    for (const log of attendance?.logs || []) {
-      const dateKey = attendanceDateKey(log.attendanceDate)
-      if (!dateKey) continue
-      const monthKey = dateKey.slice(0, 7)
-      const rows = groups.get(monthKey) || []
-      rows.push(log)
-      groups.set(monthKey, rows)
-    }
-    return Array.from(groups.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([monthKey, logs]) => ({
-        monthKey,
-        logs,
-        summary: summarizeAttendanceLogs(logs),
-      }))
-  })()
 
   // Compute dynamic checklist reminders based strictly on true database tables
   const dynamicReminders: Array<{ id: string; text: string; defaultDone: boolean }> = []
@@ -2355,240 +2237,16 @@ export function ParentDashboard({ user, activeSection, onNavigate }: DashboardPr
 
       {/* SECTION 4: ATTENDANCE LOGS */}
       {activeSection === 'attendance' && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <CheckCircle2 className="text-emerald-600" size={24} />
-                  Attendance Logs & Punctuality Record
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Submitted roll-call history by day, school week, and calendar month. Presence counts Present and Late only.
-                </p>
-              </div>
-              <span className="text-xs font-bold text-emerald-600">
-                {attendance ? `${attendance.percentage}% Overall Presence` : '0% Overall'}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
-                {([
-                  { id: 'daily', label: 'Daily' },
-                  { id: 'weekly', label: 'Weekly' },
-                  { id: 'monthly', label: 'Monthly' },
-                ] as const).map((range) => (
-                  <button
-                    key={range.id}
-                    type="button"
-                    onClick={() => setAttendanceRange(range.id)}
-                    className={`px-4 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                      attendanceRange === range.id
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {range.label}
-                  </button>
-                ))}
-              </div>
-
-              {attendanceRange === 'daily' && (
-                <div className="flex items-center gap-2">
-                  {['ALL', 'PRESENT', 'LATE', 'ABSENT'].map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setAttendanceFilter(status)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                        attendanceFilter === status
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            {attendanceRange === 'daily' && (
-              <>
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Daily Attendance History ({filteredAttendanceLogs.length} Records)
-                  </h3>
-                </div>
-                {filteredAttendanceLogs.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-700">
-                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                        <tr>
-                          <th className="p-4">Date</th>
-                          <th className="p-4">Status</th>
-                          <th className="p-4">Punctuality Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredAttendanceLogs.map((log) => {
-                          const dateKey = attendanceDateKey(log.attendanceDate)
-                          const status = String(log.status || '').toUpperCase()
-                          return (
-                            <tr key={log.id} className="hover:bg-slate-50/80 transition">
-                              <td className="p-4 font-bold text-slate-900">
-                                {dateKey
-                                  ? formatDateLabel(dateKey, {
-                                      weekday: 'short',
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric',
-                                    })
-                                  : log.attendanceDate}
-                              </td>
-                              <td className="p-4">
-                                {status === 'PRESENT' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                    ✓ Present
-                                  </span>
-                                )}
-                                {status === 'LATE' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                    ⏰ Late Arrival
-                                  </span>
-                                )}
-                                {status === 'ABSENT' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                                    ✕ Absent
-                                  </span>
-                                )}
-                                {status === 'EXCUSED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
-                                    Excused
-                                  </span>
-                                )}
-                                {status === 'SICK' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">
-                                    Sick
-                                  </span>
-                                )}
-                                {!['PRESENT', 'LATE', 'ABSENT', 'EXCUSED', 'SICK'].includes(status) && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-                                    {log.status || 'Unmarked'}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="p-4 text-slate-500">
-                                {log.remark || 'Regular roll call entry by class teacher'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center text-slate-500 text-xs">
-                    No attendance logs found matching the selected filter.
-                  </div>
-                )}
-              </>
-            )}
-
-            {attendanceRange === 'weekly' && (
-              <>
-                <div className="p-5 border-b border-slate-100">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Weekly Attendance Summary ({weeklyAttendance.length} Weeks)
-                  </h3>
-                </div>
-                {weeklyAttendance.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-700">
-                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                        <tr>
-                          <th className="p-4">Week</th>
-                          <th className="p-4">Days marked</th>
-                          <th className="p-4">Present</th>
-                          <th className="p-4">Late</th>
-                          <th className="p-4">Absent</th>
-                          <th className="p-4">Presence</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {weeklyAttendance.map((week) => (
-                          <tr key={week.start} className="hover:bg-slate-50/80 transition">
-                            <td className="p-4 font-bold text-slate-900">
-                              {formatDateLabel(week.start, { day: 'numeric', month: 'short' })}
-                              {' – '}
-                              {formatDateLabel(week.end, { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </td>
-                            <td className="p-4">{week.summary.coded}</td>
-                            <td className="p-4 text-emerald-700 font-semibold">{week.summary.present}</td>
-                            <td className="p-4 text-amber-700 font-semibold">{week.summary.late}</td>
-                            <td className="p-4 text-rose-700 font-semibold">{week.summary.absent}</td>
-                            <td className="p-4 font-bold text-emerald-600">{week.summary.percentage}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center text-slate-500 text-xs">
-                    No weekly attendance summaries yet.
-                  </div>
-                )}
-              </>
-            )}
-
-            {attendanceRange === 'monthly' && (
-              <>
-                <div className="p-5 border-b border-slate-100">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Monthly Attendance Summary ({monthlyAttendance.length} Months)
-                  </h3>
-                </div>
-                {monthlyAttendance.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-700">
-                      <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                        <tr>
-                          <th className="p-4">Month</th>
-                          <th className="p-4">Days marked</th>
-                          <th className="p-4">Present</th>
-                          <th className="p-4">Late</th>
-                          <th className="p-4">Absent</th>
-                          <th className="p-4">Presence</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {monthlyAttendance.map((month) => (
-                          <tr key={month.monthKey} className="hover:bg-slate-50/80 transition">
-                            <td className="p-4 font-bold text-slate-900">
-                              {formatDateLabel(`${month.monthKey}-01`, { month: 'long', year: 'numeric' })}
-                            </td>
-                            <td className="p-4">{month.summary.coded}</td>
-                            <td className="p-4 text-emerald-700 font-semibold">{month.summary.present}</td>
-                            <td className="p-4 text-amber-700 font-semibold">{month.summary.late}</td>
-                            <td className="p-4 text-rose-700 font-semibold">{month.summary.absent}</td>
-                            <td className="p-4 font-bold text-emerald-600">{month.summary.percentage}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center text-slate-500 text-xs">
-                    No monthly attendance summaries yet.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <StudentAttendanceReport
+          data={attendance}
+          title="Attendance Logs & Punctuality Record"
+          subtitle={
+            profile?.className
+              ? `${profile.firstName} ${profile.lastName} · ${profile.className} ${profile.sectionName || ''} — Submitted daily, weekly, monthly, and termly attendance reports.`
+              : 'Submitted roll-call history by day, school week, calendar month, and academic term. Presence counts Present and Late only.'
+          }
+          studentName={profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Student'}
+        />
       )}
 
       {/* SECTION 5: BILLING & FEE INVOICES */}

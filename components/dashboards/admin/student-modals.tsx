@@ -60,6 +60,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
     lastName: '',
     gender: 'Male',
     birthday: '',
+    admissionDate: '',
     registerNo: '',
     photo: '',
     active: true,
@@ -135,6 +136,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
       lastName: '',
       gender: 'Male',
       birthday: '',
+      admissionDate: '',
       registerNo: '',
       photo: '',
       active: true,
@@ -177,6 +179,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
           lastName: s.lastName || '',
           gender: s.gender || 'Male',
           birthday: s.birthday || '',
+          admissionDate: s.admissionDate ? String(s.admissionDate).slice(0, 10) : '',
           registerNo: s.registerNo || '',
           photo: s.photo || '',
           active: s.active !== undefined ? s.active : true,
@@ -230,6 +233,7 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
         lastName: formData.lastName.trim(),
         gender: formData.gender,
         birthday: formData.birthday || null,
+        admissionDate: formData.admissionDate || null,
         registerNo: formData.registerNo.trim() || null,
         photo: formData.photo.trim() || null,
         active: formData.active,
@@ -430,10 +434,11 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Registration / Admission No</label>
+                      <label htmlFor="edit-student-regno" className="block text-xs font-bold text-slate-700 mb-1">Registration / Admission No</label>
                       <input
+                        id="edit-student-regno"
                         type="text"
                         value={formData.registerNo}
                         onChange={e => handleChange('registerNo', e.target.value)}
@@ -442,8 +447,19 @@ export function EditStudentModal({ isOpen, studentId, classes, onClose, onSucces
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Account Status</label>
+                      <label htmlFor="edit-student-adm-date" className="block text-xs font-bold text-slate-700 mb-1">Admission Date (Attendance Start)</label>
+                      <input
+                        id="edit-student-adm-date"
+                        type="date"
+                        value={formData.admissionDate}
+                        onChange={e => handleChange('admissionDate', e.target.value)}
+                        className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="edit-student-status" className="block text-xs font-bold text-slate-700 mb-1">Account Status</label>
                       <select
+                        id="edit-student-status"
                         value={formData.active ? 'true' : 'false'}
                         onChange={e => handleChange('active', e.target.value === 'true')}
                         className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0063a6]/20 focus:border-[#0063a6] outline-none bg-white"

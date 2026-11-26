@@ -272,6 +272,7 @@ export const endpoints = {
     approveSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/approve`,
     rejectSiblingRequest: (id: number) => `${BASE_URL}/admin/sibling-requests/${id}/reject`,
     onlineAdmissions: `${BASE_URL}/admin/online-admissions`,
+    updateOnlineAdmission: (id: number) => `${BASE_URL}/admin/online-admissions/${id}`,
     updateOnlineAdmissionStatus: (id: number) => `${BASE_URL}/admin/online-admissions/${id}/status`,
     syncCbtMarks: `${BASE_URL}/admin/cbt/sync`,
 

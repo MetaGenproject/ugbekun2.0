@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { apiSlice, endpoints } from '@/lib/apiSlice'
+import { showSystemStatus } from '@/lib/systemStatus'
+import { getLagosDateKey } from '@/lib/dateUtils'
+import { AdmissionDateInlineEditor } from './admission-date-editor'
 import {
   UserPlus,
   Sparkles,
@@ -49,6 +52,7 @@ type AdmissionTab =
 
 interface Applicant {
   id: string
+  studentId?: number
   fullName: string
   targetClass: string
   parentName: string
@@ -67,6 +71,7 @@ export function AdmissionsManagement() {
   const [regLastName, setRegLastName] = useState('')
   const [regGender, setRegGender] = useState('Male')
   const [regDob, setRegDob] = useState('')
+  const [regAdmissionDate, setRegAdmissionDate] = useState(() => getLagosDateKey())
   const [regClass, setRegClass] = useState('Primary 1')
   const [regParentName, setRegParentName] = useState('')
   const [regParentPhone, setRegParentPhone] = useState('')
@@ -103,6 +108,7 @@ export function AdmissionsManagement() {
       const rawStudents = studentsRes.data?.students || []
       const mapped: Applicant[] = rawStudents.map((st: any) => ({
         id: st.registerNo || `ADM-${st.id}`,
+        studentId: Number(st.id),
         fullName: `${st.firstName || ''} ${st.lastName || ''}`.trim() || 'Student',
         targetClass: st.className || 'Primary Class',
         parentName: st.parentName || 'Parent / Guardian',
@@ -110,7 +116,7 @@ export function AdmissionsManagement() {
         examScore: 85,
         screeningStatus: 'passed',
         approvalStatus: st.active ? 'approved' : 'pending',
-        appliedDate: st.admissionDate ? new Date(st.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+        appliedDate: st.admissionDate ? String(st.admissionDate).slice(0, 10) : '',
       }))
       setApplicants(mapped)
     } catch (err) {
@@ -140,6 +146,7 @@ export function AdmissionsManagement() {
           lastName: regLastName.trim(),
           gender: regGender,
           birthday: regDob || undefined,
+          admissionDate: regAdmissionDate || getLagosDateKey(),
           classId: matchedClass.id,
           currentAddress: regAddress.trim() || undefined,
         },
@@ -154,6 +161,7 @@ export function AdmissionsManagement() {
       alert(`Student ${regFirstName} ${regLastName} registered & admitted successfully into live database!`)
       setRegFirstName('')
       setRegLastName('')
+      setRegAdmissionDate(getLagosDateKey())
       setRegParentName('')
       setRegParentPhone('')
       setRegParentEmail('')
@@ -165,6 +173,25 @@ export function AdmissionsManagement() {
     } finally {
       setIsRegistering(false)
     }
+  }
+
+  const handleSaveApplicantAdmissionDate = async (applicant: Applicant, nextDate: string) => {
+    if (!applicant.studentId) return
+    const res = await apiSlice.put<{ success: boolean; message?: string }>(
+      endpoints.admin.updateStudent(applicant.studentId),
+      { admissionDate: nextDate }
+    )
+    if (!res.success) {
+      throw new Error(res.message || 'Failed to update admission date.')
+    }
+    setApplicants((prev) =>
+      prev.map((row) => (row.id === applicant.id ? { ...row, appliedDate: nextDate } : row))
+    )
+    showSystemStatus({
+      type: 'ACTION_SUCCESS',
+      title: 'Admission Date Updated',
+      message: `${applicant.fullName}'s attendance start date set to ${nextDate}.`,
+    })
   }
 
   // AI Bulk Upload Handler
@@ -349,7 +376,7 @@ export function AdmissionsManagement() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Gender</label>
                 <select
@@ -367,6 +394,18 @@ export function AdmissionsManagement() {
                   type="date"
                   value={regDob}
                   onChange={e => setRegDob(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold bg-slate-50"
+                />
+              </div>
+              <div>
+                <label htmlFor="adm-mgmt-admission-date" className="text-xs font-bold text-slate-700 block mb-1">
+                  Admission Date
+                </label>
+                <input
+                  id="adm-mgmt-admission-date"
+                  type="date"
+                  value={regAdmissionDate}
+                  onChange={e => setRegAdmissionDate(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold bg-slate-50"
                 />
               </div>
@@ -546,7 +585,7 @@ export function AdmissionsManagement() {
                 <TableHead>Applicant Name</TableHead>
                 <TableHead>Target Class</TableHead>
                 <TableHead>Parent / Guardian</TableHead>
-                <TableHead>Submission Date</TableHead>
+                <TableHead>Admission Date (Attendance Start)</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -557,7 +596,17 @@ export function AdmissionsManagement() {
                   <TableCell className="font-bold text-slate-900">{a.fullName}</TableCell>
                   <TableCell className="font-semibold text-slate-700">{a.targetClass}</TableCell>
                   <TableCell className="text-xs text-slate-600">{a.parentName} ({a.parentPhone})</TableCell>
-                  <TableCell className="text-xs text-slate-500">{a.appliedDate}</TableCell>
+                  <TableCell>
+                    {a.studentId ? (
+                      <AdmissionDateInlineEditor
+                        value={a.appliedDate}
+                        studentName={a.fullName}
+                        onSave={(nextDate) => handleSaveApplicantAdmissionDate(a, nextDate)}
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-500">{a.appliedDate || 'Not set'}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <button
                       onClick={() => setActiveTab('screening')}
@@ -693,6 +742,7 @@ export function AdmissionsManagement() {
                 <TableHead>Applicant ID</TableHead>
                 <TableHead>Applicant Name</TableHead>
                 <TableHead>Class</TableHead>
+                <TableHead>Admission Date</TableHead>
                 <TableHead>Exam Score</TableHead>
                 <TableHead>Approval Decision</TableHead>
                 <TableHead className="text-right">Admission Letter</TableHead>
@@ -704,6 +754,17 @@ export function AdmissionsManagement() {
                   <TableCell className="font-mono font-bold text-slate-800">{a.id}</TableCell>
                   <TableCell className="font-bold text-slate-900">{a.fullName}</TableCell>
                   <TableCell className="font-semibold text-slate-700">{a.targetClass}</TableCell>
+                  <TableCell>
+                    {a.studentId ? (
+                      <AdmissionDateInlineEditor
+                        value={a.appliedDate}
+                        studentName={a.fullName}
+                        onSave={(nextDate) => handleSaveApplicantAdmissionDate(a, nextDate)}
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-500">{a.appliedDate || 'Not set'}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono font-bold text-slate-800">{a.examScore}%</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">

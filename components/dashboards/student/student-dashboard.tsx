@@ -89,6 +89,10 @@ import SchoolCalendar from '../admin/school-calendar'
 import { getAvatarUrl } from '@/lib/avatar'
 import { safeStorage } from '@/lib/safeStorage'
 import { BrandedReportCardPreview, type EvaluationMatrixComponent } from '../shared/branded-report-card-preview'
+import {
+  StudentAttendanceReport,
+  type StudentAttendanceReportData,
+} from '../shared/student-attendance-report'
 
 interface DashboardProps {
   user: {
@@ -180,19 +184,7 @@ interface StudentProfile {
   }>
 }
 
-interface AttendanceData {
-  percentage: number
-  totalDays: number
-  presentCount: number
-  absentCount: number
-  lateCount: number
-  logs: Array<{
-    id: number
-    attendanceDate: string
-    status: string
-    remark: string | null
-  }>
-}
+type AttendanceData = StudentAttendanceReportData
 
 interface TaskData {
   notes: Array<{
@@ -440,6 +432,7 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
   const { branding } = useSchoolBranding()
   const [profile, setProfile] = useState<StudentProfile | null>(null)
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
+  const [loadingAttendance, setLoadingAttendance] = useState<boolean>(false)
   const [tasks, setTasks] = useState<TaskData | null>(null)
   const [grades, setGrades] = useState<GradeData | null>(null)
   const [dashboardOverview, setDashboardOverview] = useState<DashboardOverviewData | null>(null)
@@ -885,6 +878,26 @@ export function StudentDashboard({ user, activeSection, onNavigate }: DashboardP
         }
       }
       fetchTimetable()
+    }
+
+    if (activeSection === 'attendance') {
+      if (attendance?.reports) {
+        return
+      }
+      async function fetchAttendanceReport() {
+        try {
+          setLoadingAttendance(true)
+          const res = await apiSlice.get<{ success: boolean } & AttendanceData>(endpoints.student.attendance)
+          if (res?.success) {
+            setAttendance(res)
+          }
+        } catch (err) {
+          console.error('Failed to fetch student attendance report:', err)
+        } finally {
+          setLoadingAttendance(false)
+        }
+      }
+      fetchAttendanceReport()
     }
 
     if (activeSection === 'communication' || activeSection === 'messages') {
@@ -3904,91 +3917,29 @@ function normalizeQuestions(raw: any): any[] {
 
   // 11. ATTENDANCE SUB-VIEW
   if (activeSection === 'attendance') {
-    const attData = attendance || dashboardOverview?.attendance || { percentage: 100, totalDays: 0, presentCount: 0, absentCount: 0, lateCount: 0, logs: [] }
+    const attData = attendance || dashboardOverview?.attendance || {
+      percentage: 100,
+      totalDays: 0,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      logs: [],
+    }
+    const studentDisplayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || 'Student'
+    const classLabel = [profile?.className, profile?.sectionName].filter(Boolean).join(' ')
 
     return (
-      <div className="space-y-6 pb-12 font-sans">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs gap-4">
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <CheckSquare className="text-emerald-600" size={24} />
-              Term Attendance Records & Daily Roll Call
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Class: <span className="font-bold text-slate-900">{profile.className} {profile.sectionName}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* 4 Attendance Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Attendance Rate</span>
-            <h3 className="text-2xl font-black text-emerald-600">{attData.percentage}%</h3>
-            <p className="text-[10px] text-slate-500">Overall Term Rate</p>
-          </div>
-
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Present Days</span>
-            <h3 className="text-2xl font-black text-slate-900">{attData.presentCount}</h3>
-            <p className="text-[10px] text-emerald-600 font-semibold">Punctual attendance</p>
-          </div>
-
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Late Days</span>
-            <h3 className="text-2xl font-black text-amber-600">{attData.lateCount}</h3>
-            <p className="text-[10px] text-amber-600 font-semibold">Late arrivals</p>
-          </div>
-
-          <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Absent Days</span>
-            <h3 className="text-2xl font-black text-rose-600">{attData.absentCount}</h3>
-            <p className="text-[10px] text-rose-600 font-semibold">Excused / unexcused</p>
-          </div>
-        </div>
-
-        {/* Attendance Daily Logs Table */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              Daily Attendance History ({attData.logs.length})
-            </h3>
-          </div>
-
-          {attData.logs.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
-                  <tr>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {attData.logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition">
-                      <td className="p-4 font-bold text-slate-900">
-                        {new Date(log.attendanceDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${log.status === 'Present' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (log.status === 'Late' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200')}`}>
-                          {log.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-slate-500 italic">{log.remark || 'N/A'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-slate-400 text-xs italic">
-              No daily roll call logs recorded yet.
-            </div>
-          )}
-        </div>
-      </div>
+      <StudentAttendanceReport
+        data={attData}
+        title="Attendance Reports & Roll Call"
+        subtitle={
+          classLabel
+            ? `Class: ${classLabel} · View your daily roll call, weekly, monthly, and termly attendance summaries.`
+            : undefined
+        }
+        studentName={studentDisplayName}
+        loading={loadingAttendance}
+      />
     )
   }
 

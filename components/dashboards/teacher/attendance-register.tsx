@@ -89,6 +89,17 @@ function formatShortDate(dateKey: string): string {
   })
 }
 
+function formatAdmissionDate(dateKey: string): string {
+  const parts = dateKey.slice(0, 10).split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return dateKey
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).toLocaleDateString('en-GB', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 interface FormAllocation {
   classId: number
   className: string
@@ -104,6 +115,7 @@ interface RosterStudent {
   firstName: string | null
   lastName: string | null
   gender: string | null
+  admissionDate?: string | null
 }
 
 interface AttendanceRecord {
@@ -450,6 +462,7 @@ export default function AttendanceRegister({
             firstName: string | null
             lastName: string | null
             gender: string | null
+            admissionDate?: string | null
           }>
           entries: Array<{ studentId: number; status: string; remark: string | null }>
           summary: WeekDay['summary']
@@ -481,6 +494,7 @@ export default function AttendanceRegister({
         firstName: row.firstName,
         lastName: row.lastName,
         gender: row.gender,
+        admissionDate: row.admissionDate ?? null,
       }))
       const initial: Record<number, AttendanceRecord> = {}
       roster.forEach((student) => {
@@ -1198,6 +1212,21 @@ export default function AttendanceRegister({
                               {student.registerNo || "No reg"}
                               {student.gender ? ` · ${student.gender}` : ""}
                             </div>
+                            {student.admissionDate && (
+                              <div className="mt-1">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    attendanceDate < student.admissionDate
+                                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
+                                  }`}
+                                >
+                                  {attendanceDate < student.admissionDate
+                                    ? `Starts ${formatAdmissionDate(student.admissionDate)}`
+                                    : `Admitted ${formatAdmissionDate(student.admissionDate)}`}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1306,8 +1335,23 @@ export default function AttendanceRegister({
                           <td className="px-4 py-3 text-xs font-bold text-slate-500 font-mono">{student.roll || "—"}</td>
                           <td className="px-4 py-3">
                             <div className="text-sm font-extrabold text-slate-800">{studentDisplayName(student)}</div>
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-0.5">
-                              {student.gender || "Student"}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                {student.gender || "Student"}
+                              </span>
+                              {student.admissionDate && (
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    attendanceDate < student.admissionDate
+                                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
+                                  }`}
+                                >
+                                  {attendanceDate < student.admissionDate
+                                    ? `Starts ${formatAdmissionDate(student.admissionDate)}`
+                                    : `Admitted ${formatAdmissionDate(student.admissionDate)}`}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-slate-500">{student.registerNo || "—"}</td>

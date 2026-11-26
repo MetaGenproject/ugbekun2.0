@@ -38,6 +38,8 @@ import {
   UserMinus
 } from 'lucide-react'
 import { EditStudentModal } from './student-modals'
+import { AdmissionDateInlineEditor } from './admission-date-editor'
+import { showSystemStatus } from '@/lib/systemStatus'
 import { StudentPhotoCaptureModal } from './student-photo-capture-modal'
 import { StudentPromotions } from './student-promotions'
 import { StudentPromotionModal } from './student-promotion-modal'
@@ -77,6 +79,7 @@ interface Student {
   gender: string | null
   mobileno: string | null
   email: string | null
+  admissionDate?: string | null
   parentName: string | null
   parentRelation: string | null
   parentMobile: string | null
@@ -925,6 +928,7 @@ export function ClassroomStudents() {
                             <TableHead className="w-14">Photo</TableHead>
                             <TableHead className="w-32">Reg. No</TableHead>
                             <TableHead>Student Name</TableHead>
+                            <TableHead>Admission Date</TableHead>
                             <TableHead>Gender</TableHead>
                             <TableHead>Parent / Guardian</TableHead>
                             <TableHead>Contact Details</TableHead>
@@ -978,17 +982,42 @@ export function ClassroomStudents() {
                                 </div>
                               </TableCell>
                               <TableCell className="font-bold text-slate-900">{student.registerNo || '—'}</TableCell>
-                              <TableCell className="font-bold text-slate-800">
-                                <button 
-                                  onClick={() => {
-                                    setSelectedStudentForProfile(student)
-                                    setActiveTab('profile')
-                                  }}
-                                  className="hover:text-blue-600 hover:underline text-left cursor-pointer"
-                                >
-                                  {[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}
-                                </button>
-                              </TableCell>
+                                <TableCell className="font-bold text-slate-800">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedStudentForProfile(student)
+                                      setActiveTab('profile')
+                                    }}
+                                    className="hover:text-blue-600 hover:underline text-left cursor-pointer"
+                                  >
+                                    {[student.firstName, student.lastName].filter(Boolean).join(' ') || '—'}
+                                  </button>
+                                </TableCell>
+                                <TableCell>
+                                  <AdmissionDateInlineEditor
+                                    value={student.admissionDate}
+                                    studentName={[student.firstName, student.lastName].filter(Boolean).join(' ')}
+                                    onSave={async (nextDate) => {
+                                      const res = await apiSlice.put<{ success: boolean; message?: string }>(
+                                        endpoints.admin.updateStudent(student.id),
+                                        { admissionDate: nextDate }
+                                      )
+                                      if (!res.success) {
+                                        throw new Error(res.message || 'Failed to update admission date.')
+                                      }
+                                      setStudents((prev) =>
+                                        prev.map((row) =>
+                                          row.id === student.id ? { ...row, admissionDate: nextDate } : row
+                                        )
+                                      )
+                                      showSystemStatus({
+                                        type: 'ACTION_SUCCESS',
+                                        title: 'Admission Date Updated',
+                                        message: `Attendance start date saved as ${nextDate}.`,
+                                      })
+                                    }}
+                                  />
+                                </TableCell>
                               <TableCell>
                                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border capitalize ${student.gender?.toLowerCase() === 'male'
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
